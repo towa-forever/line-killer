@@ -564,7 +564,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
 });
 
 app.get('/debug-path', (req, res) => {
-  res.json({ __dirname, clientBuild: join(__dirname, 'client/build') });
+  res.json({ __dirname, clientBuild: join(__dirname, '../client/build') });
 });
 
 // Socket.io
@@ -688,7 +688,7 @@ io.on('connection', async (socket) => {
   socket.on('disconnect', () => console.log('切断:', socket.user.username));
 });
 
-const clientBuild = join(__dirname, 'client/build');
+const clientBuild = join(__dirname, '../client/build');
 app.use(express.static(clientBuild));
 app.get('/{*path}', (req, res) => {
   res.sendFile(join(clientBuild, 'index.html'));
