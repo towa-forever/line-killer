@@ -1,9 +1,8 @@
 const mongoose = require('mongoose');
-const MONGO_URL = process.env.MONGODB_URL || process.env.MONGO_URL;
-mongoose.connect(process.env.MONGO_URI)
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://64fde7fe19fce4dbde3f94452ac4a619:Passtowa0806@17a.mongo.evennode.com:27031,17b.mongo.evennode.com:27031/64fde7fe19fce4dbde3f94452ac4a619?replicaSet=eu-17';
+mongoose.connect(MONGO_URI)
   .then(() => console.log('MongoDB接続成功'))
   .catch(err => console.error('MongoDB接続失敗', err));
-
 const UserSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   username: { type: String, required: true, unique: true },
@@ -15,7 +14,6 @@ const UserSchema = new mongoose.Schema({
   muted_rooms: { type: [String], default: [] },
   created_at: { type: Date, default: Date.now }
 });
-
 const RoomSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
@@ -24,7 +22,6 @@ const RoomSchema = new mongoose.Schema({
   members: [String],
   created_at: { type: Date, default: Date.now }
 });
-
 const MessageSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   room_id: String,
@@ -40,12 +37,10 @@ const MessageSchema = new mongoose.Schema({
   reactions: [{ emoji: String, user_id: String }],
   created_at: { type: Date, default: Date.now }
 });
-
 const FriendSchema = new mongoose.Schema({
   user_id: String,
   friend_id: String
 });
-
 const FriendRequestSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   from_id: String,
