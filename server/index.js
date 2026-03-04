@@ -1,0 +1,698 @@
+require("dotenv").config();
+const express = require('express');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { join } = require('path');
+const { v4: uuidv4 } = require('uuid');
+const { User, Room, Message, Friend, FriendRequest, Post } = require('./db');
+
+const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: '*', methods: ['GET', 'POST'] }
+});
+
+app.use(cors());
+app.get('/admin/reset-requests', async (req, res) => {
+  await FriendRequest.deleteMany({});
+  res.json({ ok: true });
+});
+
+app.use(express.json());
+
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+app.use('/uploads', express.static(uploadDir));
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => cb(null, uuidv4() + path.extname(file.originalname))
+});
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const JWT_SECRET = 'super-secret-key';
+
+const auth = (req) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  return jwt.verify(token, JWT_SECRET);
+};
+
+// スタンプセット定義
+const STAMP_SETS = [
+  { id: 1, name: '野球キャラクターセット', icon: '⚾', stamps: [
+    { emoji: '⚾', label: 'ナイスバッティング！' }, { emoji: '🏆', label: '優勝！' },
+    { emoji: '💪', label: '全力プレー！' }, { emoji: '🔥', label: '燃えてるぜ！' },
+    { emoji: '👊', label: 'ファイト！' }, { emoji: '🎯', label: 'ストライク！' },
+    { emoji: '🙌', label: 'やったー！' }, { emoji: '😤', label: '負けへんで！' },
+    { emoji: '🥇', label: 'チャンピオン！' }, { emoji: '⚡', label: '一撃必殺！' },
+  ]},
+  { id: 2, name: '動物キャラセット', icon: '🐶', stamps: [
+    { emoji: '🐶', label: 'わんわん！' }, { emoji: '🐱', label: 'にゃー！' },
+    { emoji: '🐻', label: 'よろしく！' }, { emoji: '🐼', label: 'のんびりね' },
+    { emoji: '🦊', label: 'ずるがしこい！' }, { emoji: '🐯', label: 'がおー！' },
+    { emoji: '🐸', label: 'けろけろ！' }, { emoji: '🐨', label: 'まったりしよ' },
+    { emoji: '🦁', label: '王様だ！' }, { emoji: '🐙', label: 'ぐにゃぐにゃ！' },
+  ]},
+  { id: 3, name: '面白い表情セット', icon: '😂', stamps: [
+    { emoji: '😂', label: '爆笑！' }, { emoji: '🤣', label: '草ァ！' },
+    { emoji: '😅', label: 'あせあせ…' }, { emoji: '🤪', label: 'いかれてる！' },
+    { emoji: '😈', label: 'いたずら中！' }, { emoji: '💀', label: '死んだ笑' },
+    { emoji: '🤯', label: '頭爆発！' }, { emoji: '😵', label: 'くらくら…' },
+    { emoji: '🥴', label: 'ふらふら…' }, { emoji: '🤡', label: 'ピエロだよ！' },
+  ]},
+  { id: 4, name: '食べ物キャラセット', icon: '🍕', stamps: [
+    { emoji: '🍕', label: 'ピザ食べたい！' }, { emoji: '🍔', label: 'バーガー最高！' },
+    { emoji: '🍣', label: 'お寿司食べよ！' }, { emoji: '🍜', label: 'ラーメン行こ！' },
+    { emoji: '🍩', label: 'ドーナツ食べたい' }, { emoji: '🍰', label: 'ケーキ！' },
+    { emoji: '🍦', label: 'アイス食べたい' }, { emoji: '🍫', label: 'チョコ好き！' },
+    { emoji: '🌮', label: 'タコス食べたい！' }, { emoji: '🍱', label: 'お弁当食べよ！' },
+  ]},
+  { id: 5, name: '季節・イベントセット', icon: '🎉', stamps: [
+    { emoji: '🌸', label: 'お花見しよ！' }, { emoji: '🎆', label: '花火きれい！' },
+    { emoji: '🍁', label: '紅葉シーズン！' }, { emoji: '⛄', label: '雪だるま！' },
+    { emoji: '🎉', label: 'やったー！' }, { emoji: '🎊', label: 'おめでとう！' },
+    { emoji: '🎋', label: '七夕だよ！' }, { emoji: '🎃', label: 'ハロウィン！' },
+    { emoji: '🎄', label: 'メリクリ！' }, { emoji: '🧧', label: 'お年玉！' },
+  ]},
+  { id: 6, name: 'ゆるキャラセット', icon: '👾', stamps: [
+    { emoji: '👾', label: 'ゆるゆる～' }, { emoji: '🤖', label: 'ロボットだよ！' },
+    { emoji: '👽', label: '宇宙人だよ！' }, { emoji: '👻', label: 'ばあ！' },
+    { emoji: '🎭', label: 'どっちの顔？' }, { emoji: '🧸', label: 'ぬいぐるみ！' },
+    { emoji: '🪆', label: 'マトリョーシカ' }, { emoji: '🎠', label: 'くるくる～' },
+    { emoji: '🎪', label: 'サーカスだよ！' }, { emoji: '🎨', label: 'アート！' },
+  ]},
+  { id: 7, name: '恋愛・気持ちセット', icon: '❤️', stamps: [
+    { emoji: '❤️', label: '大好き！' }, { emoji: '💕', label: 'ラブラブ！' },
+    { emoji: '💖', label: 'ドキドキ！' }, { emoji: '💘', label: '一目惚れ！' },
+    { emoji: '🥰', label: 'めちゃ好き！' }, { emoji: '😍', label: '最高！' },
+    { emoji: '💝', label: '贈り物！' }, { emoji: '💞', label: 'ずっと一緒！' },
+    { emoji: '🫶', label: 'ハートハンド！' }, { emoji: '💓', label: 'ときめき！' },
+  ]},
+  { id: 8, name: '日常会話セット', icon: '💬', stamps: [
+    { emoji: '👋', label: 'やあ！' }, { emoji: '🤝', label: 'よろしく！' },
+    { emoji: '👍', label: 'いいね！' }, { emoji: '👎', label: 'それはダメ！' },
+    { emoji: '🙏', label: 'お願い！' }, { emoji: '💪', label: 'がんばれ！' },
+    { emoji: '✌️', label: 'ピース！' }, { emoji: '👌', label: 'オッケー！' },
+    { emoji: '🤙', label: 'またね！' }, { emoji: '☝️', label: 'ちょっと待って！' },
+  ]},
+  { id: 9, name: 'スポーツセット', icon: '⚽', stamps: [
+    { emoji: '⚽', label: 'ゴール！' }, { emoji: '🏀', label: 'ダンク！' },
+    { emoji: '🏈', label: 'タッチダウン！' }, { emoji: '🎾', label: 'サーブ！' },
+    { emoji: '🏊', label: '泳ぐぞ！' }, { emoji: '🚴', label: 'レッツゴー！' },
+    { emoji: '🥊', label: 'ファイト！' }, { emoji: '🏆', label: '優勝！' },
+    { emoji: '🤸', label: '体操！' }, { emoji: '⛷️', label: 'スキー！' },
+  ]},
+  { id: 10, name: '音楽セット', icon: '🎵', stamps: [
+    { emoji: '🎵', label: 'ラララ～！' }, { emoji: '🎸', label: 'ギター！' },
+    { emoji: '🎹', label: 'ピアノ！' }, { emoji: '🥁', label: 'ドンドン！' },
+    { emoji: '🎤', label: '歌うよ！' }, { emoji: '🎧', label: '音楽聴こ！' },
+    { emoji: '🎺', label: 'ラッパ！' }, { emoji: '🎻', label: 'バイオリン！' },
+    { emoji: '🎷', label: 'サックス！' }, { emoji: '🎼', label: '作曲中！' },
+  ]},
+  { id: 11, name: 'ゲームセット', icon: '🎮', stamps: [
+    { emoji: '🎮', label: 'ゲームしよ！' }, { emoji: '🕹️', label: 'レトロゲー！' },
+    { emoji: '🏆', label: 'ゲームクリア！' }, { emoji: '💀', label: 'やられた！' },
+    { emoji: '⚔️', label: 'バトル！' }, { emoji: '🧩', label: 'パズル！' },
+    { emoji: '🎲', label: 'サイコロ！' }, { emoji: '♟️', label: 'チェス！' },
+    { emoji: '🎯', label: 'ねらい撃ち！' }, { emoji: '🥇', label: 'ランク１位！' },
+  ]},
+  { id: 12, name: '旅行セット', icon: '✈️', stamps: [
+    { emoji: '✈️', label: '旅行行こ！' }, { emoji: '🏖️', label: 'ビーチ！' },
+    { emoji: '🏔️', label: '山登り！' }, { emoji: '🗼', label: '東京タワー！' },
+    { emoji: '🌍', label: '世界旅行！' }, { emoji: '🧳', label: '旅の準備！' },
+    { emoji: '🗺️', label: '地図見よ！' }, { emoji: '🚂', label: '電車旅！' },
+    { emoji: '🚢', label: 'クルーズ！' }, { emoji: '🏯', label: 'お城！' },
+  ]},
+  { id: 13, name: '天気セット', icon: '☀️', stamps: [
+    { emoji: '☀️', label: '晴れだよ！' }, { emoji: '🌧️', label: '雨だよ！' },
+    { emoji: '⛈️', label: '嵐だ！' }, { emoji: '❄️', label: '雪だよ！' },
+    { emoji: '🌈', label: '虹が出た！' }, { emoji: '⚡', label: '雷！' },
+    { emoji: '🌊', label: '波が高い！' }, { emoji: '🌪️', label: '竜巻！' },
+    { emoji: '🌤️', label: '曇り時々晴れ' }, { emoji: '🌙', label: 'お月さま！' },
+  ]},
+  { id: 14, name: '勉強セット', icon: '📚', stamps: [
+    { emoji: '📚', label: '勉強するぞ！' }, { emoji: '✏️', label: 'メモメモ！' },
+    { emoji: '💡', label: 'ひらめいた！' }, { emoji: '🔬', label: '実験中！' },
+    { emoji: '🎓', label: '卒業！' }, { emoji: '📝', label: 'テスト中！' },
+    { emoji: '🏅', label: '満点！' }, { emoji: '📐', label: '数学！' },
+    { emoji: '🔭', label: '観察中！' }, { emoji: '📖', label: '読書中！' },
+  ]},
+  { id: 15, name: '仕事セット', icon: '💼', stamps: [
+    { emoji: '💼', label: '仕事行くぞ！' }, { emoji: '💻', label: 'PC作業中！' },
+    { emoji: '📊', label: 'データ分析！' }, { emoji: '📈', label: '右肩上がり！' },
+    { emoji: '☎️', label: '電話中！' }, { emoji: '📧', label: 'メール送った！' },
+    { emoji: '🗂️', label: 'ファイル整理！' }, { emoji: '⏰', label: '締め切り！' },
+    { emoji: '🖨️', label: '印刷中！' }, { emoji: '📋', label: '報告書！' },
+  ]},
+  { id: 16, name: 'お祝いセット', icon: '🎊', stamps: [
+    { emoji: '🎊', label: 'おめでとう！' }, { emoji: '🎉', label: 'やったー！' },
+    { emoji: '🎈', label: '風船！' }, { emoji: '🎁', label: 'プレゼント！' },
+    { emoji: '🥳', label: 'パーティー！' }, { emoji: '🍾', label: 'シャンパン！' },
+    { emoji: '🥂', label: '乾杯！' }, { emoji: '🌟', label: 'スター！' },
+    { emoji: '🎀', label: 'リボン！' }, { emoji: '🧨', label: '爆竹！' },
+  ]},
+  { id: 17, name: 'ホラーセット', icon: '👻', stamps: [
+    { emoji: '👻', label: 'ばあ！' }, { emoji: '💀', label: 'ガイコツ！' },
+    { emoji: '🕷️', label: 'クモ！' }, { emoji: '🦇', label: 'コウモリ！' },
+    { emoji: '😱', label: 'こわい！' }, { emoji: '🎃', label: 'ハロウィン！' },
+    { emoji: '🌑', label: '暗闇！' }, { emoji: '🔮', label: '占い！' },
+    { emoji: '⚰️', label: 'お墓！' }, { emoji: '🪦', label: 'R.I.P！' },
+  ]},
+  { id: 18, name: '宇宙セット', icon: '🚀', stamps: [
+    { emoji: '🚀', label: '発射！' }, { emoji: '🛸', label: 'UFO！' },
+    { emoji: '🌙', label: 'お月さま！' }, { emoji: '⭐', label: 'スター！' },
+    { emoji: '☄️', label: '彗星！' }, { emoji: '🌌', label: '銀河！' },
+    { emoji: '👨‍🚀', label: '宇宙飛行士！' }, { emoji: '🪐', label: '土星！' },
+    { emoji: '🌠', label: '流れ星！' }, { emoji: '🔭', label: '望遠鏡！' },
+  ]},
+  { id: 19, name: '学校セット', icon: '🏫', stamps: [
+    { emoji: '🏫', label: '学校行くぞ！' }, { emoji: '🎒', label: 'ランドセル！' },
+    { emoji: '✏️', label: '授業中！' }, { emoji: '🎓', label: '卒業！' },
+    { emoji: '👨‍🏫', label: '先生！' }, { emoji: '📝', label: 'テスト！' },
+    { emoji: '🏅', label: '表彰！' }, { emoji: '🖍️', label: 'お絵かき！' },
+    { emoji: '📌', label: '掲示板！' }, { emoji: '🔔', label: 'チャイム！' },
+  ]},
+];
+
+app.get('/stamps', (req, res) => res.json(STAMP_SETS));
+
+app.post('/stamps/acquire', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { setId } = req.body;
+    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { acquired_stamps: setId } });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.get('/stamps/mysets', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id });
+    res.json({ acquired: user.acquired_stamps || [] });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// 認証
+app.post('/auth/register', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
+  const exists = await User.findOne({ username });
+  if (exists) return res.status(400).json({ error: 'このユーザー名は既に使われてます' });
+  const hashed = await bcrypt.hash(password, 10);
+  const id = uuidv4();
+  await User.create({ id, username, password: hashed });
+  const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: '30d' });
+  res.json({ token, user: { id, username, avatar: null, status: '' } });
+});
+
+app.post('/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  const user = await User.findOne({ username });
+  if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
+  const ok = await bcrypt.compare(password, user.password);
+  if (!ok) return res.status(401).json({ error: 'パスワードが違います' });
+  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+  res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, status: user.status } });
+});
+
+app.get('/auth/me', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { password: 0 });
+    if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
+    res.json({ user });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.get('/users/search', async (req, res) => {
+  try {
+    const { authorization } = req.headers;
+    const token = authorization?.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const q = req.query.q || '';
+    const users = await User.find(
+      { username: { $regex: q, $options: 'i' }, id: { $ne: decoded.id } },
+      { password: 0 }
+    ).limit(20);
+    res.json(users);
+  } catch { res.status(401).json({ error: 'unauthorized' }); }
+});
+
+app.get('/users', async (req, res) => {
+  const users = await User.find({}, { password: 0 });
+  res.json(users);
+});
+
+app.patch('/users/me', upload.single('avatar'), async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { status } = req.body;
+    const update = {};
+    if (req.file) update.avatar = `/uploads/${req.file.filename}`;
+    if (status !== undefined) update.status = status;
+    const user = await User.findOneAndUpdate({ id: decoded.id }, update, { new: true, projection: { password: 0 } });
+    io.emit('user:updated', user);
+    res.json(user);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// 友だち申請
+app.get('/friend-requests', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const requests = await FriendRequest.find({ to_id: decoded.id, status: 'pending' });
+    res.json(requests);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/friend-requests', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { toId } = req.body;
+    if (toId === decoded.id) return res.status(400).json({ error: '自分には送れません' });
+    const existing = await FriendRequest.findOne({ from_id: decoded.id, to_id: toId, status: 'pending' });
+    if (existing) return res.status(400).json({ error: '既に申請済みです' });
+    const alreadyFriend = await Friend.findOne({ user_id: decoded.id, friend_id: toId });
+    if (alreadyFriend) return res.status(400).json({ error: '既に友だちです' });
+    const id = uuidv4();
+    const request = await FriendRequest.create({ id, from_id: decoded.id, from_name: decoded.username, to_id: toId });
+    io.to('user_' + toId).emit('friend:request', { id, from_id: decoded.id, from_name: decoded.username });
+    res.json(request);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/friend-requests/:requestId/accept', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const request = await FriendRequest.findOne({ id: req.params.requestId, to_id: decoded.id });
+    if (!request) return res.status(404).json({ error: '申請が見つかりません' });
+    await FriendRequest.findOneAndUpdate({ id: req.params.requestId }, { status: 'accepted' });
+    await Friend.findOneAndUpdate({ user_id: decoded.id, friend_id: request.from_id }, {}, { upsert: true });
+    await Friend.findOneAndUpdate({ user_id: request.from_id, friend_id: decoded.id }, {}, { upsert: true });
+    io.to('user_' + request.from_id).emit('friend:accepted', { by_id: decoded.id, by_name: decoded.username });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/friend-requests/:requestId/reject', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await FriendRequest.findOneAndUpdate({ id: req.params.requestId, to_id: decoded.id }, { status: 'rejected' });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// 友だち
+app.get('/friends', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const friends = await Friend.find({ user_id: decoded.id });
+    const users = await User.find({ id: { $in: friends.map(f => f.friend_id) } }, { password: 0 });
+    res.json(users);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.delete('/friends/:friendId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await Friend.deleteOne({ user_id: decoded.id, friend_id: req.params.friendId });
+    await Friend.deleteOne({ user_id: req.params.friendId, friend_id: decoded.id });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// ブロック
+app.post('/users/:userId/block', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { blocked_users: req.params.userId } });
+    await Friend.deleteOne({ user_id: decoded.id, friend_id: req.params.userId });
+    await Friend.deleteOne({ user_id: req.params.userId, friend_id: decoded.id });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.delete('/users/:userId/block', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { blocked_users: req.params.userId } });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.get('/users/blocked', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id });
+    const blocked = await User.find({ id: { $in: user.blocked_users || [] } }, { password: 0 });
+    res.json(blocked);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// 通知OFF
+app.post('/rooms/:roomId/mute', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { muted_rooms: req.params.roomId } });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.delete('/rooms/:roomId/mute', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { muted_rooms: req.params.roomId } });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// タイムライン
+app.get('/posts', async (req, res) => {
+  try {
+    auth(req);
+    const posts = await Post.find().sort({ created_at: -1 }).limit(50);
+    res.json(posts);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/posts', upload.single('image'), async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id });
+    const { content } = req.body;
+    if (!content && !req.file) return res.status(400).json({ error: '内容を入力してください' });
+    const id = uuidv4();
+    const post = await Post.create({
+      id, user_id: decoded.id, username: decoded.username,
+      avatar: user.avatar || null,
+      content: content || '',
+      image: req.file ? `/uploads/${req.file.filename}` : null
+    });
+    io.emit('post:new', post);
+    res.json(post);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/posts/:postId/like', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const post = await Post.findOne({ id: req.params.postId });
+    if (!post) return res.status(404).json({ error: '投稿が見つかりません' });
+    const liked = post.likes.includes(decoded.id);
+    if (liked) {
+      await Post.findOneAndUpdate({ id: req.params.postId }, { $pull: { likes: decoded.id } });
+    } else {
+      await Post.findOneAndUpdate({ id: req.params.postId }, { $addToSet: { likes: decoded.id } });
+    }
+    const updated = await Post.findOne({ id: req.params.postId });
+    io.emit('post:liked', { postId: req.params.postId, likes: updated.likes });
+    res.json({ likes: updated.likes });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/posts/:postId/comments', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { content } = req.body;
+    const comment = { id: uuidv4(), user_id: decoded.id, username: decoded.username, content, created_at: new Date() };
+    await Post.findOneAndUpdate({ id: req.params.postId }, { $push: { comments: comment } });
+    io.emit('post:commented', { postId: req.params.postId, comment });
+    res.json(comment);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.delete('/posts/:postId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await Post.deleteOne({ id: req.params.postId, user_id: decoded.id });
+    io.emit('post:deleted', { postId: req.params.postId });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// 部屋
+app.get('/rooms', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const rooms = await Room.find({ members: decoded.id });
+    res.json(rooms);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/rooms', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { name, memberIds } = req.body;
+    const friends = await Friend.find({ user_id: decoded.id });
+    const friendIds = friends.map(f => f.friend_id);
+    const validMembers = memberIds.filter(id => friendIds.includes(id));
+    const members = [...new Set([decoded.id, ...validMembers])];
+    const id = 'room_' + uuidv4();
+    const room = await Room.create({ id, name, members });
+    members.forEach(mid => io.to('user_' + mid).emit('room:new', room));
+    res.json(room);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.patch('/rooms/:roomId/name', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOneAndUpdate(
+      { id: req.params.roomId, members: decoded.id },
+      { name: req.body.name }, { new: true }
+    );
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    io.to(req.params.roomId).emit('room:updated', { roomId: room.id, name: room.name, icon: room.icon });
+    res.json(room);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/rooms/:roomId/icon', upload.single('icon'), async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const icon = `/uploads/${req.file.filename}`;
+    const room = await Room.findOneAndUpdate(
+      { id: req.params.roomId, members: decoded.id },
+      { icon }, { new: true }
+    );
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    io.to(req.params.roomId).emit('room:updated', { roomId: req.params.roomId, icon });
+    res.json({ icon });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/rooms/:roomId/members', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { memberIds } = req.body;
+    const room = await Room.findOneAndUpdate(
+      { id: req.params.roomId, members: decoded.id },
+      { $addToSet: { members: { $each: memberIds } } }, { new: true }
+    );
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    memberIds.forEach(mid => io.to('user_' + mid).emit('room:new', room));
+    io.to(req.params.roomId).emit('room:members_updated', { roomId: req.params.roomId, members: room.members });
+    res.json({ members: room.members });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.patch('/rooms/:roomId/pin', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { messageId } = req.body;
+    const room = await Room.findOneAndUpdate(
+      { id: req.params.roomId, members: decoded.id },
+      { pinned_message_id: messageId || null }, { new: true }
+    );
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    io.to(req.params.roomId).emit('room:pinned', { roomId: req.params.roomId, messageId: messageId || null });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// メッセージ
+app.get('/rooms/:roomId/messages', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    const msgs = await Message.find({ room_id: req.params.roomId }).sort({ created_at: 1 });
+    res.json(msgs);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.get('/rooms/:roomId/search', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    const msgs = await Message.find({ room_id: req.params.roomId, content: new RegExp(req.query.q, 'i'), deleted: false }).sort({ created_at: 1 });
+    res.json(msgs);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.get('/rooms/:roomId/album', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    const imgs = await Message.find({ room_id: req.params.roomId, type: 'image', deleted: false }).sort({ created_at: -1 });
+    res.json(imgs);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/upload', upload.single('file'), (req, res) => {
+  try {
+    auth(req);
+    if (!req.file) return res.status(400).json({ error: 'ファイルなし' });
+    const isImage = /jpeg|jpg|png|gif/.test(req.file.mimetype);
+    const isAudio = /webm|ogg|mp3|wav/.test(req.file.mimetype);
+    res.json({
+      url: `/uploads/${req.file.filename}`,
+      filename: Buffer.from(req.file.originalname, "latin1").toString("utf8"),
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      isImage, isAudio
+    });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.get('/debug-path', (req, res) => {
+  res.json({ __dirname, clientBuild: join(__dirname, 'client/build') });
+});
+
+// Socket.io
+io.use((socket, next) => {
+  try {
+    socket.user = jwt.verify(socket.handshake.auth.token, JWT_SECRET);
+    next();
+  } catch { next(new Error('認証エラー')); }
+});
+
+io.on('connection', async (socket) => {
+  console.log('接続:', socket.user.username);
+  socket.join('user_' + socket.user.id);
+  const myRooms = await Room.find({ members: socket.user.id });
+  myRooms.forEach(r => socket.join(r.id));
+
+  socket.on('room:join', (roomId) => socket.join(roomId));
+
+  socket.on('message:send', async ({ roomId, content, type = 'text', fileData, replyTo, stampLabel }) => {
+    const room = await Room.findOne({ id: roomId, members: socket.user.id });
+    if (!room) return;
+    if (room.members.length === 2) {
+      const otherId = room.members.find(m => m !== socket.user.id);
+      const isFriend = await Friend.findOne({ user_id: socket.user.id, friend_id: otherId });
+      if (!isFriend) return;
+    }
+    const id = uuidv4();
+    const msg = await Message.create({
+      id, room_id: roomId, sender_id: socket.user.id, sender_name: socket.user.username,
+      content, type, file_data: fileData || null, reply_to: replyTo || null, stamp_label: stampLabel || null,
+      read_by: [socket.user.id], reactions: []
+    });
+    io.to(roomId).emit('message:receive', {
+      id, roomId, senderId: socket.user.id, senderName: socket.user.username,
+      content, type, fileData: fileData || null, replyTo: replyTo || null, stampLabel: stampLabel || null,
+      edited: false, deleted: false, readBy: [socket.user.id], reactions: [],
+      createdAt: msg.created_at
+    });
+  });
+
+  socket.on('message:edit', async ({ roomId, messageId, content }) => {
+    const msg = await Message.findOneAndUpdate(
+      { id: messageId, sender_id: socket.user.id },
+      { content, edited: true }, { new: true }
+    );
+    if (!msg) return;
+    io.to(roomId).emit('message:edited', { messageId, content, roomId });
+  });
+
+  socket.on('message:delete', async ({ roomId, messageId }) => {
+    const msg = await Message.findOneAndUpdate(
+      { id: messageId, sender_id: socket.user.id },
+      { deleted: true, content: 'このメッセージは削除されました' }
+    );
+    if (!msg) return;
+    io.to(roomId).emit('message:deleted', { messageId, roomId });
+  });
+
+  socket.on('message:read', async ({ messageId, roomId }) => {
+    await Message.findOneAndUpdate({ id: messageId }, { $addToSet: { read_by: socket.user.id } });
+    const msg = await Message.findOne({ id: messageId });
+    io.to(roomId).emit('message:read_update', { messageId, readBy: msg.read_by, roomId });
+  });
+
+  socket.on('message:react', async ({ roomId, messageId, emoji }) => {
+    const msg = await Message.findOne({ id: messageId });
+    if (!msg) return;
+    const existing = msg.reactions.find(r => r.user_id === socket.user.id);
+    if (existing) {
+      if (existing.emoji === emoji) {
+        await Message.findOneAndUpdate({ id: messageId }, { $pull: { reactions: { user_id: socket.user.id } } });
+      } else {
+        await Message.findOneAndUpdate({ id: messageId, 'reactions.user_id': socket.user.id }, { $set: { 'reactions.$.emoji': emoji } });
+      }
+    } else {
+      await Message.findOneAndUpdate({ id: messageId }, { $push: { reactions: { emoji, user_id: socket.user.id } } });
+    }
+    const updated = await Message.findOne({ id: messageId });
+    io.to(roomId).emit('message:reacted', { messageId, reactions: updated.reactions, roomId });
+  });
+
+  socket.on('room:leave', async ({ roomId }) => {
+    await Room.findOneAndUpdate({ id: roomId }, { $pull: { members: socket.user.id } });
+    socket.leave(roomId);
+    const room = await Room.findOne({ id: roomId });
+    io.to(roomId).emit('room:members_updated', { roomId, members: room.members });
+    const sysId = uuidv4();
+    await Message.create({
+      id: sysId, room_id: roomId, sender_id: 'system', sender_name: 'system',
+      content: `${socket.user.username} がグループを退出しました`, type: 'system'
+    });
+    io.to(roomId).emit('message:receive', {
+      id: sysId, roomId, senderId: 'system', senderName: 'system',
+      content: `${socket.user.username} がグループを退出しました`,
+      type: 'system', replyTo: null, edited: false, deleted: false, readBy: [], reactions: [],
+      createdAt: new Date().toISOString()
+    });
+    socket.emit('room:left', { roomId });
+  });
+
+  socket.on('typing:start', ({ roomId }) => {
+    socket.to(roomId).emit('typing:update', { username: socket.user.username, isTyping: true });
+  });
+
+  socket.on('call:start', ({ roomId, offer }) => {
+    socket.to(roomId).emit('call:incoming', { from: socket.user.id, fromName: socket.user.username, offer, roomId });
+  });
+
+  socket.on('call:answer', ({ answer, to }) => {
+    io.to('user_' + to).emit('call:answered', { answer, from: socket.user.id });
+  });
+
+  socket.on('call:ice', ({ candidate, to }) => {
+    io.to('user_' + to).emit('call:ice', { candidate, from: socket.user.id });
+  });
+
+  socket.on('call:end', ({ roomId }) => {
+    socket.to(roomId).emit('call:ended', { from: socket.user.id });
+  });
+
+  socket.on('disconnect', () => console.log('切断:', socket.user.username));
+});
+
+const clientBuild = join(__dirname, 'client/build');
+app.use(express.static(clientBuild));
+app.get('/{*path}', (req, res) => {
+  res.sendFile(join(clientBuild, 'index.html'));
+});
+
+const PORT = process.env.PORT || 4000;
+httpServer.listen(PORT, '0.0.0.0', () => console.log('Server: http://localhost:' + PORT));
