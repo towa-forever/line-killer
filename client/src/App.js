@@ -12,7 +12,7 @@ import GroupSettings from './components/GroupSettings';
 import CreateRoom from './components/CreateRoom';
 import './App.css';
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'http://nexus.ap-1.evennode.com';
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 
 axios.defaults.baseURL = SERVER_URL;
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'http://nexus.ap-1.evennode.com';
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 
 export default function Album({ currentUser }) {
   const [photos, setPhotos] = useState([]);
