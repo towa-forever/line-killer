@@ -179,9 +179,9 @@ const STAMP_SETS = [
   ]},
 ];
 
-app.get('/stamps', (req, res) => res.json(STAMP_SETS));
+app.get('/api/stamps', (req, res) => res.json(STAMP_SETS));
 
-app.post('/stamps/acquire', async (req, res) => {
+app.post('/api/stamps/acquire', async (req, res) => {
   try {
     const decoded = auth(req);
     const { setId } = req.body;
@@ -190,7 +190,7 @@ app.post('/stamps/acquire', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.get('/stamps/mysets', async (req, res) => {
+app.get('/api/stamps/mysets', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
@@ -199,7 +199,7 @@ app.get('/stamps/mysets', async (req, res) => {
 });
 
 // 認証
-app.post('/auth/register', async (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
   const exists = await User.findOne({ username });
@@ -211,7 +211,7 @@ app.post('/auth/register', async (req, res) => {
   res.json({ token, user: { id, username, avatar: null, status: '' } });
 });
 
-app.post('/auth/login', async (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   const user = await User.findOne({ username });
   if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
@@ -221,7 +221,7 @@ app.post('/auth/login', async (req, res) => {
   res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, status: user.status } });
 });
 
-app.get('/auth/me', async (req, res) => {
+app.get('/api/auth/me', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id }, { password: 0 });
@@ -230,7 +230,7 @@ app.get('/auth/me', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.get('/users/search', async (req, res) => {
+app.get('/api/users/search', async (req, res) => {
   try {
     const { authorization } = req.headers;
     const token = authorization?.split(' ')[1];
@@ -244,12 +244,12 @@ app.get('/users/search', async (req, res) => {
   } catch { res.status(401).json({ error: 'unauthorized' }); }
 });
 
-app.get('/users', async (req, res) => {
+app.get('/api/users', async (req, res) => {
   const users = await User.find({}, { password: 0 });
   res.json(users);
 });
 
-app.patch('/users/me', upload.single('avatar'), async (req, res) => {
+app.patch('/api/users/me', upload.single('avatar'), async (req, res) => {
   try {
     const decoded = auth(req);
     const { status } = req.body;
@@ -263,7 +263,7 @@ app.patch('/users/me', upload.single('avatar'), async (req, res) => {
 });
 
 // 友だち申請
-app.get('/friend-requests', async (req, res) => {
+app.get('/api/friend-requests', async (req, res) => {
   try {
     const decoded = auth(req);
     const requests = await FriendRequest.find({ to_id: decoded.id, status: 'pending' });
@@ -271,7 +271,7 @@ app.get('/friend-requests', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.post('/friend-requests', async (req, res) => {
+app.post('/api/friend-requests', async (req, res) => {
   try {
     const decoded = auth(req);
     const { toId } = req.body;
@@ -287,7 +287,7 @@ app.post('/friend-requests', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.post('/friend-requests/:requestId/accept', async (req, res) => {
+app.post('/api/friend-requests/:requestId/accept', async (req, res) => {
   try {
     const decoded = auth(req);
     const request = await FriendRequest.findOne({ id: req.params.requestId, to_id: decoded.id });
@@ -300,7 +300,7 @@ app.post('/friend-requests/:requestId/accept', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.post('/friend-requests/:requestId/reject', async (req, res) => {
+app.post('/api/friend-requests/:requestId/reject', async (req, res) => {
   try {
     const decoded = auth(req);
     await FriendRequest.findOneAndUpdate({ id: req.params.requestId, to_id: decoded.id }, { status: 'rejected' });
@@ -309,7 +309,7 @@ app.post('/friend-requests/:requestId/reject', async (req, res) => {
 });
 
 // 友だち
-app.get('/friends', async (req, res) => {
+app.get('/api/friends', async (req, res) => {
   try {
     const decoded = auth(req);
     const friends = await Friend.find({ user_id: decoded.id });
@@ -318,7 +318,7 @@ app.get('/friends', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.delete('/friends/:friendId', async (req, res) => {
+app.delete('/api/friends/:friendId', async (req, res) => {
   try {
     const decoded = auth(req);
     await Friend.deleteOne({ user_id: decoded.id, friend_id: req.params.friendId });
@@ -328,7 +328,7 @@ app.delete('/friends/:friendId', async (req, res) => {
 });
 
 // ブロック
-app.post('/users/:userId/block', async (req, res) => {
+app.post('/api/users/:userId/block', async (req, res) => {
   try {
     const decoded = auth(req);
     await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { blocked_users: req.params.userId } });
@@ -338,7 +338,7 @@ app.post('/users/:userId/block', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.delete('/users/:userId/block', async (req, res) => {
+app.delete('/api/users/:userId/block', async (req, res) => {
   try {
     const decoded = auth(req);
     await User.findOneAndUpdate({ id: decoded.id }, { $pull: { blocked_users: req.params.userId } });
@@ -346,7 +346,7 @@ app.delete('/users/:userId/block', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.get('/users/blocked', async (req, res) => {
+app.get('/api/users/blocked', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
@@ -356,7 +356,7 @@ app.get('/users/blocked', async (req, res) => {
 });
 
 // 通知OFF
-app.post('/rooms/:roomId/mute', async (req, res) => {
+app.post('/api/rooms/:roomId/mute', async (req, res) => {
   try {
     const decoded = auth(req);
     await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { muted_rooms: req.params.roomId } });
@@ -364,7 +364,7 @@ app.post('/rooms/:roomId/mute', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.delete('/rooms/:roomId/mute', async (req, res) => {
+app.delete('/api/rooms/:roomId/mute', async (req, res) => {
   try {
     const decoded = auth(req);
     await User.findOneAndUpdate({ id: decoded.id }, { $pull: { muted_rooms: req.params.roomId } });
@@ -373,7 +373,7 @@ app.delete('/rooms/:roomId/mute', async (req, res) => {
 });
 
 // タイムライン
-app.get('/posts', async (req, res) => {
+app.get('/api/posts', async (req, res) => {
   try {
     auth(req);
     const posts = await Post.find().sort({ created_at: -1 }).limit(50);
@@ -381,7 +381,7 @@ app.get('/posts', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.post('/posts', upload.single('image'), async (req, res) => {
+app.post('/api/posts', upload.single('image'), async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
@@ -399,7 +399,7 @@ app.post('/posts', upload.single('image'), async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.post('/posts/:postId/like', async (req, res) => {
+app.post('/api/posts/:postId/like', async (req, res) => {
   try {
     const decoded = auth(req);
     const post = await Post.findOne({ id: req.params.postId });
@@ -416,7 +416,7 @@ app.post('/posts/:postId/like', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.post('/posts/:postId/comments', async (req, res) => {
+app.post('/api/posts/:postId/comments', async (req, res) => {
   try {
     const decoded = auth(req);
     const { content } = req.body;
@@ -427,7 +427,7 @@ app.post('/posts/:postId/comments', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.delete('/posts/:postId', async (req, res) => {
+app.delete('/api/posts/:postId', async (req, res) => {
   try {
     const decoded = auth(req);
     await Post.deleteOne({ id: req.params.postId, user_id: decoded.id });
@@ -437,7 +437,7 @@ app.delete('/posts/:postId', async (req, res) => {
 });
 
 // 部屋
-app.get('/rooms', async (req, res) => {
+app.get('/api/rooms', async (req, res) => {
   try {
     const decoded = auth(req);
     const rooms = await Room.find({ members: decoded.id });
@@ -445,7 +445,7 @@ app.get('/rooms', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.post('/rooms', async (req, res) => {
+app.post('/api/rooms', async (req, res) => {
   try {
     const decoded = auth(req);
     const { name, memberIds } = req.body;
@@ -460,7 +460,7 @@ app.post('/rooms', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.patch('/rooms/:roomId/name', async (req, res) => {
+app.patch('/api/rooms/:roomId/name', async (req, res) => {
   try {
     const decoded = auth(req);
     const room = await Room.findOneAndUpdate(
@@ -473,7 +473,7 @@ app.patch('/rooms/:roomId/name', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.post('/rooms/:roomId/icon', upload.single('icon'), async (req, res) => {
+app.post('/api/rooms/:roomId/icon', upload.single('icon'), async (req, res) => {
   try {
     const decoded = auth(req);
     const icon = `/uploads/${req.file.filename}`;
@@ -487,7 +487,7 @@ app.post('/rooms/:roomId/icon', upload.single('icon'), async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.post('/rooms/:roomId/members', async (req, res) => {
+app.post('/api/rooms/:roomId/members', async (req, res) => {
   try {
     const decoded = auth(req);
     const { memberIds } = req.body;
@@ -502,7 +502,7 @@ app.post('/rooms/:roomId/members', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.patch('/rooms/:roomId/pin', async (req, res) => {
+app.patch('/api/rooms/:roomId/pin', async (req, res) => {
   try {
     const decoded = auth(req);
     const { messageId } = req.body;
@@ -517,7 +517,7 @@ app.patch('/rooms/:roomId/pin', async (req, res) => {
 });
 
 // メッセージ
-app.get('/rooms/:roomId/messages', async (req, res) => {
+app.get('/api/rooms/:roomId/messages', async (req, res) => {
   try {
     const decoded = auth(req);
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
@@ -527,7 +527,7 @@ app.get('/rooms/:roomId/messages', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.get('/rooms/:roomId/search', async (req, res) => {
+app.get('/api/rooms/:roomId/search', async (req, res) => {
   try {
     const decoded = auth(req);
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
@@ -537,7 +537,7 @@ app.get('/rooms/:roomId/search', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.get('/rooms/:roomId/album', async (req, res) => {
+app.get('/api/rooms/:roomId/album', async (req, res) => {
   try {
     const decoded = auth(req);
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
@@ -547,7 +547,7 @@ app.get('/rooms/:roomId/album', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.post('/upload', upload.single('file'), (req, res) => {
+app.post('/api/upload', upload.single('file'), (req, res) => {
   try {
     auth(req);
     if (!req.file) return res.status(400).json({ error: 'ファイルなし' });
@@ -563,7 +563,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.get('/debug-path', (req, res) => {
+app.get('/api/debug-path', (req, res) => {
   res.json({ __dirname, clientBuild: join(__dirname, '../client/build') });
 });
 
@@ -690,7 +690,7 @@ io.on('connection', async (socket) => {
 
 const clientBuild = join(__dirname, '../client/build');
 app.use(express.static(clientBuild));
-app.get('/{*path}', (req, res) => {
+app.get('/api/{*path}', (req, res) => {
   res.sendFile(join(clientBuild, 'index.html'));
 });
 
