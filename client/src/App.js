@@ -357,7 +357,7 @@ export default function App() {
         <main className="app-main">
           <Routes>
             <Route path="/videocall/:roomId/:targetUserId" element={<VideoCall currentUser={currentUser} socket={socket} />} />
-            <Route path="*" element={renderTab()} />
+            <Route path="*" element={renderTabs()} />
           </Routes>
         </main>
         <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} />
