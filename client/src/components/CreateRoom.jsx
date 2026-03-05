@@ -22,7 +22,7 @@ export default function CreateRoom({ currentUser, onClose, onCreated }) {
   const handleCreate = async () => {
     if (selectedUsers.length === 0) { setError('相手を選んでください'); return; }
     if (tab === 'group' && !groupName.trim()) { setError('グループ名を入力してください'); return; }
-    setCreating(true); setError('');
+    setCreating(true); setError(''); console.log('送信payload:', JSON.stringify(tab === 'dm' ? { memberIds: [selectedUsers[0]], name: 'DM' } : { memberIds: selectedUsers, name: groupName }));
     try {
       const payload = tab === 'dm'
         ? { memberIds: [selectedUsers[0]], name: "DM" }
