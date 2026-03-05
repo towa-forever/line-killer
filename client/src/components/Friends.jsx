@@ -16,7 +16,7 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
   }, []);
 
   const fetchRequests = useCallback(async () => {
-    try { const res = await axios.get('/api/friends/requests'); setRequests(res.data); } catch (err) {}
+    try { const res = await axios.get('/api/friend-requests'); setRequests(res.data); } catch (err) {}
   }, []);
 
   useEffect(() => {
@@ -36,41 +36,47 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
     setSearching(true); setSearchResults([]);
     try {
       const res = await axios.get(`/api/users/search?q=${encodeURIComponent(searchQuery)}`);
-      setSearchResults(res.data.filter((u) => u._id !== currentUser._id));
+      setSearchResults(res.data.filter((u) => u._id !== currentUser._id && u.id !== currentUser.id));
     } catch (err) { setMessage('検索に失敗しました'); }
     finally { setSearching(false); }
   };
 
   const sendRequest = async (userId) => {
     try {
-      await axios.post(`/api/friends/request/${userId}`);
+      await axios.post('/api/friend-requests', { to_id: userId });
       setMessage('友達申請を送りました！');
-      setSearchResults((prev) => prev.filter((u) => u._id !== userId));
+      setSearchResults((prev) => prev.filter((u) => u._id !== userId && u.id !== userId));
     } catch (err) { setMessage(err.response?.data?.message || '申請に失敗しました'); }
   };
 
-  const acceptRequest = async (userId) => {
+  const acceptRequest = async (requestId) => {
     try {
-      await axios.post(`/api/friends/accept/${userId}`);
+      await axios.post(`/api/friend-requests/${requestId}/accept`);
       setMessage('友達になりました！'); fetchRequests(); fetchFriends();
-    } catch (err) {}
+    } catch (err) { console.error(err); }
   };
 
-  const rejectRequest = async (userId) => {
-    try { await axios.post(`/api/friends/reject/${userId}`); fetchRequests(); } catch (err) {}
+  const rejectRequest = async (requestId) => {
+    try {
+      await axios.post(`/api/friend-requests/${requestId}/reject`);
+      fetchRequests();
+    } catch (err) {}
   };
 
   const blockUser = async (userId) => {
     if (!window.confirm('このユーザーをブロックしますか？')) return;
-    try { await axios.post(`/api/friends/block/${userId}`); setMessage('ブロックしました'); fetchFriends(); } catch (err) {}
+    try {
+      await axios.post(`/api/users/${userId}/block`);
+      setMessage('ブロックしました'); fetchFriends();
+    } catch (err) {}
   };
 
-  const removeFriend = async (userId) => {
+  const removeFriend = async (friendId) => {
     if (!window.confirm('友達を削除しますか？')) return;
-    try { await axios.delete(`/api/friends/${userId}`); fetchFriends(); } catch (err) {}
+    try { await axios.delete(`/api/friends/${friendId}`); fetchFriends(); } catch (err) {}
   };
 
-  const isFriend = (userId) => friends.some((f) => f._id === userId);
+  const isFriend = (userId) => friends.some((f) => f._id === userId || f.id === userId);
 
   return (
     <div className="page">
@@ -95,15 +101,15 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
         <div>
           {friends.length === 0 ? <div className="empty-state">友達がいません。検索で追加しよう！</div> : (
             friends.map((friend) => (
-              <div key={friend._id} className="user-item">
-                <div className="user-avatar-circle">{friend.displayName?.[0] || '?'}</div>
+              <div key={friend._id || friend.id} className="user-item">
+                <div className="user-avatar-circle">{friend.username?.[0] || '?'}</div>
                 <div className="user-info">
-                  <div className="user-name">{friend.displayName}</div>
+                  <div className="user-name">{friend.username}</div>
                   <div className="user-id">@{friend.username}</div>
                 </div>
                 <div className="user-actions">
-                  <button className="btn-small btn-danger-s" onClick={() => blockUser(friend._id)}>ブロック</button>
-                  <button className="btn-small" onClick={() => removeFriend(friend._id)}>削除</button>
+                  <button className="btn-small btn-danger-s" onClick={() => blockUser(friend._id || friend.id)}>ブロック</button>
+                  <button className="btn-small" onClick={() => removeFriend(friend._id || friend.id)}>削除</button>
                 </div>
               </div>
             ))
@@ -114,16 +120,16 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
       {tab === 'requests' && (
         <div>
           {requests.length === 0 ? <div className="empty-state">申請はありません</div> : (
-            requests.map((user) => (
-              <div key={user._id} className="user-item">
-                <div className="user-avatar-circle">{user.displayName?.[0] || '?'}</div>
+            requests.map((req) => (
+              <div key={req._id || req.id} className="user-item">
+                <div className="user-avatar-circle">{req.from_name?.[0] || '?'}</div>
                 <div className="user-info">
-                  <div className="user-name">{user.displayName}</div>
-                  <div className="user-id">@{user.username}</div>
+                  <div className="user-name">{req.from_name}</div>
+                  <div className="user-id">@{req.from_name}</div>
                 </div>
                 <div className="user-actions">
-                  <button className="btn-small btn-primary-s" onClick={() => acceptRequest(user._id)}>承認</button>
-                  <button className="btn-small" onClick={() => rejectRequest(user._id)}>拒否</button>
+                  <button className="btn-small btn-primary-s" onClick={() => acceptRequest(req._id || req.id)}>承認</button>
+                  <button className="btn-small" onClick={() => rejectRequest(req._id || req.id)}>拒否</button>
                 </div>
               </div>
             ))
@@ -144,16 +150,16 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
           </div>
           <div style={{ marginTop: 12 }}>
             {searchResults.map((user) => (
-              <div key={user._id} className="user-item">
-                <div className="user-avatar-circle">{user.displayName?.[0] || '?'}</div>
+              <div key={user._id || user.id} className="user-item">
+                <div className="user-avatar-circle">{user.username?.[0] || '?'}</div>
                 <div className="user-info">
-                  <div className="user-name">{user.displayName}</div>
+                  <div className="user-name">{user.username}</div>
                   <div className="user-id">@{user.username}</div>
                 </div>
                 <div className="user-actions">
-                  {isFriend(user._id)
+                  {isFriend(user._id || user.id)
                     ? <span className="badge-friend">友達</span>
-                    : <button className="btn-small btn-primary-s" onClick={() => sendRequest(user._id)}>申請</button>}
+                    : <button className="btn-small btn-primary-s" onClick={() => sendRequest(user._id || user.id)}>申請</button>}
                 </div>
               </div>
             ))}
@@ -168,7 +174,6 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
             <QRCode value={`linekiller://add/${currentUser.username}`} size={200} level="H" />
           </div>
           <p style={{ marginTop: 16, color: 'var(--text2)', fontSize: 13 }}>@{currentUser.username}</p>
-          <p style={{ color: 'var(--text2)', fontSize: 12, marginTop: 4 }}>QRコードを読み取って友達追加</p>
         </div>
       )}
 

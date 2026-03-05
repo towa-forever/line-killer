@@ -12,7 +12,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await axios.put('/api/users/me', { displayName, bio });
+      const res = await axios.patch('/api/users/me', { displayName, bio });
       onUpdate(res.data);
       setMessage('プロフィールを更新しました！');
       setEditing(false);

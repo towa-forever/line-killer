@@ -98,7 +98,7 @@ function ChatScreen({ socket, currentUser, darkMode }) {
 
   const fetchMyStamps = useCallback(async () => {
     try {
-      const res = await axios.get('/api/stamps/my');
+      const res = await axios.get('/api/stamps/mysets');
       setMyStamps(res.data);
     } catch (err) {}
   }, []);

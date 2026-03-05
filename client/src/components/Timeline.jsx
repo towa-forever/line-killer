@@ -14,7 +14,7 @@ export default function Timeline({ currentUser }) {
   const [loading, setLoading] = useState(true);
 
   const fetchPosts = useCallback(async () => {
-    try { const res = await axios.get('/api/timeline'); setPosts(res.data); }
+    try { const res = await axios.get('/api/posts'); setPosts(res.data); }
     catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, []);
@@ -37,7 +37,7 @@ export default function Timeline({ currentUser }) {
       const formData = new FormData();
       formData.append('content', newPostText);
       if (newPostImage) formData.append('image', newPostImage);
-      const res = await axios.post('/api/timeline', formData, {
+      const res = await axios.post('/api/posts', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setPosts((prev) => [res.data, ...prev]);
@@ -48,7 +48,7 @@ export default function Timeline({ currentUser }) {
 
   const handleLike = async (postId) => {
     try {
-      const res = await axios.post(`/api/timeline/${postId}/like`);
+      const res = await axios.post(`/api/posts/${postId}/like`);
       setPosts((prev) => prev.map((p) => p._id === postId ? { ...p, likes: res.data.likes } : p));
     } catch (err) {}
   };
@@ -57,7 +57,7 @@ export default function Timeline({ currentUser }) {
     const text = commentInputs[postId];
     if (!text?.trim()) return;
     try {
-      const res = await axios.post(`/api/timeline/${postId}/comment`, { content: text });
+      const res = await axios.post(`/api/posts/${postId}/comment`, { content: text });
       setPosts((prev) => prev.map((p) => p._id === postId ? { ...p, comments: res.data.comments } : p));
       setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
     } catch (err) {}
@@ -65,7 +65,7 @@ export default function Timeline({ currentUser }) {
 
   const handleDeletePost = async (postId) => {
     if (!window.confirm('投稿を削除しますか？')) return;
-    try { await axios.delete(`/api/timeline/${postId}`); setPosts((prev) => prev.filter((p) => p._id !== postId)); }
+    try { await axios.delete(`/api/posts/${postId}`); setPosts((prev) => prev.filter((p) => p._id !== postId)); }
     catch (err) {}
   };
 

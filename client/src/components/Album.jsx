@@ -6,34 +6,32 @@ const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-serv
 export default function Album({ currentUser }) {
   const [photos, setPhotos] = useState([]);
   const [rooms, setRooms] = useState([]);
-  const [selectedRoom, setSelectedRoom] = useState('all');
+  const [selectedRoom, setSelectedRoom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const [photoRes, roomRes] = await Promise.all([
-        axios.get('/api/album'),
-        axios.get('/api/rooms'),
-      ]);
-      setPhotos(photoRes.data);
+      const roomRes = await axios.get('/api/rooms');
       setRooms(roomRes.data);
+      // 全ルームの写真を取得
+      const allPhotos = [];
+      for (const room of roomRes.data) {
+        try {
+          const photoRes = await axios.get(`/api/rooms/${room._id || room.id}/album`);
+          photoRes.data.forEach(p => allPhotos.push({ ...p, roomId: room._id || room.id, roomName: room.name }));
+        } catch (e) {}
+      }
+      setPhotos(allPhotos);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const filteredPhotos = selectedRoom === 'all'
-    ? photos
-    : photos.filter((p) => p.roomId === selectedRoom);
-
-  const getRoomName = (room) => {
-    if (!room) return '不明';
-    if (room.name) return room.name;
-    const others = room.members?.filter((m) => m._id !== currentUser._id);
-    return others?.map((m) => m.displayName).join(', ') || '不明';
-  };
+  const filteredPhotos = selectedRoom
+    ? photos.filter((p) => p.roomId === selectedRoom)
+    : photos;
 
   if (loading) return <div className="page"><div className="empty-state">読み込み中...</div></div>;
 
@@ -42,18 +40,18 @@ export default function Album({ currentUser }) {
       <div className="page-header">アルバム</div>
 
       <div className="album-rooms">
-        <button className={`album-room-btn ${selectedRoom === 'all' ? 'active' : ''}`}
-          onClick={() => setSelectedRoom('all')}>
+        <button className={`album-room-btn ${!selectedRoom ? 'active' : ''}`}
+          onClick={() => setSelectedRoom(null)}>
           全て ({photos.length})
         </button>
         {rooms.map((room) => {
-          const count = photos.filter((p) => p.roomId === room._id).length;
+          const count = photos.filter((p) => p.roomId === (room._id || room.id)).length;
           if (count === 0) return null;
           return (
-            <button key={room._id}
-              className={`album-room-btn ${selectedRoom === room._id ? 'active' : ''}`}
-              onClick={() => setSelectedRoom(room._id)}>
-              {getRoomName(room)} ({count})
+            <button key={room._id || room.id}
+              className={`album-room-btn ${selectedRoom === (room._id || room.id) ? 'active' : ''}`}
+              onClick={() => setSelectedRoom(room._id || room.id)}>
+              {room.name || 'ルーム'} ({count})
             </button>
           );
         })}
@@ -68,8 +66,8 @@ export default function Album({ currentUser }) {
       ) : (
         <div className="album-grid">
           {filteredPhotos.map((photo, i) => (
-            <div key={photo._id || i} className="album-item" onClick={() => setLightbox(photo)}>
-              <img src={`${SERVER_URL}${photo.fileUrl || photo.url}`} alt=""
+            <div key={photo._id || photo.id || i} className="album-item" onClick={() => setLightbox(photo)}>
+              <img src={`${SERVER_URL}${photo.file_data?.url || photo.fileUrl || photo.url}`} alt=""
                 className="album-thumb" loading="lazy" />
             </div>
           ))}
@@ -80,17 +78,11 @@ export default function Album({ currentUser }) {
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
             <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
-            <img src={`${SERVER_URL}${lightbox.fileUrl || lightbox.url}`} alt="" className="lightbox-img" />
+            <img src={`${SERVER_URL}${lightbox.file_data?.url || lightbox.fileUrl || lightbox.url}`} alt="" className="lightbox-img" />
             <div className="lightbox-info">
-              <span>{lightbox.sender?.displayName || '不明'}</span>
-              <span>{new Date(lightbox.createdAt).toLocaleDateString('ja-JP')}</span>
+              <span>{lightbox.sender_name || '不明'}</span>
+              <span>{new Date(lightbox.created_at || lightbox.createdAt).toLocaleDateString('ja-JP')}</span>
             </div>
-            <a href={`${SERVER_URL}${lightbox.fileUrl || lightbox.url}`} download
-              target="_blank" rel="noreferrer" className="btn btn-primary"
-              style={{ width: '100%', textAlign: 'center', marginTop: 10, display: 'block', padding: '8px' }}
-              onClick={(e) => e.stopPropagation()}>
-              ⬇ ダウンロード
-            </a>
           </div>
         </div>
       )}

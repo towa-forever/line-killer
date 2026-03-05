@@ -15,7 +15,7 @@ export default function StampShop({ currentUser }) {
     try {
       const [shopRes, myRes] = await Promise.all([
         axios.get('/api/stamps'),
-        axios.get('/api/stamps/my'),
+        axios.get('/api/stamps/mysets'),
       ]);
       setStamps(shopRes.data);
       setMyStamps(myRes.data);
