@@ -336,7 +336,7 @@ export default function App() {
       case 'chat': return <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} /></ErrorBoundary>;
       case 'friends': return <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />;
       case 'timeline': return <Timeline currentUser={currentUser} />;
-      case 'stampshop': return <ErrorBoundary><StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} />;
+      case 'stampshop': return <ErrorBoundary><StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} /></ErrorBoundary>;
       case 'album': return <Album currentUser={currentUser} />;
       case 'profile': return <Profile currentUser={currentUser} onUpdate={setCurrentUser} onLogout={handleLogout} darkMode={darkMode} onToggleDark={() => setDarkMode(!darkMode)} />;
       default: return null;
