@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
 import Friends from './components/Friends';
@@ -8,41 +8,29 @@ import StampShop from './components/StampShop';
 import Album from './components/Album';
 import Profile from './components/Profile';
 import VideoCall from './components/VideoCall';
-import GroupSettings from './components/GroupSettings';
 import CreateRoom from './components/CreateRoom';
 import './App.css';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
-
 axios.defaults.baseURL = SERVER_URL;
 
 function AuthScreen({ onLogin }) {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     try {
-      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-      const payload = isLogin
-        ? { username, password }
-        : { username, password, displayName: displayName || username };
-      const res = await axios.post(endpoint, payload);
+      const res = await axios.post(isLogin ? '/api/auth/login' : '/api/auth/register', { username, password });
       localStorage.setItem('token', res.data.token);
-      localStorage.setItem('userId', res.data.user._id);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       onLogin(res.data.user);
-    } catch (err) {
-      setError(err.response?.data?.message || '接続エラー');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { setError(err.response?.data?.error || '接続エラー'); }
+    finally { setLoading(false); }
   };
 
   return (
@@ -54,10 +42,6 @@ function AuthScreen({ onLogin }) {
           <p>LINEを超えるチャットアプリ</p>
         </div>
         <form onSubmit={handleSubmit}>
-          {!isLogin && (
-            <input type="text" placeholder="表示名" value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)} className="auth-input" />
-          )}
           <input type="text" placeholder="ユーザーID" value={username}
             onChange={(e) => setUsername(e.target.value)} required className="auth-input" />
           <input type="password" placeholder="パスワード" value={password}
@@ -75,13 +59,11 @@ function AuthScreen({ onLogin }) {
   );
 }
 
-function ChatScreen({ socket, currentUser, darkMode }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [onlineUsers, setOnlineUsers] = useState([]);
-  const [myStamps, setMyStamps] = useState([]);
   const [showStampPanel, setShowStampPanel] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
@@ -89,52 +71,34 @@ function ChatScreen({ socket, currentUser, darkMode }) {
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
+  const myStampSets = allStampSets.filter(s => acquiredStampIds.includes(s.id));
+
   const fetchRooms = useCallback(async () => {
-    try {
-      const res = await axios.get('/api/rooms');
-      setRooms(res.data);
-    } catch (err) { console.error(err); }
+    try { const res = await axios.get('/api/rooms'); setRooms(res.data); }
+    catch (err) { console.error(err); }
   }, []);
 
-  const fetchMyStamps = useCallback(async () => {
-    try {
-      const res = await axios.get('/api/stamps/mysets');
-      setMyStamps(res.data);
-    } catch (err) {}
-  }, []);
-
-  useEffect(() => { fetchRooms(); fetchMyStamps(); }, [fetchRooms, fetchMyStamps]);
+  useEffect(() => { fetchRooms(); }, [fetchRooms]);
 
   useEffect(() => {
     if (!socket) return;
-    socket.on('message:new', (msg) => {
-      if (msg.roomId === selectedRoom?._id) setMessages((prev) => [...prev, msg]);
+    socket.on('message:receive', (msg) => {
+      if (msg.roomId === selectedRoom?.id) setMessages((prev) => [...prev, msg]);
       setRooms((prev) =>
-        prev.map((r) => r._id === msg.roomId ? { ...r, lastMessage: msg, updatedAt: msg.createdAt } : r)
-          .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+        prev.map((r) => r.id === msg.roomId ? { ...r, lastMessage: msg } : r)
       );
     });
-    socket.on('online:update', (users) => setOnlineUsers(users));
-    socket.on('typing:start', ({ userId, roomId, displayName }) => {
-      if (roomId === selectedRoom?._id && userId !== currentUser._id)
-        setTypingUsers((prev) => prev.includes(displayName) ? prev : [...prev, displayName]);
-    });
-    socket.on('typing:stop', ({ displayName }) => {
-      setTypingUsers((prev) => prev.filter((n) => n !== displayName));
-    });
-    return () => {
-      socket.off('message:new'); socket.off('online:update');
-      socket.off('typing:start'); socket.off('typing:stop');
-    };
-  }, [socket, selectedRoom, currentUser._id]);
+    socket.on('room:new', (room) => setRooms((prev) => [room, ...prev]));
+    return () => { socket.off('message:receive'); socket.off('room:new'); };
+  }, [socket, selectedRoom]);
 
   useEffect(() => {
     if (!selectedRoom) return;
     (async () => {
       try {
-        const res = await axios.get(`/api/rooms/${selectedRoom._id}/messages`);
+        const res = await axios.get(`/api/rooms/${selectedRoom.id}/messages`);
         setMessages(res.data);
-        if (socket) socket.emit('room:join', selectedRoom._id);
+        if (socket) socket.emit('room:join', selectedRoom.id);
       } catch (err) { console.error(err); }
     })();
   }, [selectedRoom, socket]);
@@ -142,20 +106,20 @@ function ChatScreen({ socket, currentUser, darkMode }) {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const handleSend = async () => {
-    if (!inputText.trim() || !selectedRoom) return;
-    try {
-      await axios.post(`/api/rooms/${selectedRoom._id}/messages`, { content: inputText, type: 'text' });
-      setInputText('');
-      socket?.emit('typing:stop', { roomId: selectedRoom._id, displayName: currentUser.displayName });
-    } catch (err) { console.error(err); }
+    if (!inputText.trim() || !selectedRoom || !socket) return;
+    socket.emit('message:send', { roomId: selectedRoom.id, content: inputText, type: 'text' });
+    setInputText('');
   };
 
-  const handleSendStamp = async (stampId) => {
-    if (!selectedRoom) return;
-    try {
-      await axios.post(`/api/rooms/${selectedRoom._id}/messages`, { content: stampId, type: 'stamp' });
-      setShowStampPanel(false);
-    } catch (err) {}
+  const handleSendStamp = (stampSet, stamp) => {
+    if (!selectedRoom || !socket) return;
+    socket.emit('message:send', {
+      roomId: selectedRoom.id,
+      content: stamp.emoji,
+      type: 'stamp',
+      stampLabel: stamp.label
+    });
+    setShowStampPanel(false);
   };
 
   const handleFileUpload = async (e) => {
@@ -163,10 +127,13 @@ function ChatScreen({ socket, currentUser, darkMode }) {
     if (!file || !selectedRoom) return;
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('roomId', selectedRoom._id);
     try {
-      await axios.post(`/api/rooms/${selectedRoom._id}/messages/file`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const res = await axios.post('/api/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      socket?.emit('message:send', {
+        roomId: selectedRoom.id,
+        content: res.data.filename || 'ファイル',
+        type: res.data.isImage ? 'image' : 'file',
+        fileData: res.data
       });
     } catch (err) { console.error(err); }
     e.target.value = '';
@@ -175,40 +142,29 @@ function ChatScreen({ socket, currentUser, darkMode }) {
   const handleTyping = (e) => {
     setInputText(e.target.value);
     if (!socket || !selectedRoom) return;
-    socket.emit('typing:start', { roomId: selectedRoom._id, displayName: currentUser.displayName });
+    socket.emit('typing:start', { roomId: selectedRoom.id });
     clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      socket.emit('typing:stop', { roomId: selectedRoom._id, displayName: currentUser.displayName });
-    }, 2000);
+    typingTimeoutRef.current = setTimeout(() => socket.emit('typing:stop', { roomId: selectedRoom.id }), 2000);
   };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-  };
-
-  const isOnline = (userId) => onlineUsers.includes(userId);
 
   const renderMessage = (msg) => {
-    const isMine = msg.sender?._id === currentUser._id || msg.sender === currentUser._id;
-    const senderName = msg.sender?.displayName || '';
+    const isMine = msg.senderId === currentUser.id;
     const time = new Date(msg.createdAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
     let content;
     if (msg.type === 'stamp') {
-      const stamp = myStamps.find((s) => s._id === msg.content);
-      content = stamp ? <img src={`${SERVER_URL}${stamp.imageUrl}`} alt="stamp" className="chat-stamp" /> : <span>🎫</span>;
-    } else if (msg.type === 'file' || msg.type === 'image') {
-      const isImage = msg.fileType?.startsWith('image/') || msg.type === 'image';
-      content = isImage
-        ? <img src={`${SERVER_URL}${msg.fileUrl}`} alt="img" className="chat-image" />
-        : <a href={`${SERVER_URL}${msg.fileUrl}`} target="_blank" rel="noreferrer" className="chat-file-link">📎 {msg.fileName || 'ファイル'}</a>;
+      content = <span style={{ fontSize: 36 }}>{msg.content}</span>;
+    } else if (msg.type === 'image' && msg.fileData?.url) {
+      content = <img src={`${SERVER_URL}${msg.fileData.url}`} alt="img" className="chat-image" />;
+    } else if (msg.type === 'file' && msg.fileData?.url) {
+      content = <a href={`${SERVER_URL}${msg.fileData.url}`} target="_blank" rel="noreferrer" className="chat-file-link">📎 {msg.content}</a>;
     } else {
       content = <span>{msg.content}</span>;
     }
     return (
-      <div key={msg._id} className={`message ${isMine ? 'mine' : 'theirs'}`}>
-        {!isMine && <div className="message-avatar">{senderName?.[0] || '?'}</div>}
+      <div key={msg.id} className={`message ${isMine ? 'mine' : 'theirs'}`}>
+        {!isMine && <div className="message-avatar">{msg.senderName?.[0] || '?'}</div>}
         <div className="message-body">
-          {!isMine && <div className="message-sender">{senderName}</div>}
+          {!isMine && <div className="message-sender">{msg.senderName}</div>}
           <div className="message-bubble">{content}</div>
           <div className="message-time">{time}</div>
         </div>
@@ -225,25 +181,17 @@ function ChatScreen({ socket, currentUser, darkMode }) {
         </div>
         <div className="room-items">
           {rooms.map((room) => {
-            const otherMembers = room.members?.filter((m) => m._id !== currentUser._id) || [];
-            const roomName = room.name || otherMembers.map((m) => m.displayName).join(', ') || '不明';
             const lastMsg = room.lastMessage;
-            const unread = room.unreadCount || 0;
-            const online = otherMembers.some((m) => isOnline(m._id));
             return (
-              <div key={room._id} className={`room-item ${selectedRoom?._id === room._id ? 'active' : ''}`}
+              <div key={room.id} className={`room-item ${selectedRoom?.id === room.id ? 'active' : ''}`}
                 onClick={() => setSelectedRoom(room)}>
-                <div className="room-avatar">
-                  {room.isGroup ? '👥' : roomName[0] || '?'}
-                  {online && <span className="online-dot" />}
-                </div>
+                <div className="room-avatar">{room.icon ? <img src={`${SERVER_URL}${room.icon}`} alt="" style={{width:40,height:40,borderRadius:'50%',objectFit:'cover'}} /> : (room.name?.[0] || '?')}</div>
                 <div className="room-info">
-                  <div className="room-name">{roomName}</div>
+                  <div className="room-name">{room.name}</div>
                   <div className="room-last-msg">
                     {lastMsg?.type === 'stamp' ? '[スタンプ]' : lastMsg?.type === 'file' ? '[ファイル]' : lastMsg?.content?.slice(0, 30) || ''}
                   </div>
                 </div>
-                {unread > 0 && <div className="unread-badge">{unread}</div>}
               </div>
             );
           })}
@@ -254,9 +202,7 @@ function ChatScreen({ socket, currentUser, darkMode }) {
         <div className="message-area">
           <div className="chat-header">
             <button className="icon-btn back-btn" onClick={() => setSelectedRoom(null)}>←</button>
-            <div className="chat-header-name">
-              {selectedRoom.name || selectedRoom.members?.find((m) => m._id !== currentUser._id)?.displayName || 'トーク'}
-            </div>
+            <div className="chat-header-name">{selectedRoom.name}</div>
           </div>
           <div className="messages-container">
             {messages.map(renderMessage)}
@@ -266,11 +212,16 @@ function ChatScreen({ socket, currentUser, darkMode }) {
           <div className="input-area">
             {showStampPanel && (
               <div className="stamp-panel">
-                {myStamps.map((s) => (
-                  <img key={s._id} src={`${SERVER_URL}${s.imageUrl}`} alt="stamp"
-                    className="stamp-thumbnail" onClick={() => handleSendStamp(s._id)} />
-                ))}
-                {myStamps.length === 0 && <span className="no-stamps">スタンプなし</span>}
+                {myStampSets.length === 0
+                  ? <span className="no-stamps">ショップでスタンプを追加しよう！</span>
+                  : myStampSets.map((stampSet) => (
+                    stampSet.stamps.map((stamp, i) => (
+                      <span key={`${stampSet.id}-${i}`} style={{ fontSize: 32, cursor: 'pointer', padding: 4 }}
+                        title={stamp.label}
+                        onClick={() => handleSendStamp(stampSet, stamp)}>{stamp.emoji}</span>
+                    ))
+                  ))
+                }
               </div>
             )}
             <div className="input-row">
@@ -278,7 +229,8 @@ function ChatScreen({ socket, currentUser, darkMode }) {
               <button className="icon-btn" onClick={() => fileInputRef.current?.click()}>📎</button>
               <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
               <textarea className="message-input" value={inputText} onChange={handleTyping}
-                onKeyDown={handleKeyDown} placeholder="メッセージを入力..." rows={1} />
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+                placeholder="メッセージを入力..." rows={1} />
               <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>送信</button>
             </div>
           </div>
@@ -323,8 +275,10 @@ export default function App() {
   const [socket, setSocket] = useState(null);
   const [activeTab, setActiveTab] = useState('chat');
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
-  const [notifications, setNotifications] = useState({ friends: 0, chat: 0 });
+  const [notifications, setNotifications] = useState({ friends: 0 });
   const [toast, setToast] = useState(null);
+  const [allStampSets, setAllStampSets] = useState([]);
+  const [acquiredStampIds, setAcquiredStampIds] = useState([]);
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -336,25 +290,26 @@ export default function App() {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       axios.get('/api/auth/me')
-        .then((res) => setCurrentUser(res.data))
-        .catch(() => { localStorage.removeItem('token'); localStorage.removeItem('userId'); });
+        .then((res) => setCurrentUser(res.data.user))
+        .catch(() => { localStorage.removeItem('token'); });
     }
   }, []);
 
   useEffect(() => {
     if (!currentUser) return;
+    axios.get('/api/stamps').then(res => setAllStampSets(res.data)).catch(() => {});
+    axios.get('/api/stamps/mysets').then(res => setAcquiredStampIds(res.data.acquired || [])).catch(() => {});
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
     const token = localStorage.getItem('token');
-    const s = io(SERVER_URL, {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-    });
-    s.on('connect', () => s.emit('user:online', currentUser._id));
+    const s = io(SERVER_URL, { auth: { token }, transports: ['websocket', 'polling'], reconnection: true });
     s.on('friend:request', (data) => {
-      showToast(`${data.fromName} から友達申請が届きました`);
+      showToast(`${data.from_name} から友達申請が届きました`);
       setNotifications((prev) => ({ ...prev, friends: prev.friends + 1 }));
     });
-    s.on('friend:accepted', (data) => showToast(`${data.name} と友達になりました！`, 'success'));
+    s.on('friend:accepted', (data) => showToast(`${data.by_name} と友達になりました！`, 'success'));
     setSocket(s);
     return () => s.disconnect();
   }, [currentUser, showToast]);
@@ -364,21 +319,23 @@ export default function App() {
     localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
 
+  const handleLogin = (user) => setCurrentUser(user);
+
   const handleLogout = () => {
-    localStorage.removeItem('token'); localStorage.removeItem('userId');
+    localStorage.removeItem('token');
     delete axios.defaults.headers.common['Authorization'];
     if (socket) socket.disconnect();
     setSocket(null); setCurrentUser(null);
   };
 
-  if (!currentUser) return <AuthScreen onLogin={setCurrentUser} />;
+  if (!currentUser) return <AuthScreen onLogin={handleLogin} />;
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'chat': return <ChatScreen socket={socket} currentUser={currentUser} darkMode={darkMode} />;
+      case 'chat': return <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} />;
       case 'friends': return <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />;
       case 'timeline': return <Timeline currentUser={currentUser} />;
-      case 'stampshop': return <StampShop currentUser={currentUser} />;
+      case 'stampshop': return <StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} />;
       case 'album': return <Album currentUser={currentUser} />;
       case 'profile': return <Profile currentUser={currentUser} onUpdate={setCurrentUser} onLogout={handleLogout} darkMode={darkMode} onToggleDark={() => setDarkMode(!darkMode)} />;
       default: return null;
@@ -391,7 +348,7 @@ export default function App() {
         <header className="app-header">
           <span className="app-title">💬 LINE Killer</span>
           <div className="header-actions">
-            <span className="online-status">🟢 {currentUser.displayName}</span>
+            <span className="online-status">🟢 {currentUser.username}</span>
             <button className="icon-btn" onClick={() => setDarkMode(!darkMode)}>{darkMode ? '☀️' : '🌙'}</button>
           </div>
         </header>
