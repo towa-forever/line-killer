@@ -450,9 +450,11 @@ app.post('/api/rooms', async (req, res) => {
   try {
     const decoded = auth(req);
     const { name, memberIds } = req.body;
+    console.log("room create:", { name, memberIds, decodedId: decoded.id });
     const friends = await Friend.find({ user_id: decoded.id });
     const friendIds = friends.map(f => f.friend_id);
     const validMembers = memberIds.filter(id => friendIds.includes(id));
+    console.log("friends:", friendIds, "valid:", validMembers);
     const members = [...new Set([decoded.id, ...validMembers])];
     const id = 'room_' + uuidv4();
     const room = await Room.create({ id, name, members });
