@@ -8,6 +8,7 @@ import StampShop from './components/StampShop';
 import Album from './components/Album';
 import Profile from './components/Profile';
 import VideoCall from './components/VideoCall';
+import ErrorBoundary from "./components/ErrorBoundary";
 import CreateRoom from './components/CreateRoom';
 import './App.css';
 
@@ -332,10 +333,10 @@ export default function App() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'chat': return <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} />;
+      case 'chat': return <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} /></ErrorBoundary>;
       case 'friends': return <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />;
       case 'timeline': return <Timeline currentUser={currentUser} />;
-      case 'stampshop': return <StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} />;
+      case 'stampshop': return <ErrorBoundary><StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} />;
       case 'album': return <Album currentUser={currentUser} />;
       case 'profile': return <Profile currentUser={currentUser} onUpdate={setCurrentUser} onLogout={handleLogout} darkMode={darkMode} onToggleDark={() => setDarkMode(!darkMode)} />;
       default: return null;
