@@ -25,8 +25,8 @@ export default function CreateRoom({ currentUser, onClose, onCreated }) {
     setCreating(true); setError('');
     try {
       const payload = tab === 'dm'
-        ? { members: [selectedUsers[0]], isGroup: false }
-        : { members: selectedUsers, isGroup: true, name: groupName };
+        ? { memberIds: [selectedUsers[0]], name: "DM" }
+        : { memberIds: selectedUsers, name: groupName };
       const res = await axios.post('/api/rooms', payload);
       onCreated(res.data);
     } catch (err) {
@@ -57,15 +57,15 @@ export default function CreateRoom({ currentUser, onClose, onCreated }) {
             <div style={{ textAlign: 'center', padding: 20, color: 'var(--text2)', fontSize: 13 }}>友達がいません</div>
           ) : (
             friends.map((friend) => {
-              const selected = selectedUsers.includes(friend._id);
+              const selected = selectedUsers.includes(friend.id);
               const disabled = tab === 'dm' && selectedUsers.length > 0 && !selected;
               return (
-                <div key={friend._id}
+                <div key={friend.id}
                   className={`friend-select-item ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
-                  onClick={() => !disabled && toggleUser(friend._id)}>
-                  <div className="friend-select-avatar">{friend.displayName?.[0] || '?'}</div>
+                  onClick={() => !disabled && toggleUser(friend.id)}>
+                  <div className="friend-select-avatar">{friend.username?.[0] || '?'}</div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{friend.displayName}</div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{friend.username}</div>
                     <div style={{ fontSize: 12, color: 'var(--text2)' }}>@{friend.username}</div>
                   </div>
                   <div className={`select-check ${selected ? 'checked' : ''}`}>{selected && '✓'}</div>
