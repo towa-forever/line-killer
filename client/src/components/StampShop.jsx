@@ -1,40 +1,32 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
-export default function StampShop({ currentUser }) {
+export default function StampShop({ currentUser, acquiredStampIds = [], onAcquire }) {
   const [stamps, setStamps] = useState([]);
-  const [acquiredIds, setAcquiredIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [acquiring, setAcquiring] = useState(null);
   const [message, setMessage] = useState('');
   const [tab, setTab] = useState('shop');
 
-  const fetchStamps = useCallback(async () => {
-    try {
-      const [shopRes, myRes] = await Promise.all([
-        axios.get('/api/stamps'),
-        axios.get('/api/stamps/mysets'),
-      ]);
-      setStamps(shopRes.data);
-      setAcquiredIds(myRes.data.acquired || []);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+  useEffect(() => {
+    axios.get('/api/stamps')
+      .then(res => setStamps(res.data))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
   }, []);
-
-  useEffect(() => { fetchStamps(); }, [fetchStamps]);
 
   const handleAcquire = async (setId) => {
     setAcquiring(setId);
     try {
       await axios.post('/api/stamps/acquire', { setId });
       setMessage('スタンプを追加しました！');
-      setAcquiredIds((prev) => [...prev, setId]);
+      onAcquire?.(setId);
     } catch (err) {
       setMessage(err.response?.data?.error || '取得に失敗しました');
     } finally { setAcquiring(null); }
   };
 
-  const isOwned = (setId) => acquiredIds.includes(setId);
+  const isOwned = (setId) => acquiredStampIds.includes(setId);
   const myStampSets = stamps.filter((s) => isOwned(s.id));
 
   if (loading) return <div className="page"><div className="empty-state">読み込み中...</div></div>;
@@ -49,35 +41,31 @@ export default function StampShop({ currentUser }) {
       {message && <div className="friends-message" onClick={() => setMessage('')}>{message} ✕</div>}
       {tab === 'shop' && (
         <div className="stamp-grid">
-          {stamps.length === 0 ? (
-            <div className="empty-state" style={{ gridColumn: '1/-1' }}>スタンプがありません</div>
-          ) : (
-            stamps.map((stampSet) => {
-              const owned = isOwned(stampSet.id);
-              return (
-                <div key={stampSet.id} className="stamp-card">
-                  <div className="stamp-icon">{stampSet.icon}</div>
-                  <div className="stamp-name">{stampSet.name}</div>
-                  <div className="stamp-preview">
-                    {stampSet.stamps.slice(0, 4).map((s, i) => (
-                      <span key={i} style={{ fontSize: 18 }}>{s.emoji}</span>
-                    ))}
-                  </div>
-                  <div className="stamp-price">無料</div>
-                  {owned ? (
-                    <span className="stamp-owned">✓ 所持済み</span>
-                  ) : (
-                    <button className="btn btn-primary"
-                      style={{ width: '100%', padding: '6px', fontSize: 12, marginTop: 6 }}
-                      onClick={() => handleAcquire(stampSet.id)}
-                      disabled={acquiring === stampSet.id}>
-                      {acquiring === stampSet.id ? '処理中...' : '追加する'}
-                    </button>
-                  )}
+          {stamps.map((stampSet) => {
+            const owned = isOwned(stampSet.id);
+            return (
+              <div key={stampSet.id} className="stamp-card">
+                <div className="stamp-icon">{stampSet.icon}</div>
+                <div className="stamp-name">{stampSet.name}</div>
+                <div className="stamp-preview">
+                  {stampSet.stamps.slice(0, 4).map((s, i) => (
+                    <span key={i} style={{ fontSize: 18 }}>{s.emoji}</span>
+                  ))}
                 </div>
-              );
-            })
-          )}
+                <div className="stamp-price">無料</div>
+                {owned ? (
+                  <span className="stamp-owned">✓ 所持済み</span>
+                ) : (
+                  <button className="btn btn-primary"
+                    style={{ width: '100%', padding: '6px', fontSize: 12, marginTop: 6 }}
+                    onClick={() => handleAcquire(stampSet.id)}
+                    disabled={acquiring === stampSet.id}>
+                    {acquiring === stampSet.id ? '処理中...' : '追加する'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
       {tab === 'mine' && (
