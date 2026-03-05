@@ -30,7 +30,7 @@ export default function CreateRoom({ currentUser, onClose, onCreated }) {
       const res = await axios.post('/api/rooms', payload);
       onCreated(res.data);
     } catch (err) {
-      setError(err.response?.data?.message || 'ルーム作成に失敗しました');
+      setError('エラー: ' + (err.response?.data?.error || err.response?.data?.message || err.message || 'ルーム作成に失敗しました') + ' / payload: ' + JSON.stringify({memberIds: selectedUsers, name: groupName || 'DM'}));
     } finally { setCreating(false); }
   };
 
