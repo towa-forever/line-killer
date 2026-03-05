@@ -333,7 +333,7 @@ export default function App() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'chat': return <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} /></ErrorBoundary>;
+      case 'chat': return <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} />;
       case 'friends': return <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />;
       case 'timeline': return <Timeline currentUser={currentUser} />;
       case 'stampshop': return <ErrorBoundary><StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} /></ErrorBoundary>;
