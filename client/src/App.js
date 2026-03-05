@@ -204,6 +204,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds }) {
           <div className="chat-header">
             <button className="icon-btn back-btn" onClick={() => setSelectedRoom(null)}>←</button>
             <div className="chat-header-name">{selectedRoom.name}</div>
+            <button className="icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) window.location.href=`/videocall/${selectedRoom.id}/${other}`; }}>📞</button>
           </div>
           <div className="messages-container">
             {messages.map(renderMessage)}
@@ -355,7 +356,7 @@ export default function App() {
         </header>
         <main className="app-main">
           <Routes>
-            <Route path="/videocall/:roomId" element={<VideoCall currentUser={currentUser} socket={socket} />} />
+            <Route path="/videocall/:roomId/:targetUserId" element={<VideoCall currentUser={currentUser} socket={socket} />} />
             <Route path="*" element={renderTab()} />
           </Routes>
         </main>
