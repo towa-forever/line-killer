@@ -691,7 +691,7 @@ io.on('connection', async (socket) => {
 
 const clientBuild = join(__dirname, '../client/build');
 app.use(express.static(clientBuild));
-app.get('*', (req, res) => {
+app.get('/*', (req, res) => {
   res.sendFile(join(clientBuild, 'index.html'));
 });
 
