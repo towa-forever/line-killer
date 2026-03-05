@@ -65,7 +65,7 @@ export default function Timeline({ currentUser }) {
 
   const handleDeletePost = async (postId) => {
     if (!window.confirm('投稿を削除しますか？')) return;
-    try { await axios.delete(`/api/posts/${postId}`); setPosts((prev) => prev.filter((p) => p._id !== postId)); }
+    try { await axios.delete(`/api/posts/${postId}`); setPosts((prev) => prev.filter((p) => p.id !== postId)); }
     catch (err) {}
   };
 
@@ -121,25 +121,25 @@ export default function Timeline({ currentUser }) {
           const authorName = post.username || '不明';
           const isOwn = post.user_id === currentUser.id;
           const liked = isLiked(post);
-          const showComments = expandedComments[post._id];
+          const showComments = expandedComments[post.id];
           return (
-            <div key={post._id} className="tl-post">
+            <div key={post.id} className="tl-post">
               <div className="tl-post-header">
                 <div className="tl-avatar">{authorName[0]}</div>
                 <div className="tl-post-meta">
                   <span className="tl-author">{authorName}</span>
                   <span className="tl-time">{timeAgo(post.created_at)}</span>
                 </div>
-                {isOwn && <button className="icon-btn" onClick={() => handleDeletePost(post._id)} style={{ fontSize: 14 }}>🗑️</button>}
+                {isOwn && <button className="icon-btn" onClick={() => handleDeletePost(post.id)} style={{ fontSize: 14 }}>🗑️</button>}
               </div>
               {post.content && <p className="tl-content">{post.content}</p>}
               {post.image && <img src={`${SERVER_URL}${post.image}`} alt="post" className="tl-image" />}
               <div className="tl-actions">
-                <button className={`tl-action-btn ${liked ? 'liked' : ''}`} onClick={() => handleLike(post._id)}>
+                <button className={`tl-action-btn ${liked ? 'liked' : ''}`} onClick={() => handleLike(post.id)}>
                   {liked ? '❤️' : '🤍'} {post.likes?.length || 0}
                 </button>
                 <button className="tl-action-btn"
-                  onClick={() => setExpandedComments((p) => ({ ...p, [post._id]: !p[post._id] }))}>
+                  onClick={() => setExpandedComments((p) => ({ ...p, [post.id]: !p[post.id] }))}>
                   💬 {post.comments?.length || 0}
                 </button>
               </div>
@@ -154,11 +154,11 @@ export default function Timeline({ currentUser }) {
                   <div className="tl-comment-input-row">
                     <input className="form-input" style={{ marginBottom: 0, fontSize: 13 }}
                       placeholder="コメントを入力..."
-                      value={commentInputs[post._id] || ''}
-                      onChange={(e) => setCommentInputs((p) => ({ ...p, [post._id]: e.target.value }))}
-                      onKeyDown={(e) => e.key === 'Enter' && handleComment(post._id)} />
+                      value={commentInputs[post.id] || ''}
+                      onChange={(e) => setCommentInputs((p) => ({ ...p, [post.id]: e.target.value }))}
+                      onKeyDown={(e) => e.key === 'Enter' && handleComment(post.id)} />
                     <button className="btn btn-primary" style={{ padding: '8px 14px', fontSize: 13 }}
-                      onClick={() => handleComment(post._id)}>送信</button>
+                      onClick={() => handleComment(post.id)}>送信</button>
                   </div>
                 </div>
               )}
