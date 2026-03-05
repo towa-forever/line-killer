@@ -12,8 +12,8 @@ export default function CreateRoom({ currentUser, onClose, onCreated }) {
   useEffect(() => {
     setFriends([]);
     axios.get('/api/friends')
-      .then((res) => { console.log('friends:', res.data); setFriends(res.data); })
-      .catch((err) => { console.error('friends error:', err); });
+      .then((res) => setFriends(res.data))
+      .catch((err) => setError('友達取得失敗: ' + (err.response?.data?.error || err.message)));
   }, [currentUser]);
 
   const toggleUser = (userId) => {
