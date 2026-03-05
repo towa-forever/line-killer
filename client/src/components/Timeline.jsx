@@ -49,7 +49,7 @@ export default function Timeline({ currentUser }) {
   const handleLike = async (postId) => {
     try {
       const res = await axios.post(`/api/posts/${postId}/like`);
-      setPosts((prev) => prev.map((p) => p._id === postId ? { ...p, likes: res.data.likes } : p));
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, likes: res.data.likes } : p));
     } catch (err) {}
   };
 
@@ -57,8 +57,8 @@ export default function Timeline({ currentUser }) {
     const text = commentInputs[postId];
     if (!text?.trim()) return;
     try {
-      const res = await axios.post(`/api/posts/${postId}/comment`, { content: text });
-      setPosts((prev) => prev.map((p) => p._id === postId ? { ...p, comments: res.data.comments } : p));
+      const res = await axios.post(`/api/posts/${postId}/comments`, { content: text });
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: res.data.comments } : p));
       setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
     } catch (err) {}
   };
@@ -69,7 +69,7 @@ export default function Timeline({ currentUser }) {
     catch (err) {}
   };
 
-  const isLiked = (post) => post.likes?.some((l) => l === currentUser._id || l?._id === currentUser._id);
+  const isLiked = (post) => post.likes?.some((l) => l === currentUser._id || l === currentUser.id);
 
   const timeAgo = (date) => {
     const diff = Date.now() - new Date(date);
@@ -118,8 +118,8 @@ export default function Timeline({ currentUser }) {
         <div className="empty-state">まだ投稿がありません。最初の投稿をしよう！</div>
       ) : (
         posts.map((post) => {
-          const authorName = post.author?.displayName || '不明';
-          const isOwn = post.author?._id === currentUser._id;
+          const authorName = post.username || '不明';
+          const isOwn = post.user_id === currentUser.id;
           const liked = isLiked(post);
           const showComments = expandedComments[post._id];
           return (
@@ -128,12 +128,12 @@ export default function Timeline({ currentUser }) {
                 <div className="tl-avatar">{authorName[0]}</div>
                 <div className="tl-post-meta">
                   <span className="tl-author">{authorName}</span>
-                  <span className="tl-time">{timeAgo(post.createdAt)}</span>
+                  <span className="tl-time">{timeAgo(post.created_at)}</span>
                 </div>
                 {isOwn && <button className="icon-btn" onClick={() => handleDeletePost(post._id)} style={{ fontSize: 14 }}>🗑️</button>}
               </div>
               {post.content && <p className="tl-content">{post.content}</p>}
-              {post.imageUrl && <img src={`${SERVER_URL}${post.imageUrl}`} alt="post" className="tl-image" />}
+              {post.image && <img src={`${SERVER_URL}${post.image}`} alt="post" className="tl-image" />}
               <div className="tl-actions">
                 <button className={`tl-action-btn ${liked ? 'liked' : ''}`} onClick={() => handleLike(post._id)}>
                   {liked ? '❤️' : '🤍'} {post.likes?.length || 0}
@@ -147,7 +147,7 @@ export default function Timeline({ currentUser }) {
                 <div className="tl-comments">
                   {post.comments?.map((c, i) => (
                     <div key={i} className="tl-comment">
-                      <span className="tl-comment-author">{c.author?.displayName || '?'}</span>
+                      <span className="tl-comment-author">{c.username || '?'}</span>
                       <span className="tl-comment-text">{c.content}</span>
                     </div>
                   ))}

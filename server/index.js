@@ -423,7 +423,8 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
     const comment = { id: uuidv4(), user_id: decoded.id, username: decoded.username, content, created_at: new Date() };
     await Post.findOneAndUpdate({ id: req.params.postId }, { $push: { comments: comment } });
     io.emit('post:commented', { postId: req.params.postId, comment });
-    res.json(comment);
+    const updatedPost = await Post.findOne({ id: req.params.postId });
+    res.json({ comments: updatedPost.comments });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
@@ -690,7 +691,7 @@ io.on('connection', async (socket) => {
 
 const clientBuild = join(__dirname, '../client/build');
 app.use(express.static(clientBuild));
-app.get('/api/{*path}', (req, res) => {
+app.get('*', (req, res) => {
   res.sendFile(join(clientBuild, 'index.html'));
 });
 
