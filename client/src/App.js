@@ -332,17 +332,28 @@ export default function App() {
 
   if (!currentUser) return <AuthScreen onLogin={handleLogin} />;
 
-  const renderTab = () => {
-    switch (activeTab) {
-      case 'chat': return <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} />;
-      case 'friends': return <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />;
-      case 'timeline': return <Timeline currentUser={currentUser} />;
-      case 'stampshop': return <ErrorBoundary><StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} /></ErrorBoundary>;
-      case 'album': return <Album currentUser={currentUser} />;
-      case 'profile': return <Profile currentUser={currentUser} onUpdate={setCurrentUser} onLogout={handleLogout} darkMode={darkMode} onToggleDark={() => setDarkMode(!darkMode)} />;
-      default: return null;
-    }
-  };
+  const renderTabs = () => (
+    <>
+      <div style={{ display: activeTab === 'chat' ? 'contents' : 'none' }}>
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} />
+      </div>
+      <div style={{ display: activeTab === 'friends' ? 'contents' : 'none' }}>
+        <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />
+      </div>
+      <div style={{ display: activeTab === 'timeline' ? 'contents' : 'none' }}>
+        <Timeline currentUser={currentUser} />
+      </div>
+      <div style={{ display: activeTab === 'stampshop' ? 'contents' : 'none' }}>
+        <ErrorBoundary><StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} /></ErrorBoundary>
+      </div>
+      <div style={{ display: activeTab === 'album' ? 'contents' : 'none' }}>
+        <Album currentUser={currentUser} />
+      </div>
+      <div style={{ display: activeTab === 'profile' ? 'contents' : 'none' }}>
+        <Profile currentUser={currentUser} onUpdate={setCurrentUser} onLogout={handleLogout} darkMode={darkMode} onToggleDark={() => setDarkMode(!darkMode)} />
+      </div>
+    </>
+  );
 
   return (
     <Router>
