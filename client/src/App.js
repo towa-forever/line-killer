@@ -245,7 +245,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds }) {
       )}
 
       {showCreateRoom && (
-        <CreateRoom currentUser={currentUser} onClose={() => setShowCreateRoom(false)}
+        <CreateRoom currentUser={currentUser} friendsList={friendsList} onClose={() => setShowCreateRoom(false)}
           onCreated={(room) => { setRooms((prev) => [room, ...prev]); setSelectedRoom(room); setShowCreateRoom(false); }} />
       )}
     </div>
@@ -284,6 +284,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [allStampSets, setAllStampSets] = useState([]);
   const [acquiredStampIds, setAcquiredStampIds] = useState([]);
+  const [friendsList, setFriendsList] = useState([]);
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -304,6 +305,7 @@ export default function App() {
     if (!currentUser) return;
     axios.get('/api/stamps').then(res => setAllStampSets(res.data)).catch(() => {});
     axios.get('/api/stamps/mysets').then(res => setAcquiredStampIds(res.data.acquired || [])).catch(() => {});
+    axios.get('/api/friends').then(res => setFriendsList(res.data)).catch(() => {});
   }, [currentUser]);
 
   useEffect(() => {
