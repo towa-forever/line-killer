@@ -98,6 +98,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
   useEffect(() => {
     if (!selectedRoom) return;
+    setMessages([]);
     (async () => {
       try {
         const res = await axios.get(`/api/rooms/${selectedRoom.id}/messages`);
