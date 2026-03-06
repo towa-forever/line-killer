@@ -67,6 +67,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
+  const messagesCache = useRef({});
   const [inputText, setInputText] = useState('');
   const [showStampPanel, setShowStampPanel] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
@@ -98,10 +99,16 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
   useEffect(() => {
     if (!selectedRoom) return;
-    setMessages([]);
+    // キャッシュがあれば即表示
+    if (messagesCache.current[selectedRoom.id]) {
+      setMessages(messagesCache.current[selectedRoom.id]);
+    } else {
+      setMessages([]);
+    }
     (async () => {
       try {
         const res = await axios.get(`/api/rooms/${selectedRoom.id}/messages`);
+        messagesCache.current[selectedRoom.id] = res.data;
         setMessages(res.data);
         if (socket) socket.emit('room:join', selectedRoom.id);
       } catch (err) { console.error(err); }
