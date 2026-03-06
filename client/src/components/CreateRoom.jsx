@@ -61,7 +61,9 @@ export default function CreateRoom({ currentUser, onClose, onCreated }) {
         )}
 
         <div style={{ maxHeight: 280, overflowY: 'auto', margin: '10px 0' }}>
-          {friends.length === 0 ? (
+          {loadingFriends ? (
+            <div style={{ textAlign: 'center', padding: 20, color: 'var(--text2)', fontSize: 13 }}>読み込み中...</div>
+          ) : friends.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 20, color: 'var(--text2)', fontSize: 13 }}>友達がいません</div>
           ) : (
             friends.map((friend) => {
