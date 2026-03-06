@@ -90,13 +90,28 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   useEffect(() => {
     if (!socket) return;
     socket.on('message:receive', (msg) => {
-      if (msg.roomId === selectedRoom?.id) setMessages((prev) => [...prev, msg]);
+      if (msg.roomId === selectedRoom?.id) {
+        setMessages((prev) => [...prev, msg]);
+        // 受信したメッセージを即既読にする
+        if (msg.senderId !== currentUser.id) {
+          socket.emit('message:read', { messageId: msg.id, roomId: msg.roomId });
+        }
+      }
       setRooms((prev) =>
         prev.map((r) => r.id === msg.roomId ? { ...r, lastMessage: msg } : r)
       );
     });
+    socket.on('message:read_update', ({ messageId, readBy }) => {
+      setMessages((prev) => prev.map(m => m.id === messageId ? { ...m, read_by: readBy } : m));
+      // キャッシュも更新
+      Object.keys(messagesCache.current).forEach(roomId => {
+        messagesCache.current[roomId] = messagesCache.current[roomId]?.map(
+          m => m.id === messageId ? { ...m, read_by: readBy } : m
+        );
+      });
+    });
     socket.on('room:new', (room) => setRooms((prev) => [room, ...prev]));
-    return () => { socket.off('message:receive'); socket.off('room:new'); };
+    return () => { socket.off('message:receive'); socket.off('message:read_update'); socket.off('room:new'); };
   }, [socket, selectedRoom]);
 
   useEffect(() => {
@@ -112,7 +127,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         const res = await axios.get(`/api/rooms/${selectedRoom.id}/messages`);
         messagesCache.current[selectedRoom.id] = res.data;
         setMessages(res.data);
-        if (socket) socket.emit('room:join', selectedRoom.id);
+        if (socket) {
+          socket.emit('room:join', selectedRoom.id);
+          // 未読メッセージを既読にする
+          res.data.forEach(msg => {
+            if (msg.senderId !== currentUser.id && !msg.read_by?.includes(currentUser.id)) {
+              socket.emit('message:read', { messageId: msg.id, roomId: selectedRoom.id });
+            }
+          });
+        }
       } catch (err) { console.error(err); }
     })();
   }, [selectedRoom, socket]);
@@ -164,6 +187,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const renderMessage = (msg) => {
     const isMine = msg.senderId === currentUser.id;
     const time = new Date(msg.createdAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    const readByOthers = msg.read_by?.some(id => id !== currentUser.id);
     let content;
     if (msg.type === 'stamp') {
       content = <span style={{ fontSize: 36 }}>{msg.content}</span>;
@@ -180,7 +204,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         <div className="message-body">
           {!isMine && <div className="message-sender">{msg.senderName}</div>}
           <div className="message-bubble">{content}</div>
-          <div className="message-time">{time}</div>
+          <div className="message-time">
+            {isMine && readByOthers && <span style={{ fontSize: 11, color: '#06c755', marginRight: 4 }}>既読</span>}
+            {time}
+          </div>
         </div>
       </div>
     );
