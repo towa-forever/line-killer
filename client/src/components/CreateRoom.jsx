@@ -8,12 +8,13 @@ export default function CreateRoom({ currentUser, onClose, onCreated }) {
   const [groupName, setGroupName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [loadingFriends, setLoadingFriends] = useState(true);
 
   useEffect(() => {
-    setFriends([]);
+    setLoadingFriends(true);
     axios.get('/api/friends')
-      .then((res) => setFriends(res.data))
-      .catch((err) => setError('友達取得失敗: ' + (err.response?.data?.error || err.message)));
+      .then((res) => { setFriends(res.data); setLoadingFriends(false); })
+      .catch((err) => { setError('友達取得失敗: ' + (err.response?.data?.error || err.message)); setLoadingFriends(false); });
   }, [currentUser]);
 
   const toggleUser = (userId) => {
