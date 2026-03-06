@@ -202,7 +202,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     }
     return (
       <div key={msg.id} className={`message ${isMine ? 'mine' : 'theirs'}`}>
-        {!isMine && <div className="message-avatar">{msg.senderName?.[0] || '?'}</div>}
+        {!isMine && <div className="message-avatar">{msg.senderAvatar ? <img src={`${SERVER_URL}${msg.senderAvatar}`} alt="" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} /> : (msg.senderName?.[0] || '?')}</div>}
         <div className="message-body">
           {!isMine && <div className="message-sender">{msg.senderName}</div>}
           {msg.replyTo && (

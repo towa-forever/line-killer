@@ -613,9 +613,12 @@ app.get('/api/debug-path', (req, res) => {
 });
 
 // Socket.io
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   try {
-    socket.user = jwt.verify(socket.handshake.auth.token, JWT_SECRET);
+    const decoded = jwt.verify(socket.handshake.auth.token, JWT_SECRET);
+    // DBから最新のavatar情報を取得
+    const user = await User.findOne({ id: decoded.id }, { password: 0 });
+    socket.user = { ...decoded, avatar: user?.avatar || null };
     next();
   } catch { next(new Error('認証エラー')); }
 });
@@ -644,6 +647,7 @@ io.on('connection', async (socket) => {
     });
     io.to(roomId).emit('message:receive', {
       id, roomId, senderId: socket.user.id, senderName: socket.user.username,
+      senderAvatar: socket.user.avatar || null,
       content, type, fileData: fileData || null, replyTo: replyTo || null, stampLabel: stampLabel || null,
       edited: false, deleted: false, readBy: [socket.user.id], reactions: [], read_by: [socket.user.id],
       createdAt: msg.created_at
