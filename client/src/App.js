@@ -78,6 +78,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [typingUsers, setTypingUsers] = useState([]);
   const [replyTo, setReplyTo] = useState(null); // 返信先メッセージ
   const [showSearch, setShowSearch] = useState(false);
+  const [reactionPicker, setReactionPicker] = useState(null); // { msgId, x, y }
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -117,8 +118,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         );
       });
     });
+    socket.on('message:reacted', ({ messageId, reactions }) => {
+      setMessages((prev) => prev.map(m => m.id === messageId ? { ...m, reactions } : m));
+    });
     socket.on('room:new', (room) => setRooms((prev) => [room, ...prev]));
-    return () => { socket.off('message:receive'); socket.off('message:read_update'); socket.off('room:new'); };
+    return () => { socket.off('message:receive'); socket.off('message:read_update'); socket.off('message:reacted'); socket.off('room:new'); };
   }, [socket, selectedRoom]);
 
   useEffect(() => {
@@ -217,7 +221,22 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <span className="reply-content">{msg.replyTo.content?.slice(0, 40)}{msg.replyTo.content?.length > 40 ? '...' : ''}</span>
             </div>
           )}
-          <div className="message-bubble" onDoubleClick={() => setReplyTo(msg)}>{content}</div>
+          <div className="message-bubble"
+            onDoubleClick={(e) => setReactionPicker({ msgId: msg.id, x: e.clientX, y: e.clientY })}
+            onContextMenu={(e) => { e.preventDefault(); setReactionPicker({ msgId: msg.id, x: e.clientX, y: e.clientY }); }}
+          >{content}</div>
+          {msg.reactions?.length > 0 && (
+            <div className="reaction-row">
+              {Object.entries(
+                msg.reactions.reduce((acc, r) => { acc[r.emoji] = (acc[r.emoji] || []); acc[r.emoji].push(r.user_id); return acc; }, {})
+              ).map(([emoji, users]) => (
+                <button key={emoji} className={`reaction-btn ${users.includes(currentUser.id) ? 'mine' : ''}`}
+                  onClick={() => { socket.emit('message:react', { messageId: msg.id, roomId: selectedRoom.id, emoji }); }}>
+                  {emoji} {users.length}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="message-time">
             {isMine && readByOthers && <span style={{ fontSize: 11, color: '#06c755', marginRight: 4 }}>既読</span>}
             {time}
@@ -264,6 +283,27 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             <button className="icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) window.location.href=`/videocall/${selectedRoom.id}/${other}?caller=true`; }}>📞</button>
           </div>
           {showNote && <Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} />}
+          {reactionPicker && (
+            <div style={{ position:'fixed', inset:0, zIndex:3000 }} onClick={() => setReactionPicker(null)}>
+              <div style={{
+                position:'fixed',
+                left: Math.min(reactionPicker.x, window.innerWidth - 220),
+                top: Math.max(reactionPicker.y - 60, 10),
+                background:'var(--surface)', borderRadius:24, padding:'8px 12px',
+                boxShadow:'0 4px 20px rgba(0,0,0,0.2)', display:'flex', gap:6, zIndex:3001
+              }} onClick={(e) => e.stopPropagation()}>
+                {['❤️','👍','😂','😮','😢','🔥','👏','🎉'].map(emoji => (
+                  <button key={emoji} onClick={() => {
+                    socket.emit('message:react', { messageId: reactionPicker.msgId, roomId: selectedRoom.id, emoji });
+                    setReactionPicker(null);
+                  }} style={{ fontSize:24, background:'none', border:'none', cursor:'pointer', padding:'4px 2px', borderRadius:8, transition:'transform 0.1s' }}
+                    onMouseEnter={e => e.target.style.transform='scale(1.3)'}
+                    onMouseLeave={e => e.target.style.transform='scale(1)'}
+                  >{emoji}</button>
+                ))}
+              </div>
+            </div>
+          )}
           {showSearch && (
             <div style={{ position:'fixed', inset:0, background:'var(--bg)', zIndex:2000, display:'flex', flexDirection:'column' }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px', borderBottom:'1px solid var(--border)', background:'var(--surface)' }}>

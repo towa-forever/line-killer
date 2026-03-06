@@ -415,3 +415,8 @@ a { text-decoration: none; color: var(--accent); }
 .reply-bar-text { color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .reply-bar-close { font-size: 16px; color: var(--text2); padding: 4px 8px; flex-shrink: 0; }
 .message-time { display: flex; align-items: center; gap: 2px; }
+
+.reaction-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.reaction-btn { display: flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface2); font-size: 14px; cursor: pointer; color: var(--text); transition: all 0.15s; }
+.reaction-btn:hover { border-color: var(--primary); background: var(--surface); }
+.reaction-btn.mine { border-color: var(--primary); background: rgba(6,199,85,0.1); }
