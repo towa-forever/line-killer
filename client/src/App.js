@@ -79,6 +79,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [replyTo, setReplyTo] = useState(null); // 返信先メッセージ
   const [showSearch, setShowSearch] = useState(false);
   const [reactionPicker, setReactionPicker] = useState(null); // { msgId, x, y }
+  const [pinnedMessage, setPinnedMessage] = useState(null); // ピン留めメッセージ
+  const [msgMenu, setMsgMenu] = useState(null); // { msg, x, y } 長押しメニュー
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -121,6 +123,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     socket.on('message:reacted', ({ messageId, reactions }) => {
       setMessages((prev) => prev.map(m => m.id === messageId ? { ...m, reactions } : m));
     });
+    socket.on('room:pinned', ({ roomId, messageId }) => {
+      if (roomId !== selectedRoom?.id) return;
+      if (!messageId) { setPinnedMessage(null); return; }
+      setMessages((prev) => {
+        const msg = prev.find(m => m.id === messageId);
+        if (msg) setPinnedMessage(msg);
+        return prev;
+      });
+    });
     socket.on('room:new', (room) => setRooms((prev) => [room, ...prev]));
     return () => { socket.off('message:receive'); socket.off('message:read_update'); socket.off('message:reacted'); socket.off('room:new'); };
   }, [socket, selectedRoom]);
@@ -138,6 +149,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         const res = await axios.get(`/api/rooms/${selectedRoom.id}/messages`);
         messagesCache.current[selectedRoom.id] = res.data;
         setMessages(res.data);
+        // ピン留め状態を復元
+        if (selectedRoom.pinned_message_id) {
+          const pinned = res.data.find(m => m.id === selectedRoom.pinned_message_id);
+          setPinnedMessage(pinned || null);
+        } else {
+          setPinnedMessage(null);
+        }
         if (socket) {
           socket.emit('room:join', selectedRoom.id);
           // 未読メッセージを既読にする
@@ -211,7 +229,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       content = <span>{msg.content}</span>;
     }
     return (
-      <div key={msg.id} className={`message ${isMine ? 'mine' : 'theirs'}`}>
+      <div key={msg.id} id={`msg-${msg.id}`} className={`message ${isMine ? 'mine' : 'theirs'}`}
+        onContextMenu={(e) => { e.preventDefault(); setMsgMenu({ msg, x: e.clientX, y: e.clientY }); }}>
         {!isMine && <div className="message-avatar">{msg.senderAvatar ? <img src={`${SERVER_URL}${msg.senderAvatar}`} alt="" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} /> : (msg.senderName?.[0] || '?')}</div>}
         <div className="message-body">
           {!isMine && <div className="message-sender">{msg.senderName}</div>}
@@ -283,6 +302,35 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             <button className="icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) window.location.href=`/videocall/${selectedRoom.id}/${other}?caller=true`; }}>📞</button>
           </div>
           {showNote && <Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} />}
+          {msgMenu && (
+            <div style={{ position:'fixed', inset:0, zIndex:3000 }} onClick={() => setMsgMenu(null)}>
+              <div style={{
+                position:'fixed',
+                left: Math.min(msgMenu.x, window.innerWidth - 160),
+                top: Math.min(msgMenu.y, window.innerHeight - 160),
+                background:'var(--surface)', borderRadius:12, overflow:'hidden',
+                boxShadow:'0 4px 20px rgba(0,0,0,0.2)', minWidth:150, zIndex:3001
+              }} onClick={(e) => e.stopPropagation()}>
+                {[
+                  { icon:'📌', label: pinnedMessage?.id === msgMenu.msg.id ? 'ピンを外す' : 'ピン留め', action: () => {
+                    const newId = pinnedMessage?.id === msgMenu.msg.id ? null : msgMenu.msg.id;
+                    axios.patch(`/api/rooms/${selectedRoom.id}/pin`, { messageId: newId });
+                    setPinnedMessage(newId ? msgMenu.msg : null);
+                  }},
+                  { icon:'↩', label:'返信', action: () => setReplyTo(msgMenu.msg) },
+                  { icon:'😊', label:'リアクション', action: () => setReactionPicker({ msgId: msgMenu.msg.id, x: msgMenu.x, y: msgMenu.y }) },
+                ].map(item => (
+                  <button key={item.label} onClick={() => { item.action(); setMsgMenu(null); }} style={{
+                    display:'flex', alignItems:'center', gap:10, width:'100%', padding:'12px 16px',
+                    background:'none', border:'none', cursor:'pointer', fontSize:14, color:'var(--text)',
+                    borderBottom:'1px solid var(--border)'
+                  }}>
+                    <span>{item.icon}</span>{item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {reactionPicker && (
             <div style={{ position:'fixed', inset:0, zIndex:3000 }} onClick={() => setReactionPicker(null)}>
               <div style={{
@@ -347,6 +395,18 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+          {pinnedMessage && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', background:'var(--surface)', borderBottom:'1px solid var(--border)', cursor:'pointer' }}
+              onClick={() => { const el = document.getElementById(`msg-${pinnedMessage.id}`); el?.scrollIntoView({ behavior:'smooth', block:'center' }); }}>
+              <span style={{ fontSize:16 }}>📌</span>
+              <div style={{ flex:1, overflow:'hidden' }}>
+                <div style={{ fontSize:11, color:'var(--primary)', fontWeight:700 }}>ピン留め</div>
+                <div style={{ fontSize:13, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{pinnedMessage.content}</div>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); axios.patch(`/api/rooms/${selectedRoom.id}/pin`, { messageId: null }); setPinnedMessage(null); }}
+                style={{ fontSize:16, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
             </div>
           )}
           <div className="messages-container">
