@@ -66,6 +66,30 @@ function AuthScreen({ onLogin }) {
   );
 }
 
+function RoomNameEditor({ room, onClose }) {
+  const [name, setName] = React.useState(room.name || '');
+  const [saving, setSaving] = React.useState(false);
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try { await axios.patch(`/api/rooms/${room.id}/name`, { name }); onClose(); }
+    catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+  return (
+    <div style={{ marginBottom:12 }}>
+      <div style={{ fontSize:13, color:'var(--text2)', marginBottom:6 }}>グループ名</div>
+      <div style={{ display:'flex', gap:8 }}>
+        <input className="form-input" value={name} onChange={(e) => setName(e.target.value)}
+          placeholder="グループ名" style={{ margin:0, flex:1 }} />
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ whiteSpace:'nowrap' }}>
+          {saving ? '...' : '変更'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -81,6 +105,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [reactionPicker, setReactionPicker] = useState(null); // { msgId, x, y }
   const [pinnedMessage, setPinnedMessage] = useState(null); // ピン留めメッセージ
   const [unreadCounts, setUnreadCounts] = useState({}); // { roomId: count }
+  const [showRoomSettings, setShowRoomSettings] = useState(false);
+  const roomIconInputRef = useRef(null);
   const [msgMenu, setMsgMenu] = useState(null); // { msg, x, y } 長押しメニュー
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -137,7 +163,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       });
     });
     socket.on('room:new', (room) => setRooms((prev) => [room, ...prev]));
-    return () => { socket.off('message:receive'); socket.off('message:read_update'); socket.off('message:reacted'); socket.off('room:new'); };
+    socket.on('room:updated', ({ roomId, name, icon }) => {
+      setRooms((prev) => prev.map(r => r.id === roomId ? { ...r, ...(name && { name }), ...(icon && { icon }) } : r));
+      setSelectedRoom((prev) => prev?.id === roomId ? { ...prev, ...(name && { name }), ...(icon && { icon }) } : prev);
+    });
+    return () => { socket.off('message:receive'); socket.off('message:read_update'); socket.off('message:reacted'); socket.off('room:new'); socket.off('room:updated'); };
   }, [socket, selectedRoom]);
 
   useEffect(() => {
@@ -316,12 +346,50 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         <div className="message-area">
           <div className="chat-header">
             <button className="icon-btn back-btn" onClick={() => setSelectedRoom(null)}>←</button>
-            <div className="chat-header-name">{selectedRoom.name}</div>
+            <div className="chat-header-name" onClick={() => setShowRoomSettings(true)} style={{ cursor:'pointer' }}>
+              {selectedRoom.name} <span style={{ fontSize:12, color:'var(--text2)' }}>⚙️</span>
+            </div>
             <button className="icon-btn" onClick={() => { setShowSearch(!showSearch); setSearchQuery(''); setSearchResults([]); }}>🔍</button>
             <button className="icon-btn" onClick={() => setShowNote(true)}>📝</button>
             <button className="icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) window.location.href=`/videocall/${selectedRoom.id}/${other}?caller=true`; }}>📞</button>
           </div>
           {showNote && <Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} />}
+          {showRoomSettings && (
+            <div className="modal-overlay" onClick={() => setShowRoomSettings(false)}>
+              <div className="modal" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-title">⚙️ トーク設定</div>
+                {/* アイコン変更 */}
+                <div style={{ textAlign:'center', marginBottom:16 }}>
+                  <div style={{ position:'relative', display:'inline-block', cursor:'pointer' }}
+                    onClick={() => roomIconInputRef.current?.click()}>
+                    {selectedRoom.icon
+                      ? <img src={`${SERVER_URL}${selectedRoom.icon}`} alt="" style={{ width:72, height:72, borderRadius:'50%', objectFit:'cover', border:'3px solid var(--primary)' }} />
+                      : <div style={{ width:72, height:72, borderRadius:'50%', background:'var(--primary)', color:'white', fontSize:28, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto' }}>{selectedRoom.name?.[0] || '?'}</div>
+                    }
+                    <div style={{ position:'absolute', bottom:0, right:0, width:24, height:24, borderRadius:'50%', background:'var(--primary)', color:'white', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center' }}>📷</div>
+                  </div>
+                  <div style={{ fontSize:12, color:'var(--text2)', marginTop:6 }}>タップでアイコン変更</div>
+                  <input ref={roomIconInputRef} type="file" accept="image/*" style={{ display:'none' }}
+                    onChange={async (e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      const formData = new FormData();
+                      formData.append('icon', file);
+                      try {
+                        await axios.post(`/api/rooms/${selectedRoom.id}/icon`, formData, { headers: { 'Content-Type':'multipart/form-data' } });
+                      } catch (err) { console.error(err); }
+                      e.target.value = '';
+                    }}
+                  />
+                </div>
+                {/* グループ名変更 */}
+                <RoomNameEditor room={selectedRoom} onClose={() => setShowRoomSettings(false)} />
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setShowRoomSettings(false)}>閉じる</button>
+                </div>
+              </div>
+            </div>
+          )}
           {msgMenu && (
             <div style={{ position:'fixed', inset:0, zIndex:3000 }} onClick={() => setMsgMenu(null)}>
               <div style={{
