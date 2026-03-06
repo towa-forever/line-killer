@@ -63,7 +63,7 @@ function AuthScreen({ onLogin }) {
   );
 }
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -340,7 +340,7 @@ export default function App() {
   const renderTabs = () => (
     <>
       <div style={{ display: activeTab === 'chat' ? 'contents' : 'none' }}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} />
       </div>
       <div style={{ display: activeTab === 'friends' ? 'contents' : 'none' }}>
         <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />
