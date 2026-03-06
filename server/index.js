@@ -12,7 +12,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { User, Room, Message, Friend, FriendRequest, Post } = require('./db');
+const { User, Room, Message, Friend, FriendRequest, Post, Note } = require('./db');
 
 const app = express();
 
@@ -27,6 +27,7 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
+app.set('io', io);
 
 app.use(cors());
 app.get('/admin/reset-requests', async (req, res) => {
@@ -579,6 +580,61 @@ app.get('/api/rooms/:roomId/search', async (req, res) => {
     if (!room) return res.status(403).json({ error: '権限なし' });
     const msgs = await Message.find({ room_id: req.params.roomId, content: new RegExp(req.query.q, 'i'), deleted: false }).sort({ created_at: 1 });
     res.json(msgs);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// ノートAPI
+// 共有ノート取得
+app.get('/api/rooms/:roomId/note/shared', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    const note = await Note.findOne({ room_id: req.params.roomId, user_id: null });
+    res.json({ content: note?.content || '', updatedBy: note?.updated_by || null, updatedAt: note?.updated_at || null });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// 共有ノート保存
+app.put('/api/rooms/:roomId/note/shared', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    const note = await Note.findOneAndUpdate(
+      { room_id: req.params.roomId, user_id: null },
+      { content: req.body.content, updated_by: decoded.username, updated_at: new Date(), $setOnInsert: { id: require('uuid').v4() } },
+      { upsert: true, new: true }
+    );
+    // リアルタイムで他メンバーに通知
+    req.app.get('io').to(req.params.roomId).emit('note:updated', { roomId: req.params.roomId, type: 'shared', content: note.content, updatedBy: decoded.username });
+    res.json({ content: note.content, updatedBy: decoded.username, updatedAt: note.updated_at });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// 個人ノート取得
+app.get('/api/rooms/:roomId/note/mine', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    const note = await Note.findOne({ room_id: req.params.roomId, user_id: decoded.id });
+    res.json({ content: note?.content || '' });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// 個人ノート保存
+app.put('/api/rooms/:roomId/note/mine', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    await Note.findOneAndUpdate(
+      { room_id: req.params.roomId, user_id: decoded.id },
+      { content: req.body.content, updated_at: new Date(), $setOnInsert: { id: require('uuid').v4() } },
+      { upsert: true }
+    );
+    res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 

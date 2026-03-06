@@ -69,7 +69,17 @@ const PostSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 module.exports = {
+const NoteSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  room_id: { type: String, required: true },
+  user_id: { type: String }, // nullなら共有ノート、あれば個人ノート
+  content: { type: String, default: '' },
+  updated_at: { type: Date, default: Date.now },
+  updated_by: { type: String }, // 最後に編集したユーザー名
+});
+
   User: mongoose.model('User', UserSchema),
+  Note: mongoose.model('Note', NoteSchema),
   Room: mongoose.model('Room', RoomSchema),
   Message: mongoose.model('Message', MessageSchema),
   Friend: mongoose.model('Friend', FriendSchema),

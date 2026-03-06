@@ -13,6 +13,7 @@ const Album = lazy(() => import('./components/Album'));
 const Profile = lazy(() => import('./components/Profile'));
 const VideoCall = lazy(() => import('./components/VideoCall'));
 const CreateRoom = lazy(() => import('./components/CreateRoom'));
+const Note = lazy(() => import('./components/Note'));
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 axios.defaults.baseURL = SERVER_URL;
@@ -73,6 +74,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [inputText, setInputText] = useState('');
   const [showStampPanel, setShowStampPanel] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [showNote, setShowNote] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
   const [replyTo, setReplyTo] = useState(null); // 返信先メッセージ
   const messagesEndRef = useRef(null);
@@ -253,8 +255,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           <div className="chat-header">
             <button className="icon-btn back-btn" onClick={() => setSelectedRoom(null)}>←</button>
             <div className="chat-header-name">{selectedRoom.name}</div>
+            <button className="icon-btn" onClick={() => setShowNote(true)}>📝</button>
             <button className="icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) window.location.href=`/videocall/${selectedRoom.id}/${other}?caller=true`; }}>📞</button>
           </div>
+          {showNote && <Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} />}
           <div className="messages-container">
             {messages.map(renderMessage)}
             {typingUsers.length > 0 && <div className="typing-indicator">{typingUsers.join(', ')} が入力中...</div>}
