@@ -77,6 +77,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showNote, setShowNote] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
   const [replyTo, setReplyTo] = useState(null); // 返信先メッセージ
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -255,10 +259,56 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           <div className="chat-header">
             <button className="icon-btn back-btn" onClick={() => setSelectedRoom(null)}>←</button>
             <div className="chat-header-name">{selectedRoom.name}</div>
+            <button className="icon-btn" onClick={() => { setShowSearch(!showSearch); setSearchQuery(''); setSearchResults([]); }}>🔍</button>
             <button className="icon-btn" onClick={() => setShowNote(true)}>📝</button>
             <button className="icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) window.location.href=`/videocall/${selectedRoom.id}/${other}?caller=true`; }}>📞</button>
           </div>
           {showNote && <Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} />}
+          {showSearch && (
+            <div style={{ position:'fixed', inset:0, background:'var(--bg)', zIndex:2000, display:'flex', flexDirection:'column' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px', borderBottom:'1px solid var(--border)', background:'var(--surface)' }}>
+                <button onClick={() => setShowSearch(false)} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
+                <input
+                  autoFocus
+                  value={searchQuery}
+                  onChange={async (e) => {
+                    const q = e.target.value;
+                    setSearchQuery(q);
+                    if (!q.trim()) { setSearchResults([]); return; }
+                    setSearchLoading(true);
+                    try {
+                      const res = await axios.get(`/api/rooms/${selectedRoom.id}/search?q=${encodeURIComponent(q)}`);
+                      setSearchResults(res.data);
+                    } catch {}
+                    finally { setSearchLoading(false); }
+                  }}
+                  placeholder="メッセージを検索..."
+                  style={{ flex:1, padding:'8px 12px', borderRadius:20, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)', fontSize:15, outline:'none' }}
+                />
+              </div>
+              <div style={{ flex:1, overflowY:'auto', padding:8 }}>
+                {searchLoading && <div style={{ textAlign:'center', padding:20, color:'var(--text2)' }}>検索中...</div>}
+                {!searchLoading && searchQuery && searchResults.length === 0 && (
+                  <div style={{ textAlign:'center', padding:20, color:'var(--text2)' }}>「{searchQuery}」は見つかりませんでした</div>
+                )}
+                {searchResults.map((msg) => (
+                  <div key={msg.id || msg._id} style={{ padding:'10px 12px', borderBottom:'1px solid var(--border)', cursor:'pointer' }}
+                    onClick={() => setShowSearch(false)}>
+                    <div style={{ fontSize:12, color:'var(--text2)', marginBottom:4 }}>
+                      {msg.sender_name} · {new Date(msg.created_at).toLocaleDateString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}
+                    </div>
+                    <div style={{ fontSize:14, color:'var(--text)' }}>
+                      {msg.content?.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) =>
+                        part.toLowerCase() === searchQuery.toLowerCase()
+                          ? <mark key={i} style={{ background:'#ffeb3b', color:'#000', borderRadius:2 }}>{part}</mark>
+                          : part
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="messages-container">
             {messages.map(renderMessage)}
             {typingUsers.length > 0 && <div className="typing-indicator">{typingUsers.join(', ')} が入力中...</div>}
