@@ -14,6 +14,9 @@ import './App.css';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 axios.defaults.baseURL = SERVER_URL;
+// アプリ起動時に即座にトークンをセット
+const _token = localStorage.getItem('token');
+if (_token) axios.defaults.headers.common['Authorization'] = `Bearer ${_token}`;
 
 function AuthScreen({ onLogin }) {
   const [isLogin, setIsLogin] = useState(true);
