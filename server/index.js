@@ -548,6 +548,31 @@ app.post('/api/rooms/:roomId/members', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
+// メッセージ転送API
+app.post('/api/rooms/:roomId/forward', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { content, type, fileData } = req.body;
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    const id = uuidv4();
+    const msg = await Message.create({
+      id, room_id: req.params.roomId, sender_id: decoded.id, sender_name: decoded.username,
+      content, type: type || 'text', file_data: fileData || null,
+      read_by: [decoded.id], reactions: [], forwarded: true
+    });
+    const user = await User.findOne({ id: decoded.id });
+    io.to(req.params.roomId).emit('message:receive', {
+      id, roomId: req.params.roomId, senderId: decoded.id, senderName: decoded.username,
+      senderAvatar: user?.avatar || null,
+      content, type: type || 'text', fileData: fileData || null,
+      forwarded: true, edited: false, deleted: false,
+      read_by: [decoded.id], reactions: [], createdAt: msg.created_at
+    });
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(401).json({ error: '認証エラー' }); }
+});
+
 app.patch('/api/rooms/:roomId/pin', async (req, res) => {
   try {
     const decoded = auth(req);

@@ -37,6 +37,7 @@ const MessageSchema = new mongoose.Schema({
   deleted: { type: Boolean, default: false },
   read_by: [String],
   reactions: [{ emoji: String, user_id: String }],
+  forwarded: { type: Boolean, default: false },
   created_at: { type: Date, default: Date.now }
 });
 const FriendSchema = new mongoose.Schema({

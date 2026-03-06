@@ -106,6 +106,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [pinnedMessage, setPinnedMessage] = useState(null); // ピン留めメッセージ
   const [unreadCounts, setUnreadCounts] = useState({}); // { roomId: count }
   const [showRoomSettings, setShowRoomSettings] = useState(false);
+  const [forwardMsg, setForwardMsg] = useState(null); // 転送するメッセージ
   const roomIconInputRef = useRef(null);
   const [msgMenu, setMsgMenu] = useState(null); // { msg, x, y } 長押しメニュー
   const [searchQuery, setSearchQuery] = useState('');
@@ -270,6 +271,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         {!isMine && <div className="message-avatar">{msg.senderAvatar ? <img src={`${SERVER_URL}${msg.senderAvatar}`} alt="" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} /> : (msg.senderName?.[0] || '?')}</div>}
         <div className="message-body">
           {!isMine && <div className="message-sender">{msg.senderName}</div>}
+          {msg.forwarded && (
+            <div style={{ fontSize:11, color:'var(--text2)', marginBottom:4 }}>📤 転送されたメッセージ</div>
+          )}
           {msg.replyTo && (
             <div className="reply-preview">
               <span className="reply-name">{msg.replyTo.senderName}</span>
@@ -407,6 +411,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   }},
                   { icon:'↩', label:'返信', action: () => setReplyTo(msgMenu.msg) },
                   { icon:'😊', label:'リアクション', action: () => setReactionPicker({ msgId: msgMenu.msg.id, x: msgMenu.x, y: msgMenu.y }) },
+                  { icon:'📤', label:'転送', action: () => setForwardMsg(msgMenu.msg) },
                 ].map(item => (
                   <button key={item.label} onClick={() => { item.action(); setMsgMenu(null); }} style={{
                     display:'flex', alignItems:'center', gap:10, width:'100%', padding:'12px 16px',
@@ -416,6 +421,43 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     <span>{item.icon}</span>{item.label}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+          {forwardMsg && (
+            <div className="modal-overlay" onClick={() => setForwardMsg(null)}>
+              <div className="modal" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-title">📤 転送先を選択</div>
+                <div style={{ fontSize:13, color:'var(--text2)', marginBottom:8, padding:'0 4px',
+                  background:'var(--surface2)', borderRadius:8, padding:'8px 10px' }}>
+                  {forwardMsg.type === 'stamp' ? '[スタンプ]' : forwardMsg.content?.slice(0, 60)}
+                </div>
+                <div style={{ maxHeight:300, overflowY:'auto' }}>
+                  {rooms.filter(r => r.id !== selectedRoom?.id).map(room => (
+                    <div key={room.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 4px', cursor:'pointer', borderRadius:8 }}
+                      onClick={async () => {
+                        try {
+                          await axios.post(`/api/rooms/${room.id}/forward`, {
+                            content: forwardMsg.content,
+                            type: forwardMsg.type,
+                            fileData: forwardMsg.fileData || null,
+                          });
+                          setForwardMsg(null);
+                        } catch(e) { console.error(e); }
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background='var(--surface2)'}
+                      onMouseLeave={e => e.currentTarget.style.background=''}
+                    >
+                      <div className="room-avatar" style={{ width:40, height:40, fontSize:16 }}>
+                        {room.icon ? <img src={`${SERVER_URL}${room.icon}`} alt="" style={{width:40,height:40,borderRadius:'50%',objectFit:'cover'}} /> : (room.name?.[0] || '?')}
+                      </div>
+                      <div style={{ fontWeight:600, fontSize:14 }}>{room.name}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setForwardMsg(null)}>キャンセル</button>
+                </div>
               </div>
             </div>
           )}
