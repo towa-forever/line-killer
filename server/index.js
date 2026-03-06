@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require('express');
+const compression = require('compression');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
@@ -704,9 +705,22 @@ io.on('connection', async (socket) => {
   socket.on('disconnect', () => console.log('切断:', socket.user.username));
 });
 
+// gzip圧縮（全レスポンスに適用）
+app.use(compression());
+
 const clientBuild = join(__dirname, '../client/build');
-app.use(express.static(clientBuild));
+
+// JS/CSSは1年キャッシュ（ファイル名にハッシュが入るので安全）
+app.use('/static', express.static(join(clientBuild, 'static'), {
+  maxAge: '1y',
+  immutable: true,
+}));
+
+// index.htmlはキャッシュしない
+app.use(express.static(clientBuild, { maxAge: 0 }));
+
 app.get('/{*path}', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(join(clientBuild, 'index.html'));
 });
 

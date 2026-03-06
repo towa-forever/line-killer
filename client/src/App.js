@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
-import Friends from './components/Friends';
-import Timeline from './components/Timeline';
-import StampShop from './components/StampShop';
-import Album from './components/Album';
-import Profile from './components/Profile';
-import VideoCall from './components/VideoCall';
 import ErrorBoundary from "./components/ErrorBoundary";
-import CreateRoom from './components/CreateRoom';
 import './App.css';
+
+// 遅延読み込み（初回ロード高速化）
+const Friends = lazy(() => import('./components/Friends'));
+const Timeline = lazy(() => import('./components/Timeline'));
+const StampShop = lazy(() => import('./components/StampShop'));
+const Album = lazy(() => import('./components/Album'));
+const Profile = lazy(() => import('./components/Profile'));
+const VideoCall = lazy(() => import('./components/VideoCall'));
+const CreateRoom = lazy(() => import('./components/CreateRoom'));
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 axios.defaults.baseURL = SERVER_URL;
@@ -397,10 +399,12 @@ export default function App() {
           </div>
         </header>
         <main className="app-main">
-          <Routes>
-            <Route path="/videocall/:roomId/:targetUserId" element={<VideoCall currentUser={currentUser} socket={socket} />} />
-            <Route path="*" element={renderTabs()} />
-          </Routes>
+          <Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',fontSize:24}}>⏳</div>}>
+            <Routes>
+              <Route path="/videocall/:roomId/:targetUserId" element={<VideoCall currentUser={currentUser} socket={socket} />} />
+              <Route path="*" element={renderTabs()} />
+            </Routes>
+          </Suspense>
         </main>
         <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} />
         {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
