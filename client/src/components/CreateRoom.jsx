@@ -12,7 +12,8 @@ export default function CreateRoom({ currentUser, onClose, onCreated }) {
 
   useEffect(() => {
     setLoadingFriends(true);
-    axios.get('/api/friends')
+    const token = localStorage.getItem('token');
+    axios.get('/api/friends', { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => { setFriends(res.data); setLoadingFriends(false); })
       .catch((err) => { setError('友達取得失敗: ' + (err.response?.data?.error || err.message)); setLoadingFriends(false); });
   }, [currentUser]);
