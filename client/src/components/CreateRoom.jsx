@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+const api = axios.create({ baseURL: SERVER_URL });
 
 export default function CreateRoom({ currentUser, onClose, onCreated }) {
   const [tab, setTab] = useState('dm');
@@ -14,7 +15,8 @@ export default function CreateRoom({ currentUser, onClose, onCreated }) {
   useEffect(() => {
     setLoadingFriends(true);
     const token = localStorage.getItem('token');
-    axios.get(`${SERVER_URL}/api/friends`, { headers: { Authorization: `Bearer ${token}` } })
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    api.get('/api/friends')
       .then((res) => { setFriends(res.data); setLoadingFriends(false); })
       .catch((err) => { setError('友達取得失敗: ' + (err.response?.data?.error || err.message)); setLoadingFriends(false); });
   }, [currentUser]);
@@ -33,7 +35,7 @@ export default function CreateRoom({ currentUser, onClose, onCreated }) {
       const payload = tab === 'dm'
         ? { memberIds: [selectedUsers[0]], name: "DM" }
         : { memberIds: selectedUsers, name: groupName };
-      const res = await axios.post('/api/rooms', payload);
+      const res = await api.post('/api/rooms', payload);
       onCreated(res.data);
     } catch (err) {
       setError('エラー: ' + (err.response?.data?.error || err.response?.data?.message || err.message || 'ルーム作成に失敗しました') + ' / payload: ' + JSON.stringify({memberIds: selectedUsers, name: groupName || 'DM'}));
