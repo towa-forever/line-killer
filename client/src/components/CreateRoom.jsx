@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 
 export default function CreateRoom({ currentUser, onClose, onCreated }) {
   const [tab, setTab] = useState('dm');
@@ -13,7 +14,7 @@ export default function CreateRoom({ currentUser, onClose, onCreated }) {
   useEffect(() => {
     setLoadingFriends(true);
     const token = localStorage.getItem('token');
-    axios.get('/api/friends', { headers: { Authorization: `Bearer ${token}` } })
+    axios.get(`${SERVER_URL}/api/friends`, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => { setFriends(res.data); setLoadingFriends(false); })
       .catch((err) => { setError('友達取得失敗: ' + (err.response?.data?.error || err.message)); setLoadingFriends(false); });
   }, [currentUser]);
