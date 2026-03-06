@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
 import Friends from './components/Friends';
@@ -215,7 +215,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           <div className="chat-header">
             <button className="icon-btn back-btn" onClick={() => setSelectedRoom(null)}>←</button>
             <div className="chat-header-name">{selectedRoom.name}</div>
-            <button className="icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) window.location.href=`/videocall/${selectedRoom.id}/${other}`; }}>📞</button>
+            <button className="icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) window.location.href=`/videocall/${selectedRoom.id}/${other}?caller=true`; }}>📞</button>
           </div>
           <div className="messages-container">
             {messages.map(renderMessage)}
@@ -293,6 +293,7 @@ export default function App() {
   const [allStampSets, setAllStampSets] = useState([]);
   const [acquiredStampIds, setAcquiredStampIds] = useState([]);
   const [friendsList, setFriendsList] = useState([]);
+  const [incomingCall, setIncomingCall] = useState(null); // { from, fromName, offer, roomId }
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -325,6 +326,9 @@ export default function App() {
       setNotifications((prev) => ({ ...prev, friends: prev.friends + 1 }));
     });
     s.on('friend:accepted', (data) => showToast(`${data.by_name} と友達になりました！`, 'success'));
+    s.on('call:incoming', (data) => {
+      setIncomingCall(data);
+    });
     setSocket(s);
     return () => s.disconnect();
   }, [currentUser, showToast]);
@@ -344,6 +348,20 @@ export default function App() {
   };
 
   if (!currentUser) return <AuthScreen onLogin={handleLogin} />;
+
+  const handleAcceptCall = () => {
+    if (!incomingCall) return;
+    const { from, roomId } = incomingCall;
+    sessionStorage.setItem('_incomingCall', JSON.stringify(incomingCall)); // ページ遷移後も保持
+    setIncomingCall(null);
+    window.location.href = `/videocall/${roomId}/${from}?caller=false`;
+  };
+
+  const handleRejectCall = () => {
+    if (!incomingCall) return;
+    socket?.emit('call:reject', { to: incomingCall.from });
+    setIncomingCall(null);
+  };
 
   const renderTabs = () => (
     <>
@@ -386,6 +404,32 @@ export default function App() {
         </main>
         <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} />
         {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
+        {incomingCall && (
+          <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999,
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <div style={{
+              background: '#1a1a2e', borderRadius: 20, padding: '32px 40px',
+              textAlign: 'center', color: 'white', boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              minWidth: 280
+            }}>
+              <div style={{ fontSize: 48, marginBottom: 8 }}>📞</div>
+              <div style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 4 }}>着信中</div>
+              <div style={{ fontSize: 16, color: '#aaa', marginBottom: 24 }}>{incomingCall.fromName}</div>
+              <div style={{ display: 'flex', gap: 24, justifyContent: 'center' }}>
+                <button onClick={handleRejectCall} style={{
+                  width: 64, height: 64, borderRadius: '50%', background: '#e74c3c',
+                  fontSize: 28, border: 'none', cursor: 'pointer'
+                }}>📵</button>
+                <button onClick={handleAcceptCall} style={{
+                  width: 64, height: 64, borderRadius: '50%', background: '#2ecc71',
+                  fontSize: 28, border: 'none', cursor: 'pointer'
+                }}>📞</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Router>
   );

@@ -672,8 +672,13 @@ io.on('connection', async (socket) => {
     socket.to(roomId).emit('typing:update', { username: socket.user.username, isTyping: true });
   });
 
-  socket.on('call:start', ({ roomId, offer }) => {
-    socket.to(roomId).emit('call:incoming', { from: socket.user.id, fromName: socket.user.username, offer, roomId });
+  socket.on('call:start', ({ roomId, offer, to }) => {
+    // toが指定されていればそのユーザーに直接送る、なければroomにブロードキャスト
+    if (to) {
+      io.to('user_' + to).emit('call:incoming', { from: socket.user.id, fromName: socket.user.username, offer, roomId });
+    } else {
+      socket.to(roomId).emit('call:incoming', { from: socket.user.id, fromName: socket.user.username, offer, roomId });
+    }
   });
 
   socket.on('call:answer', ({ answer, to }) => {
@@ -684,8 +689,16 @@ io.on('connection', async (socket) => {
     io.to('user_' + to).emit('call:ice', { candidate, from: socket.user.id });
   });
 
-  socket.on('call:end', ({ roomId }) => {
-    socket.to(roomId).emit('call:ended', { from: socket.user.id });
+  socket.on('call:end', ({ roomId, to }) => {
+    if (to) {
+      io.to('user_' + to).emit('call:ended', { from: socket.user.id });
+    } else {
+      socket.to(roomId).emit('call:ended', { from: socket.user.id });
+    }
+  });
+
+  socket.on('call:reject', ({ to }) => {
+    io.to('user_' + to).emit('call:rejected', { from: socket.user.id });
   });
 
   socket.on('disconnect', () => console.log('切断:', socket.user.username));
