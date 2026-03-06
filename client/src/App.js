@@ -367,6 +367,29 @@ export default function App() {
     localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
 
+  // Service Worker登録 & Push通知購読
+  useEffect(() => {
+    if (!currentUser || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    const registerPush = async () => {
+      try {
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+        const res = await axios.get('/api/push/vapid-key');
+        const vapidKey = res.data.publicKey;
+        // urlBase64ToUint8Array変換
+        const padding = '='.repeat((4 - vapidKey.length % 4) % 4);
+        const base64 = (vapidKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = atob(base64);
+        const key = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; i++) key[i] = rawData.charCodeAt(i);
+        const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+        await axios.post('/api/push/subscribe', sub);
+      } catch (e) { console.error('Push登録失敗:', e); }
+    };
+    registerPush();
+  }, [currentUser]);
+
   const handleLogin = (user) => setCurrentUser(user);
 
   const handleLogout = () => {

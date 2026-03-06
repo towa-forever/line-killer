@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require('express');
 const compression = require('compression');
+const webpush = require('web-push');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
@@ -14,6 +15,14 @@ const { v4: uuidv4 } = require('uuid');
 const { User, Room, Message, Friend, FriendRequest, Post } = require('./db');
 
 const app = express();
+
+// VAPID設定
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BAwzRukb1C_xX8RFR2Luln0HcUEDsAgrimF1njzr2t4952nvpwfkrQ6yvSHE4z9wqXXpnp3tMhwzIBKuuvd5Xkk';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'NYWHWUJij3EUcOYPmq17yMihomww6SmBpvQe4ZTsDI0';
+webpush.setVapidDetails('mailto:admin@line-killer.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
+// push購読をメモリで管理（再起動でリセットされるが無料プランでは許容）
+const pushSubscriptions = new Map(); // userId -> subscription
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
@@ -179,6 +188,31 @@ const STAMP_SETS = [
     { emoji: '📌', label: '掲示板！' }, { emoji: '🔔', label: 'チャイム！' },
   ]},
 ];
+
+// Push通知API
+app.get('/api/push/vapid-key', (req, res) => {
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+app.post('/api/push/subscribe', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: '認証エラー' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    pushSubscriptions.set(decoded.id, req.body);
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.delete('/api/push/subscribe', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: '認証エラー' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    pushSubscriptions.delete(decoded.id);
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
 
 app.get('/api/stamps', (req, res) => res.json(STAMP_SETS));
 
@@ -604,9 +638,23 @@ io.on('connection', async (socket) => {
     io.to(roomId).emit('message:receive', {
       id, roomId, senderId: socket.user.id, senderName: socket.user.username,
       content, type, fileData: fileData || null, replyTo: replyTo || null, stampLabel: stampLabel || null,
-      edited: false, deleted: false, readBy: [socket.user.id], reactions: [],
+      edited: false, deleted: false, readBy: [socket.user.id], reactions: [], read_by: [socket.user.id],
       createdAt: msg.created_at
     });
+
+    // Push通知: ルームにいない他のメンバーに通知
+    const notifyBody = type === 'stamp' ? `${socket.user.username}: ${content}` : `${socket.user.username}: ${content}`;
+    for (const memberId of room.members) {
+      if (memberId === socket.user.id) continue;
+      const sub = pushSubscriptions.get(memberId);
+      if (!sub) continue;
+      webpush.sendNotification(sub, JSON.stringify({
+        title: room.name || socket.user.username,
+        body: notifyBody.length > 50 ? notifyBody.slice(0, 50) + '...' : notifyBody,
+        tag: roomId,
+        url: '/',
+      })).catch(() => pushSubscriptions.delete(memberId));
+    }
   });
 
   socket.on('message:edit', async ({ roomId, messageId, content }) => {
