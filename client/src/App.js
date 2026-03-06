@@ -74,6 +74,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showStampPanel, setShowStampPanel] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
+  const [replyTo, setReplyTo] = useState(null); // 返信先メッセージ
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -144,8 +145,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
   const handleSend = async () => {
     if (!inputText.trim() || !selectedRoom || !socket) return;
-    socket.emit('message:send', { roomId: selectedRoom.id, content: inputText, type: 'text' });
+    socket.emit('message:send', { roomId: selectedRoom.id, content: inputText, type: 'text', replyTo: replyTo ? { id: replyTo.id, content: replyTo.content, senderName: replyTo.senderName } : null });
     setInputText('');
+    setReplyTo(null);
   };
 
   const handleSendStamp = (stampSet, stamp) => {
@@ -203,10 +205,17 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         {!isMine && <div className="message-avatar">{msg.senderName?.[0] || '?'}</div>}
         <div className="message-body">
           {!isMine && <div className="message-sender">{msg.senderName}</div>}
-          <div className="message-bubble">{content}</div>
+          {msg.replyTo && (
+            <div className="reply-preview">
+              <span className="reply-name">{msg.replyTo.senderName}</span>
+              <span className="reply-content">{msg.replyTo.content?.slice(0, 40)}{msg.replyTo.content?.length > 40 ? '...' : ''}</span>
+            </div>
+          )}
+          <div className="message-bubble" onDoubleClick={() => setReplyTo(msg)}>{content}</div>
           <div className="message-time">
             {isMine && readByOthers && <span style={{ fontSize: 11, color: '#06c755', marginRight: 4 }}>既読</span>}
             {time}
+            <span className="reply-btn" onClick={() => setReplyTo(msg)}>↩</span>
           </div>
         </div>
       </div>
@@ -252,6 +261,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             <div ref={messagesEndRef} />
           </div>
           <div className="input-area">
+            {replyTo && (
+              <div className="reply-bar">
+                <div className="reply-bar-content">
+                  <span className="reply-bar-name">↩ {replyTo.senderName}</span>
+                  <span className="reply-bar-text">{replyTo.content?.slice(0, 50)}</span>
+                </div>
+                <button className="reply-bar-close" onClick={() => setReplyTo(null)}>✕</button>
+              </div>
+            )}
             {showStampPanel && (
               <div className="stamp-panel">
                 {myStampSets.length === 0
