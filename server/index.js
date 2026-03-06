@@ -243,7 +243,7 @@ app.post('/api/auth/register', async (req, res) => {
   const id = uuidv4();
   await User.create({ id, username, password: hashed });
   const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id, username, avatar: null, status: '' } });
+  res.json({ token, user: { id, username, avatar: null, displayName: username, bio: '', status: '' } });
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -253,7 +253,7 @@ app.post('/api/auth/login', async (req, res) => {
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return res.status(401).json({ error: 'パスワードが違います' });
   const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, status: user.status } });
+  res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '' } });
 });
 
 app.get('/api/auth/me', async (req, res) => {
@@ -261,7 +261,7 @@ app.get('/api/auth/me', async (req, res) => {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id }, { password: 0 });
     if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
-    res.json({ user });
+    res.json({ user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '' } });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
@@ -287,13 +287,20 @@ app.get('/api/users', async (req, res) => {
 app.patch('/api/users/me', upload.single('avatar'), async (req, res) => {
   try {
     const decoded = auth(req);
-    const { status } = req.body;
+    const { status, displayName, bio } = req.body;
     const update = {};
     if (req.file) update.avatar = `/uploads/${req.file.filename}`;
     if (status !== undefined) update.status = status;
+    if (displayName !== undefined) update.display_name = displayName;
+    if (bio !== undefined) update.bio = bio;
     const user = await User.findOneAndUpdate({ id: decoded.id }, update, { new: true, projection: { password: 0 } });
-    io.emit('user:updated', user);
-    res.json(user);
+    const userRes = {
+      id: user.id, username: user.username, avatar: user.avatar,
+      displayName: user.display_name || user.username,
+      bio: user.bio || '', status: user.status || '',
+    };
+    io.emit('user:updated', userRes);
+    res.json(userRes);
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 

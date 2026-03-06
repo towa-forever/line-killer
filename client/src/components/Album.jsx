@@ -67,7 +67,7 @@ export default function Album({ currentUser }) {
         <div className="album-grid">
           {filteredPhotos.map((photo, i) => (
             <div key={photo._id || photo.id || i} className="album-item" onClick={() => setLightbox(photo)}>
-              <img src={`${SERVER_URL}${photo.file_data?.url || photo.fileUrl || photo.url}`} alt=""
+              <img src={`${SERVER_URL}${photo.file_data?.url || photo.fileData?.url || photo.url}`} alt=""
                 className="album-thumb" loading="lazy" />
             </div>
           ))}
@@ -78,7 +78,7 @@ export default function Album({ currentUser }) {
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
             <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
-            <img src={`${SERVER_URL}${lightbox.file_data?.url || lightbox.fileUrl || lightbox.url}`} alt="" className="lightbox-img" />
+            <img src={`${SERVER_URL}${lightbox.file_data?.url || lightbox.fileData?.url || lightbox.url}`} alt="" className="lightbox-img" />
             <div className="lightbox-info">
               <span>{lightbox.sender_name || '不明'}</span>
               <span>{new Date(lightbox.created_at || lightbox.createdAt).toLocaleDateString('ja-JP')}</span>

@@ -8,6 +8,8 @@ const UserSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   avatar: String,
+  display_name: { type: String, default: '' },
+  bio: { type: String, default: '' },
   status: { type: String, default: '' },
   acquired_stamps: { type: [Number], default: [] },
   blocked_users: { type: [String], default: [] },
