@@ -80,6 +80,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showSearch, setShowSearch] = useState(false);
   const [reactionPicker, setReactionPicker] = useState(null); // { msgId, x, y }
   const [pinnedMessage, setPinnedMessage] = useState(null); // ピン留めメッセージ
+  const [unreadCounts, setUnreadCounts] = useState({}); // { roomId: count }
   const [msgMenu, setMsgMenu] = useState(null); // { msg, x, y } 長押しメニュー
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -106,6 +107,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         if (msg.senderId !== currentUser.id) {
           socket.emit('message:read', { messageId: msg.id, roomId: msg.roomId });
         }
+      } else if (msg.senderId !== currentUser.id) {
+        // 別のルームのメッセージは未読カウントを増やす
+        setUnreadCounts((prev) => ({ ...prev, [msg.roomId]: (prev[msg.roomId] || 0) + 1 }));
       }
       setRooms((prev) =>
         prev.map((r) => r.id === msg.roomId ? { ...r, lastMessage: msg } : r)
@@ -156,6 +160,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         } else {
           setPinnedMessage(null);
         }
+        // ルームを開いたら未読をリセット
+        setUnreadCounts((prev) => ({ ...prev, [selectedRoom.id]: 0 }));
         if (socket) {
           socket.emit('room:join', selectedRoom.id);
           // 未読メッセージを既読にする
@@ -279,10 +285,24 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             return (
               <div key={room.id} className={`room-item ${selectedRoom?.id === room.id ? 'active' : ''}`}
                 onClick={() => setSelectedRoom(room)}>
-                <div className="room-avatar">{room.icon ? <img src={`${SERVER_URL}${room.icon}`} alt="" style={{width:40,height:40,borderRadius:'50%',objectFit:'cover'}} /> : (room.name?.[0] || '?')}</div>
+                <div style={{ position:'relative' }}>
+                  <div className="room-avatar">{room.icon ? <img src={`${SERVER_URL}${room.icon}`} alt="" style={{width:40,height:40,borderRadius:'50%',objectFit:'cover'}} /> : (room.name?.[0] || '?')}</div>
+                  {unreadCounts[room.id] > 0 && (
+                    <span style={{
+                      position:'absolute', top:-4, right:-4,
+                      background:'#ff3b30', color:'white', borderRadius:'50%',
+                      minWidth:18, height:18, fontSize:11, fontWeight:700,
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      padding:'0 4px', boxShadow:'0 1px 4px rgba(0,0,0,0.3)'
+                    }}>{unreadCounts[room.id] > 99 ? '99+' : unreadCounts[room.id]}</span>
+                  )}
+                </div>
                 <div className="room-info">
-                  <div className="room-name">{room.name}</div>
-                  <div className="room-last-msg">
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <div className={`room-name ${unreadCounts[room.id] > 0 ? 'unread' : ''}`}>{room.name}</div>
+                    {lastMsg?.createdAt && <div style={{ fontSize:11, color:'var(--text2)' }}>{new Date(lastMsg.createdAt).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}</div>}
+                  </div>
+                  <div className={`room-last-msg ${unreadCounts[room.id] > 0 ? 'unread' : ''}`}>
                     {lastMsg?.type === 'stamp' ? '[スタンプ]' : lastMsg?.type === 'file' ? '[ファイル]' : lastMsg?.content?.slice(0, 30) || ''}
                   </div>
                 </div>
