@@ -3,6 +3,7 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://64fde7fe19fce4dbde3f94452a
 mongoose.connect(MONGO_URI)
   .then(() => console.log('MongoDB接続成功'))
   .catch(err => console.error('MongoDB接続失敗', err));
+
 const UserSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   username: { type: String, required: true, unique: true },
@@ -16,6 +17,7 @@ const UserSchema = new mongoose.Schema({
   muted_rooms: { type: [String], default: [] },
   created_at: { type: Date, default: Date.now }
 });
+
 const RoomSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
@@ -24,6 +26,7 @@ const RoomSchema = new mongoose.Schema({
   members: [String],
   created_at: { type: Date, default: Date.now }
 });
+
 const MessageSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   room_id: String,
@@ -40,10 +43,12 @@ const MessageSchema = new mongoose.Schema({
   forwarded: { type: Boolean, default: false },
   created_at: { type: Date, default: Date.now }
 });
+
 const FriendSchema = new mongoose.Schema({
   user_id: String,
   friend_id: String
 });
+
 const FriendRequestSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   from_id: String,
@@ -52,6 +57,7 @@ const FriendRequestSchema = new mongoose.Schema({
   status: { type: String, default: 'pending' },
   created_at: { type: Date, default: Date.now }
 });
+
 const PostSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   user_id: String,
@@ -60,25 +66,20 @@ const PostSchema = new mongoose.Schema({
   content: String,
   image: String,
   likes: { type: [String], default: [] },
-  comments: { type: [{
-    id: String,
-    user_id: String,
-    username: String,
-    content: String,
-    created_at: { type: Date, default: Date.now }
-  }], default: [] },
+  comments: { type: [{ id: String, user_id: String, username: String, content: String, created_at: { type: Date, default: Date.now } }], default: [] },
   created_at: { type: Date, default: Date.now }
 });
-module.exports = {
+
 const NoteSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   room_id: { type: String, required: true },
-  user_id: { type: String }, // nullなら共有ノート、あれば個人ノート
+  user_id: { type: String },
   content: { type: String, default: '' },
   updated_at: { type: Date, default: Date.now },
-  updated_by: { type: String }, // 最後に編集したユーザー名
+  updated_by: { type: String },
 });
 
+module.exports = {
   User: mongoose.model('User', UserSchema),
   Note: mongoose.model('Note', NoteSchema),
   Room: mongoose.model('Room', RoomSchema),
