@@ -650,3 +650,24 @@ body.dark .messages-container {
   background: rgba(6,199,85,0.9);
   backdrop-filter: blur(4px);
 }
+
+/* ===== アバターフレーム ===== */
+.avatar-wrapper { position: relative; display: inline-block; }
+.avatar-wrapper .avatar-frame-ring {
+  position: absolute; inset: -3px; border-radius: 50%;
+  pointer-events: none; z-index: 1;
+}
+.avatar-frame-rainbow { background: conic-gradient(from 0deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff, #ff0000); }
+.avatar-frame-gold { background: conic-gradient(from 0deg, #f7d000, #fff0a0, #c8a000, #ffe97f, #f7d000); }
+.avatar-frame-heart { background: conic-gradient(from 0deg, #ff6b9d, #ff8fab, #ff4081, #ff6b9d); }
+.avatar-frame-blue { background: conic-gradient(from 0deg, #00c6ff, #0072ff, #00c6ff); }
+.avatar-frame-glow {
+  position: absolute; inset: -4px; border-radius: 50%;
+  box-shadow: 0 0 10px 3px rgba(6,199,85,0.7);
+}
+
+/* ===== ステータスメッセージ ===== */
+.status-badge {
+  font-size: 11px; color: var(--text2); font-style: italic;
+  max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

@@ -4,6 +4,7 @@ import io from 'socket.io-client';
 import axios from 'axios';
 import ErrorBoundary from "./components/ErrorBoundary";
 import VideoCall from "./components/VideoCall";
+import { sounds } from "./utils/sounds";
 import AIAssistant from "./components/AIAssistant";
 import PollCard from "./components/PollCard";
 import TaskPanel from "./components/TaskPanel";
@@ -95,7 +96,32 @@ function RoomNameEditor({ room, onClose }) {
   );
 }
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms }) {
+// アバターフレームコンポーネント
+const AVATAR_FRAMES = [
+  { id: 'none', label: 'なし' },
+  { id: 'gold', label: '✨ ゴールド' },
+  { id: 'rainbow', label: '🌈 レインボー' },
+  { id: 'heart', label: '💗 ハート' },
+  { id: 'blue', label: '💙 ブルー' },
+  { id: 'glow', label: '💚 グロウ' },
+];
+function AvatarImg({ src, name, size = 40, frame = 'none' }) {
+  const inner = src
+    ? <img src={src} alt="" style={{ width:size, height:size, borderRadius:'50%', objectFit:'cover', display:'block' }} />
+    : <div style={{ width:size, height:size, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:size*0.4, fontWeight:700 }}>{name?.[0] || '?'}</div>;
+  if (frame === 'none') return inner;
+  return (
+    <div style={{ position:'relative', width:size, height:size, flexShrink:0 }}>
+      {inner}
+      {frame === 'glow'
+        ? <div className="avatar-frame-ring avatar-frame-glow" />
+        : <div className={`avatar-frame-ring avatar-frame-${frame}`} style={{ padding:2, WebkitMask:'radial-gradient(circle at center, transparent calc(50% - 3px), black calc(50% - 3px))' }} />
+      }
+    </div>
+  );
+}
+
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default' }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -108,6 +134,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [replyTo, setReplyTo] = useState(null); // 返信先メッセージ
   const [showSearch, setShowSearch] = useState(false);
   const [reactionPicker, setReactionPicker] = useState(null); // { msgId, x, y }
+  const [hoveredMsg, setHoveredMsg] = useState(null);
+  const [translating, setTranslating] = useState({}); // { msgId: translated text }
+  const QUICK_REACTIONS = ['👍','❤️','😂','😮','😢','🔥'];
   const [pinnedMessage, setPinnedMessage] = useState(null); // ピン留めメッセージ
   const [unreadCounts, setUnreadCounts] = useState({}); // { roomId: count }
   const [showRoomSettings, setShowRoomSettings] = useState(false);
@@ -154,9 +183,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     socket.on('message:receive', (msg) => {
       if (msg.roomId === selectedRoom?.id) {
         setMessages((prev) => [...prev, msg]);
-        // 受信したメッセージを即既読にする
         if (msg.senderId !== currentUser.id) {
           socket.emit('message:read', { messageId: msg.id, roomId: msg.roomId });
+          sounds.receive(soundTheme);
         }
       } else if (msg.senderId !== currentUser.id) {
         // 別のルームのメッセージは未読カウントを増やす
@@ -261,6 +290,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const handleSend = async () => {
+    sounds.send(soundTheme);
     if (!inputText.trim() || !selectedRoom || !socket) return;
     socket.emit('message:send', { roomId: selectedRoom.id, content: inputText, type: 'text', replyTo: replyTo ? { id: replyTo.id, content: replyTo.content, senderName: replyTo.senderName } : null });
     setInputText('');
@@ -380,10 +410,48 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <span className="reply-content">{msg.replyTo.content?.slice(0, 40)}{msg.replyTo.content?.length > 40 ? '...' : ''}</span>
             </div>
           )}
-          <div className="message-bubble"
-            onDoubleClick={(e) => setReactionPicker({ msgId: msg.id, x: e.clientX, y: e.clientY })}
-            onContextMenu={(e) => { e.preventDefault(); setReactionPicker({ msgId: msg.id, x: e.clientX, y: e.clientY }); }}
-          >{content}</div>
+          <div style={{ position:'relative' }}
+            onMouseEnter={() => setHoveredMsg(msg.id)}
+            onMouseLeave={() => setHoveredMsg(null)}
+          >
+            {hoveredMsg === msg.id && (
+              <div style={{
+                position:'absolute', [isMine ? 'left' : 'right']:'calc(100% + 4px)',
+                top:'50%', transform:'translateY(-50%)',
+                display:'flex', gap:2, background:'var(--surface)',
+                borderRadius:20, padding:'4px 6px', boxShadow:'0 2px 8px rgba(0,0,0,0.15)',
+                zIndex:100, whiteSpace:'nowrap'
+              }}>
+                {QUICK_REACTIONS.map(emoji => (
+                  <button key={emoji} onClick={() => { socket.emit('message:react', { messageId: msg.id, roomId: selectedRoom.id, emoji }); setHoveredMsg(null); }}
+                    style={{ fontSize:18, padding:'2px 3px', border:'none', background:'none', cursor:'pointer', borderRadius:6 }}
+                    onMouseEnter={e => e.target.style.background='var(--surface2)'}
+                    onMouseLeave={e => e.target.style.background='none'}
+                  >{emoji}</button>
+                ))}
+                <button onClick={async () => {
+                  if (translating[msg.id]) { setTranslating(p => ({...p, [msg.id]: null})); return; }
+                  setTranslating(p => ({...p, [msg.id]: '翻訳中...'}));
+                  try {
+                    const res = await axios.post('/api/translate', { text: msg.content, targetLang: '日本語' });
+                    setTranslating(p => ({...p, [msg.id]: res.data.result}));
+                  } catch { setTranslating(p => ({...p, [msg.id]: '翻訳失敗'})); }
+                  setHoveredMsg(null);
+                }} style={{ fontSize:14, padding:'2px 5px', border:'none', background:'none', cursor:'pointer', borderRadius:6, color:'var(--text2)' }}
+                  title="翻訳">🌐</button>
+              </div>
+            )}
+            <div className="message-bubble"
+              onDoubleClick={(e) => setReactionPicker({ msgId: msg.id, x: e.clientX, y: e.clientY })}
+              onContextMenu={(e) => { e.preventDefault(); setReactionPicker({ msgId: msg.id, x: e.clientX, y: e.clientY }); }}
+            >{content}
+            {translating[msg.id] && (
+              <div style={{ marginTop:6, paddingTop:6, borderTop:'1px solid rgba(0,0,0,0.1)', fontSize:12, color: translating[msg.id] === '翻訳中...' ? 'var(--text2)' : 'var(--text)', fontStyle:'italic' }}>
+                🌐 {translating[msg.id]}
+              </div>
+            )}
+            </div>
+          </div>
           {msg.reactions?.length > 0 && (
             <div className="reaction-row">
               {Object.entries(
@@ -426,7 +494,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <div key={room.id} className={`room-item ${selectedRoom?.id === room.id ? 'active' : ''}`}
                 onClick={() => setSelectedRoom(room)}>
                 <div style={{ position:'relative' }}>
-                  <div className="room-avatar">{room.icon ? <img src={`${SERVER_URL}${room.icon}`} alt="" style={{width:40,height:40,borderRadius:'50%',objectFit:'cover'}} /> : (room.name?.[0] || '?')}</div>
+                  <AvatarImg src={room.icon ? `${SERVER_URL}${room.icon}` : null} name={room.name} size={40} frame="none" />
                   {/* オンラインドット */}
                   {room.members?.some(mid => mid !== currentUser.id && onlineUsers.has(mid)) && (
                     <span style={{
@@ -451,6 +519,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                       {room.name}
                       {mutedRooms.has(room.id) && <span style={{ fontSize:11, color:'var(--text2)', marginLeft:4 }}>🔕</span>}
                     </div>
+                    {room.members?.length === 2 && room.memberStatus && (
+                      <div className="status-badge">{room.memberStatus}</div>
+                    )}
                     {lastMsg?.createdAt && <div style={{ fontSize:11, color:'var(--text2)' }}>{new Date(lastMsg.createdAt).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}</div>}
                   </div>
                   <div className={`room-last-msg ${unreadCounts[room.id] > 0 ? 'unread' : ''}`}>
@@ -964,6 +1035,8 @@ export default function App() {
   const [activeCall, setActiveCall] = useState(null); // { roomId, targetUserId, isCaller, offer }
   const [callMinimized, setCallMinimized] = useState(false);
   const [groupCall, setGroupCall] = useState(null); // { roomId, members, roomName }
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const [darkAutoMode, setDarkAutoMode] = useState(() => localStorage.getItem('darkAutoMode') === 'true');
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -1017,6 +1090,16 @@ export default function App() {
     document.body.classList.toggle('dark', darkMode);
     localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
+
+  // システムダークモード連動
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = e => { setSystemDark(e.matches); if (darkAutoMode) { document.body.classList.toggle('dark', e.matches); } };
+    mq.addEventListener('change', handler);
+    if (darkAutoMode) document.body.classList.toggle('dark', mq.matches);
+    return () => mq.removeEventListener('change', handler);
+  }, [darkAutoMode]);
+
 
   // Service Worker登録 & Push通知購読
   useEffect(() => {
@@ -1081,7 +1164,7 @@ export default function App() {
   const renderTabs = () => (
     <>
       <div style={{ display: activeTab === 'chat' ? 'contents' : 'none' }}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} />
       </div>
       <div style={{ display: activeTab === 'friends' ? 'contents' : 'none' }}>
         <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />
@@ -1096,7 +1179,9 @@ export default function App() {
         <Album currentUser={currentUser} />
       </div>
       <div style={{ display: activeTab === 'profile' ? 'contents' : 'none' }}>
-        <Profile currentUser={currentUser} onUpdate={setCurrentUser} onLogout={handleLogout} darkMode={darkMode} onToggleDark={() => setDarkMode(!darkMode)} />
+        <Profile currentUser={currentUser} onUpdate={(u) => { setCurrentUser(u); }} onLogout={handleLogout}
+  darkMode={darkMode} onToggleDark={() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(!darkMode); }}
+  darkAutoMode={darkAutoMode} onToggleAuto={() => { const v = !darkAutoMode; setDarkAutoMode(v); localStorage.setItem('darkAutoMode', v); if (v) { setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches); } }} />
       </div>
     </>
   );

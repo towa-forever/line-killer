@@ -284,7 +284,7 @@ app.get('/api/auth/me', async (req, res) => {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id }, { password: 0 });
     if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
-    res.json({ user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '', mutedRooms: user.muted_rooms || [], bookmarks: user.bookmarked_messages || [] } });
+    res.json({ user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '', mutedRooms: user.muted_rooms || [], bookmarks: user.bookmarked_messages || [], avatarFrame: user.avatar_frame || 'none', soundTheme: user.sound_theme || 'default' } });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
@@ -310,17 +310,21 @@ app.get('/api/users', async (req, res) => {
 app.patch('/api/users/me', upload.single('avatar'), async (req, res) => {
   try {
     const decoded = auth(req);
-    const { status, displayName, bio } = req.body;
+    const { status, displayName, bio, avatarFrame, soundTheme } = req.body;
     const update = {};
     if (req.file) update.avatar = getFileUrl(req);
     if (status !== undefined) update.status = status;
     if (displayName !== undefined) update.display_name = displayName;
     if (bio !== undefined) update.bio = bio;
+    if (avatarFrame !== undefined) update.avatar_frame = avatarFrame;
+    if (soundTheme !== undefined) update.sound_theme = soundTheme;
     const user = await User.findOneAndUpdate({ id: decoded.id }, update, { new: true, projection: { password: 0 } });
     const userRes = {
       id: user.id, username: user.username, avatar: user.avatar,
       displayName: user.display_name || user.username,
       bio: user.bio || '', status: user.status || '',
+      avatarFrame: user.avatar_frame || 'none',
+      soundTheme: user.sound_theme || 'default',
     };
     io.emit('user:updated', userRes);
     res.json(userRes);
@@ -1001,6 +1005,22 @@ app.post('/api/ai/assist', async (req, res) => {
     });
     const data = await response.json();
     res.json({ result: data.content?.[0]?.text || 'エラーが発生したで' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== メッセージ翻訳 =====
+app.post('/api/translate', async (req, res) => {
+  try {
+    auth(req);
+    const { text, targetLang } = req.body;
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 300,
+        messages: [{ role: 'user', content: `次のテキストを${targetLang || '日本語'}に翻訳してください。翻訳結果だけ返してください。\n\n${text}` }] })
+    });
+    const data = await response.json();
+    res.json({ result: data.content?.[0]?.text || '' });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

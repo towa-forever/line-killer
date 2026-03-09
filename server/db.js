@@ -12,6 +12,8 @@ const UserSchema = new mongoose.Schema({
   display_name: { type: String, default: '' },
   bio: { type: String, default: '' },
   status: { type: String, default: '' },
+  avatar_frame: { type: String, default: 'none' },
+  sound_theme: { type: String, default: 'default' },
   acquired_stamps: { type: [Number], default: [] },
   blocked_users: { type: [String], default: [] },
   muted_rooms: { type: [String], default: [] },

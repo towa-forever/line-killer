@@ -4,11 +4,15 @@ import { QRCodeSVG as QRCode } from 'qrcode.react';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 
-export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onToggleDark }) {
+export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onToggleDark, darkAutoMode, onToggleAuto }) {
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser.displayName || '');
   const [bio, setBio] = useState(currentUser.bio || '');
   const [saving, setSaving] = useState(false);
+  const [showFramePicker, setShowFramePicker] = useState(false);
+  const [selectedFrame, setSelectedFrame] = useState(currentUser.avatarFrame || 'none');
+  const [selectedSound, setSelectedSound] = useState(currentUser.soundTheme || 'default');
+  const [statusText, setStatusText] = useState(currentUser.status || '');
   const [message, setMessage] = useState('');
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [avatarFile, setAvatarFile] = useState(null);
@@ -19,6 +23,13 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
     if (!file) return;
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const saveSettings = async (updates) => {
+    try {
+      const res = await axios.patch('/api/users/me', updates);
+      onUpdate(res.data);
+    } catch(e) { console.error(e); }
   };
 
   const handleSave = async () => {
@@ -113,8 +124,52 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
         <div className="profile-section-title">設定</div>
         <div className="setting-row" onClick={onToggleDark}>
           <span>🌙 ダークモード</span>
-          <div className={`toggle ${darkMode ? 'on' : ''}`}>
-            <div className="toggle-knob" />
+          <div className={`toggle ${darkMode ? 'on' : ''}`}><div className="toggle-knob" /></div>
+        </div>
+        <div className="setting-row" onClick={onToggleAuto}>
+          <div>
+            <div>📱 システム連動</div>
+            <div style={{ fontSize:11, color:'var(--text2)' }}>OSのダークモードに自動で合わせる</div>
+          </div>
+          <div className={`toggle ${darkAutoMode ? 'on' : ''}`}><div className="toggle-knob" /></div>
+        </div>
+
+        {/* ステータスメッセージ */}
+        <div style={{ padding:'12px 0', borderBottom:'1px solid var(--border)' }}>
+          <div style={{ fontSize:13, marginBottom:6 }}>💬 ステータスメッセージ</div>
+          <div style={{ display:'flex', gap:8 }}>
+            <input value={statusText} onChange={e => setStatusText(e.target.value)} placeholder="一言を入力..." className="form-input" style={{ flex:1, marginBottom:0, fontSize:13 }} maxLength={40} />
+            <button onClick={() => saveSettings({ status: statusText })} style={{ padding:'0 12px', borderRadius:10, background:'var(--primary)', color:'white', border:'none', fontSize:13, fontWeight:700, cursor:'pointer' }}>保存</button>
+          </div>
+        </div>
+
+        {/* アバターフレーム */}
+        <div style={{ padding:'12px 0', borderBottom:'1px solid var(--border)' }}>
+          <div style={{ fontSize:13, marginBottom:8 }}>🖼️ アバターフレーム</div>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {[{id:'none',label:'なし'},{id:'gold',label:'✨'},{id:'rainbow',label:'🌈'},{id:'heart',label:'💗'},{id:'blue',label:'💙'},{id:'glow',label:'💚'}].map(f => (
+              <button key={f.id} onClick={() => { setSelectedFrame(f.id); saveSettings({ avatarFrame: f.id }); }}
+                style={{ padding:'6px 12px', borderRadius:20, fontSize:13, border:'2px solid', cursor:'pointer',
+                  borderColor: selectedFrame === f.id ? 'var(--primary)' : 'var(--border)',
+                  background: selectedFrame === f.id ? 'var(--primary)' : 'var(--surface2)',
+                  color: selectedFrame === f.id ? 'white' : 'var(--text)', fontWeight: selectedFrame === f.id ? 700 : 400
+                }}>{f.label} {f.id === 'none' ? 'なし' : f.id}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* サウンドテーマ */}
+        <div style={{ padding:'12px 0' }}>
+          <div style={{ fontSize:13, marginBottom:8 }}>🔊 サウンドテーマ</div>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {[{id:'default',label:'🎵 デフォルト'},{id:'pop',label:'🎈 ポップ'},{id:'soft',label:'🎶 ソフト'},{id:'mute',label:'🔇 ミュート'}].map(s => (
+              <button key={s.id} onClick={() => { setSelectedSound(s.id); saveSettings({ soundTheme: s.id }); }}
+                style={{ padding:'6px 12px', borderRadius:20, fontSize:13, border:'2px solid', cursor:'pointer',
+                  borderColor: selectedSound === s.id ? 'var(--primary)' : 'var(--border)',
+                  background: selectedSound === s.id ? 'var(--primary)' : 'var(--surface2)',
+                  color: selectedSound === s.id ? 'white' : 'var(--text)', fontWeight: selectedSound === s.id ? 700 : 400
+                }}>{s.label}</button>
+            ))}
           </div>
         </div>
       </div>
