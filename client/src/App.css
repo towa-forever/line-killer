@@ -484,3 +484,23 @@ video {
   }
   .message-body { max-width: 78%; }
 }
+
+/* スマホ対応追加 */
+@media (max-width: 768px) {
+  .message-bubble { max-width: 72vw; }
+  .chat-header-name { font-size: 15px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .room-list { width: 100%; }
+  .message-area { width: 100%; }
+}
+
+/* iOSキーボード対応 */
+@supports (-webkit-touch-callout: none) {
+  .input-area { padding-bottom: max(env(safe-area-inset-bottom), 8px); }
+  .tab-bar { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* タッチデバイスでhoverを無効化 */
+@media (hover: none) {
+  .reply-btn { opacity: 0.6 !important; }
+  .room-item:hover { background: transparent; }
+}
