@@ -4,6 +4,9 @@ import io from 'socket.io-client';
 import axios from 'axios';
 import ErrorBoundary from "./components/ErrorBoundary";
 import VideoCall from "./components/VideoCall";
+import AIAssistant from "./components/AIAssistant";
+import PollCard from "./components/PollCard";
+import TaskPanel from "./components/TaskPanel";
 import GroupVideoCall from "./components/GroupVideoCall";
 import './App.css';
 
@@ -118,6 +121,16 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [bookmarkedMsgs, setBookmarkedMsgs] = useState([]);
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [announceText, setAnnounceText] = useState('');
+  const [showAI, setShowAI] = useState(false);
+  const [showTaskPanel, setShowTaskPanel] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleText, setScheduleText] = useState('');
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [showPollCreator, setShowPollCreator] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
+  const [pollMulti, setPollMulti] = useState(false);
+  const [polls, setPolls] = useState({});
   const [chatBg, setChatBg] = useState(() => localStorage.getItem('chatBg') || 'default');
   const [editText, setEditText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -178,6 +191,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     socket.on('room:updated', ({ roomId, name, icon }) => {
       setRooms((prev) => prev.map(r => r.id === roomId ? { ...r, ...(name && { name }), ...(icon && { icon }) } : r));
       setSelectedRoom((prev) => prev?.id === roomId ? { ...prev, ...(name && { name }), ...(icon && { icon }) } : prev);
+    });
+    socket.on('poll:updated', (poll) => {
+      setPolls(prev => ({ ...prev, [poll.id]: poll }));
     });
     socket.on('room:announcement', ({ roomId, text, by }) => {
       if (roomId === selectedRoom?.id) {
@@ -288,6 +304,37 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   };
 
   const renderMessage = (msg) => {
+    // 投票メッセージ
+    if (msg.type === 'poll') {
+      const pollId = msg.fileData?.pollId || msg.file_data?.pollId;
+      const pollData = polls[pollId] || msg.poll;
+      return (
+        <div key={msg.id} className={`message ${isMine ? 'mine' : 'theirs'}`} style={{ marginBottom:6 }}>
+          {!isMine && <div className="message-avatar">{msg.senderName?.[0] || '?'}</div>}
+          <div className="message-body">
+            {!isMine && <div className="message-sender">{msg.senderName}</div>}
+            <PollCard pollId={pollId} initialPoll={pollData} currentUser={currentUser} />
+          </div>
+        </div>
+      );
+    }
+    // 期限付きメッセージ
+    if (msg.type === 'ephemeral') {
+      const expiresAt = msg.expiresAt ? new Date(msg.expiresAt) : null;
+      const remaining = expiresAt ? Math.max(0, Math.round((expiresAt - Date.now()) / 1000)) : 0;
+      return (
+        <div key={msg.id} className={`message ${isMine ? 'mine' : 'theirs'}`} style={{ marginBottom:6 }}>
+          {!isMine && <div className="message-avatar">{msg.senderName?.[0] || '?'}</div>}
+          <div className="message-body">
+            {!isMine && <div className="message-sender">{msg.senderName}</div>}
+            <div className="message-bubble" style={{ border:'1.5px dashed var(--danger)', background:'rgba(255,59,48,0.07)', position:'relative' }}>
+              <span style={{ fontSize:12, marginRight:6 }}>💨</span>{msg.content}
+              {remaining > 0 && <div style={{ fontSize:10, color:'var(--danger)', marginTop:4 }}>{remaining}秒後に消えるで</div>}
+            </div>
+          </div>
+        </div>
+      );
+    }
     // アナウンスはシステムメッセージとして表示
     if (msg.type === 'announcement') {
       return (
@@ -438,6 +485,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               }
             }}>{mutedRooms.has(selectedRoom.id) ? '🔕' : '🔔'}</button>
             <button className="icon-btn" onClick={() => setShowNote(true)}>📝</button>
+            <button className="icon-btn" title="AIアシスタント" onClick={() => setShowAI(true)}>🤖</button>
+            <button className="icon-btn" title="タスク" onClick={() => setShowTaskPanel(true)}>✅</button>
             <button className="icon-btn" onClick={() => setShowBgPicker(true)}>🎨</button>
             <button className="call-icon-btn" onClick={() => {
               if (selectedRoom.members?.length > 2) {
@@ -540,6 +589,71 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     <span>{item.icon}</span><span style={{ color: item.danger ? 'var(--danger)' : 'inherit' }}>{item.label}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+          {showAI && (
+            <AIAssistant
+              messages={messages.filter(m => m.type === 'text').slice(-50)}
+              currentRoom={selectedRoom}
+              onInsert={text => { setInputText(text); setShowAI(false); }}
+              onClose={() => setShowAI(false)}
+            />
+          )}
+          {showTaskPanel && (
+            <TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} />
+          )}
+          {showSchedule && (
+            <div className="modal-overlay" onClick={() => setShowSchedule(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-title">⏰ スケジュール送信</div>
+                <textarea className="form-input" value={scheduleText} onChange={e => setScheduleText(e.target.value)}
+                  placeholder="送信するメッセージ..." style={{ minHeight:80, resize:'vertical' }} />
+                <label className="form-label" style={{ marginTop:8 }}>送信日時</label>
+                <input type="datetime-local" className="form-input" value={scheduleAt} onChange={e => setScheduleAt(e.target.value)} />
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setShowSchedule(false)}>キャンセル</button>
+                  <button className="btn btn-primary" onClick={() => {
+                    if (!scheduleText.trim() || !scheduleAt) return;
+                    axios.post('/api/rooms/' + selectedRoom.id + '/schedule', { content: scheduleText.trim(), sendAt: scheduleAt });
+                    setShowSchedule(false); setScheduleText(''); setScheduleAt('');
+                  }}>予約する</button>
+                </div>
+              </div>
+            </div>
+          )}
+          {showPollCreator && (
+            <div className="modal-overlay" onClick={() => setShowPollCreator(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-title">📊 投票を作成</div>
+                <input className="form-input" value={pollQuestion} onChange={e => setPollQuestion(e.target.value)} placeholder="質問を入力..." />
+                <label className="form-label">選択肢</label>
+                {pollOptions.map((opt, i) => (
+                  <div key={i} style={{ display:'flex', gap:8, marginBottom:8 }}>
+                    <input className="form-input" style={{ marginBottom:0, flex:1 }} value={opt}
+                      onChange={e => { const o = [...pollOptions]; o[i] = e.target.value; setPollOptions(o); }}
+                      placeholder={`選択肢 ${i + 1}`} />
+                    {pollOptions.length > 2 && (
+                      <button onClick={() => setPollOptions(pollOptions.filter((_, j) => j !== i))}
+                        style={{ color:'var(--danger)', padding:'0 8px', fontSize:18 }}>✕</button>
+                    )}
+                  </div>
+                ))}
+                <button onClick={() => setPollOptions([...pollOptions, ''])}
+                  style={{ fontSize:13, color:'var(--primary)', padding:'4px 0', marginBottom:12 }}>＋ 選択肢を追加</button>
+                <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:14, marginBottom:12 }}>
+                  <input type="checkbox" checked={pollMulti} onChange={e => setPollMulti(e.target.checked)} />
+                  複数選択を許可
+                </label>
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setShowPollCreator(false)}>キャンセル</button>
+                  <button className="btn btn-primary" onClick={() => {
+                    const opts = pollOptions.filter(o => o.trim());
+                    if (!pollQuestion.trim() || opts.length < 2) return;
+                    axios.post('/api/rooms/' + selectedRoom.id + '/polls', { question: pollQuestion.trim(), options: opts, multi: pollMulti });
+                    setShowPollCreator(false); setPollQuestion(''); setPollOptions(['', '']); setPollMulti(false);
+                  }}>作成</button>
+                </div>
               </div>
             </div>
           )}
@@ -784,6 +898,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             <div className="input-row">
               <button className="icon-btn" onClick={() => setShowStampPanel(!showStampPanel)}>🎫</button>
               <button className="icon-btn" onClick={() => fileInputRef.current?.click()}>📎</button>
+              <button className="icon-btn" title="投票作成" onClick={() => setShowPollCreator(true)}>📊</button>
+              <button className="icon-btn" title="スケジュール送信" onClick={() => { setScheduleText(inputText); setShowSchedule(true); }}>⏰</button>
+              <button className="icon-btn" title="期限付きメッセージ" onClick={() => {
+                if (!inputText.trim()) return;
+                const ttl = parseInt(prompt('何秒後に消す？（例: 30）') || '0');
+                if (ttl > 0) { axios.post('/api/rooms/' + selectedRoom.id + '/ephemeral', { content: inputText.trim(), ttlSeconds: ttl }); setInputText(''); }
+              }}>💨</button>
               <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
               <textarea className="message-input" value={inputText} onChange={handleTyping}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}

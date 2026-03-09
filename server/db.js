@@ -41,6 +41,7 @@ const MessageSchema = new mongoose.Schema({
   reply_to: mongoose.Schema.Types.Mixed,
   edited: { type: Boolean, default: false },
   deleted: { type: Boolean, default: false },
+  expires_at: { type: Date, default: null },
   read_by: [String],
   reactions: [{ emoji: String, user_id: String }],
   forwarded: { type: Boolean, default: false },
@@ -82,6 +83,41 @@ const NoteSchema = new mongoose.Schema({
   updated_by: { type: String },
 });
 
+
+const ScheduledMessageSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  room_id: String,
+  sender_id: String,
+  sender_name: String,
+  content: String,
+  send_at: { type: Date, required: true },
+  sent: { type: Boolean, default: false },
+  created_at: { type: Date, default: Date.now }
+});
+
+const PollSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  room_id: String,
+  creator_id: String,
+  question: String,
+  options: [{ id: String, text: String, voters: [String] }],
+  multi: { type: Boolean, default: false },
+  closed: { type: Boolean, default: false },
+  created_at: { type: Date, default: Date.now }
+});
+
+const TaskSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  room_id: String,
+  creator_id: String,
+  title: String,
+  assignee_id: String,
+  assignee_name: String,
+  due: Date,
+  done: { type: Boolean, default: false },
+  created_at: { type: Date, default: Date.now }
+});
+
 module.exports = {
   User: mongoose.model('User', UserSchema),
   Note: mongoose.model('Note', NoteSchema),
@@ -89,5 +125,8 @@ module.exports = {
   Message: mongoose.model('Message', MessageSchema),
   Friend: mongoose.model('Friend', FriendSchema),
   FriendRequest: mongoose.model('FriendRequest', FriendRequestSchema),
-  Post: mongoose.model('Post', PostSchema)
+  Post: mongoose.model('Post', PostSchema),
+  ScheduledMessage: mongoose.model('ScheduledMessage', ScheduledMessageSchema),
+  Poll: mongoose.model('Poll', PollSchema),
+  Task: mongoose.model('Task', TaskSchema),
 };

@@ -24,7 +24,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { User, Room, Message, Friend, FriendRequest, Post, Note } = require('./db');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task } = require('./db');
 
 const app = express();
 
@@ -978,6 +978,216 @@ app.get('/api/users/online', authenticateToken, (req, res) => {
   const list = io.onlineUsers ? Array.from(io.onlineUsers.keys()) : [];
   res.json(list);
 });
+
+// ===== AI アシスタント =====
+app.post('/api/ai/assist', async (req, res) => {
+  try {
+    auth(req);
+    const { type, messages: msgs, text, targetLang } = req.body;
+    let prompt = '';
+    if (type === 'summary') {
+      const chatText = msgs.map(m => `${m.senderName}: ${m.content}`).join('\n');
+      prompt = `以下のチャット会話を日本語で3〜5行に要約してください。\n\n${chatText}`;
+    } else if (type === 'translate') {
+      prompt = `次のテキストを${targetLang || '英語'}に翻訳してください。翻訳結果だけ返してください。\n\n${text}`;
+    } else if (type === 'suggest') {
+      const chatText = msgs.slice(-10).map(m => `${m.senderName}: ${m.content}`).join('\n');
+      prompt = `以下の会話の流れを読んで、自然な返信案を3つ提案してください。番号付きリストで返してください。\n\n${chatText}`;
+    }
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await response.json();
+    res.json({ result: data.content?.[0]?.text || 'エラーが発生したで' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== スケジュール送信 =====
+app.post('/api/rooms/:roomId/schedule', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { content, sendAt } = req.body;
+    const { v4: uuidv4 } = require('uuid');
+    const user = await User.findOne({ id: decoded.id });
+    const msg = await ScheduledMessage.create({
+      id: 'sched_' + uuidv4(), room_id: req.params.roomId,
+      sender_id: decoded.id, sender_name: user.display_name || user.username,
+      content, send_at: new Date(sendAt)
+    });
+    res.json(msg);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+app.get('/api/rooms/:roomId/scheduled', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const msgs = await ScheduledMessage.find({ room_id: req.params.roomId, sender_id: decoded.id, sent: false }).sort({ send_at: 1 });
+    res.json(msgs);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+app.delete('/api/scheduled/:id', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await ScheduledMessage.deleteOne({ id: req.params.id, sender_id: decoded.id });
+    res.json({ ok: true });
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+// ===== 投票 =====
+app.post('/api/rooms/:roomId/polls', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { v4: uuidv4 } = require('uuid');
+    const { question, options, multi } = req.body;
+    const poll = await Poll.create({
+      id: 'poll_' + uuidv4(), room_id: req.params.roomId,
+      creator_id: decoded.id, question, multi: !!multi,
+      options: options.map((t, i) => ({ id: 'opt_' + i, text: t, voters: [] }))
+    });
+    // メッセージとして送信
+    const user = await User.findOne({ id: decoded.id });
+    const { v4: uuid2 } = require('uuid');
+    const msg = await Message.create({
+      id: 'msg_' + uuid2(), room_id: req.params.roomId,
+      sender_id: decoded.id, sender_name: user.display_name || user.username,
+      type: 'poll', content: poll.question,
+      file_data: { pollId: poll.id },
+      created_at: new Date()
+    });
+    io.to(req.params.roomId).emit('message:receive', {
+      id: msg.id, roomId: req.params.roomId, senderId: msg.sender_id,
+      senderName: msg.sender_name, type: 'poll', content: poll.question,
+      fileData: { pollId: poll.id }, createdAt: msg.created_at, poll
+    });
+    res.json({ poll, message: msg });
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+app.get('/api/polls/:pollId', async (req, res) => {
+  try {
+    auth(req);
+    const poll = await Poll.findOne({ id: req.params.pollId });
+    res.json(poll);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+app.post('/api/polls/:pollId/vote', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { optionId } = req.body;
+    const poll = await Poll.findOne({ id: req.params.pollId });
+    if (!poll || poll.closed) return res.status(400).json({ error: '投票できません' });
+    // 既存の票を取り消し（複数選択でない場合）
+    if (!poll.multi) {
+      poll.options.forEach(o => { o.voters = o.voters.filter(v => v !== decoded.id); });
+    }
+    const opt = poll.options.find(o => o.id === optionId);
+    if (!opt) return res.status(400).json({ error: '選択肢が見つかりません' });
+    const already = opt.voters.includes(decoded.id);
+    if (already) opt.voters = opt.voters.filter(v => v !== decoded.id);
+    else opt.voters.push(decoded.id);
+    await poll.save();
+    io.to(poll.room_id).emit('poll:updated', poll);
+    res.json(poll);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+app.post('/api/polls/:pollId/close', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const poll = await Poll.findOneAndUpdate({ id: req.params.pollId, creator_id: decoded.id }, { closed: true }, { new: true });
+    io.to(poll.room_id).emit('poll:updated', poll);
+    res.json(poll);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+// ===== タスク =====
+app.post('/api/rooms/:roomId/tasks', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { v4: uuidv4 } = require('uuid');
+    const { title, assigneeId, assigneeName, due } = req.body;
+    const task = await Task.create({
+      id: 'task_' + uuidv4(), room_id: req.params.roomId,
+      creator_id: decoded.id, title, assignee_id: assigneeId,
+      assignee_name: assigneeName, due: due ? new Date(due) : null
+    });
+    io.to(req.params.roomId).emit('task:new', task);
+    res.json(task);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+app.get('/api/rooms/:roomId/tasks', async (req, res) => {
+  try {
+    auth(req);
+    const tasks = await Task.find({ room_id: req.params.roomId }).sort({ created_at: -1 });
+    res.json(tasks);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+app.patch('/api/tasks/:taskId', async (req, res) => {
+  try {
+    auth(req);
+    const task = await Task.findOneAndUpdate({ id: req.params.taskId }, req.body, { new: true });
+    io.to(task.room_id).emit('task:updated', task);
+    res.json(task);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+app.delete('/api/tasks/:taskId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const task = await Task.findOne({ id: req.params.taskId });
+    await Task.deleteOne({ id: req.params.taskId });
+    io.to(task.room_id).emit('task:deleted', { taskId: req.params.taskId });
+    res.json({ ok: true });
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+// ===== 期限付きメッセージ =====
+// (通常メッセージのexpiresAtフィールドを使用、クリーンアップはcronで)
+app.post('/api/rooms/:roomId/ephemeral', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { v4: uuidv4 } = require('uuid');
+    const { content, ttlSeconds } = req.body;
+    const user = await User.findOne({ id: decoded.id });
+    const expiresAt = new Date(Date.now() + (ttlSeconds || 30) * 1000);
+    const msg = await Message.create({
+      id: 'msg_' + uuidv4(), room_id: req.params.roomId,
+      sender_id: decoded.id, sender_name: user.display_name || user.username,
+      content, type: 'ephemeral', expires_at: expiresAt, created_at: new Date()
+    });
+    io.to(req.params.roomId).emit('message:receive', {
+      id: msg.id, roomId: req.params.roomId, senderId: msg.sender_id,
+      senderName: msg.sender_name, type: 'ephemeral', content,
+      expiresAt, createdAt: msg.created_at
+    });
+    // TTL後に自動削除
+    setTimeout(async () => {
+      await Message.deleteOne({ id: msg.id });
+      io.to(req.params.roomId).emit('message:deleted', { messageId: msg.id, roomId: req.params.roomId });
+    }, ttlSeconds * 1000);
+    res.json(msg);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+// ===== スケジュール送信の実行（1分ごとにチェック） =====
+setInterval(async () => {
+  try {
+    const now = new Date();
+    const due = await ScheduledMessage.find({ sent: false, send_at: { $lte: now } });
+    for (const sm of due) {
+      const { v4: uuidv4 } = require('uuid');
+      const msg = await Message.create({
+        id: 'msg_' + uuidv4(), room_id: sm.room_id,
+        sender_id: sm.sender_id, sender_name: sm.sender_name,
+        content: sm.content, type: 'text', created_at: now
+      });
+      io.to(sm.room_id).emit('message:receive', {
+        id: msg.id, roomId: sm.room_id, senderId: sm.sender_id,
+        senderName: sm.sender_name, content: sm.content,
+        type: 'text', createdAt: now
+      });
+      await ScheduledMessage.findOneAndUpdate({ id: sm.id }, { sent: true });
+    }
+  } catch(e) { console.error('スケジュール送信エラー:', e); }
+}, 60000);
 
 // gzip圧縮（全レスポンスに適用）
 app.use(compression());
