@@ -433,3 +433,54 @@ a { text-decoration: none; color: var(--accent); }
 
 .room-name.unread { font-weight: 700; color: var(--text); }
 .room-last-msg.unread { font-weight: 600; color: var(--text); }
+
+/* ========== スマホ対応強化 ========== */
+
+/* キーボード表示時のレイアウト崩れ防止 */
+@supports (height: 100dvh) {
+  .app-container, .chat-screen { height: 100dvh; }
+}
+
+/* タッチ操作改善 */
+.room-item, .message-bubble, .tab-btn, .btn, .icon-btn {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* スマホでルームリスト→チャット画面の切り替え */
+@media (max-width: 600px) {
+  .room-list {
+    width: 100%;
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    transition: transform 0.25s ease;
+  }
+  .room-list.hidden {
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+  .message-area {
+    width: 100%;
+    position: absolute;
+    inset: 0;
+  }
+  .back-btn { display: flex !important; }
+  .chat-screen { position: relative; overflow: hidden; }
+}
+
+/* iOSのSafari対応: ビデオ要素 */
+video {
+  -webkit-playsinline: true;
+}
+
+/* スマホでの入力エリア改善 */
+@media (max-width: 600px) {
+  .message-input {
+    font-size: 16px; /* iOSのズームイン防止 */
+  }
+  .form-input {
+    font-size: 16px;
+  }
+  .message-body { max-width: 78%; }
+}

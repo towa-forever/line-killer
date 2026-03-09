@@ -109,6 +109,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showRoomSettings, setShowRoomSettings] = useState(false);
   const [forwardMsg, setForwardMsg] = useState(null); // 転送するメッセージ
   const roomIconInputRef = useRef(null);
+  const longPressTimer = useRef(null);
   const [msgMenu, setMsgMenu] = useState(null); // { msg, x, y } 長押しメニュー
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -268,7 +269,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     }
     return (
       <div key={msg.id} id={`msg-${msg.id}`} className={`message ${isMine ? 'mine' : 'theirs'}`}
-        onContextMenu={(e) => { e.preventDefault(); setMsgMenu({ msg, x: e.clientX, y: e.clientY }); }}>
+        onContextMenu={(e) => { e.preventDefault(); setMsgMenu({ msg, x: e.clientX, y: e.clientY }); }}
+        onTouchStart={(e) => {
+          const touch = e.touches[0];
+          longPressTimer.current = setTimeout(() => {
+            setMsgMenu({ msg, x: touch.clientX, y: touch.clientY });
+          }, 500);
+        }}
+        onTouchEnd={() => clearTimeout(longPressTimer.current)}
+        onTouchMove={() => clearTimeout(longPressTimer.current)}>
         {!isMine && <div className="message-avatar">{msg.senderAvatar ? <img src={`${SERVER_URL}${msg.senderAvatar}`} alt="" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} /> : (msg.senderName?.[0] || '?')}</div>}
         <div className="message-body">
           {!isMine && <div className="message-sender">{msg.senderName}</div>}
@@ -309,7 +318,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
   return (
     <div className="chat-screen">
-      <div className="room-list">
+      <div className={`room-list ${selectedRoom ? "hidden" : ""}`}>
         <div className="room-list-header">
           <span>トーク</span>
           <button className="icon-btn" onClick={() => setShowCreateRoom(true)}>✏️</button>

@@ -170,10 +170,10 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   return (
     <div style={{ position:'fixed', inset:0, background:'#000', display:'flex', flexDirection:'column', zIndex:5000 }}>
       <div style={{ position:'relative', flex:1, background:'#111' }}>
-        <video ref={remoteVideoRef} autoPlay playsInline
+        <video ref={remoteVideoRef} autoPlay playsInline webkit-playsinline="true"
           style={{ width:'100%', height:'100%', objectFit:'cover' }}
           onLoadedMetadata={(e) => e.target.play().catch(()=>{})} />
-        <video ref={localVideoRef} autoPlay playsInline muted
+        <video ref={localVideoRef} autoPlay playsInline muted webkit-playsinline="true"
           style={{ position:'absolute', bottom:12, right:12, width:100, height:140, objectFit:'cover', borderRadius:10, border:'2px solid white' }} />
         {statusText[status] && (
           <div style={{ position:'absolute', top:20, left:'50%', transform:'translateX(-50%)', color:'white', fontSize:16, fontWeight:'bold', padding:'8px 16px', background:'rgba(0,0,0,0.6)', borderRadius:20, whiteSpace:'nowrap' }}>
