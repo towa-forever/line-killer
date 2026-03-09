@@ -92,7 +92,7 @@ function RoomNameEditor({ room, onClose }) {
   );
 }
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set() }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -112,6 +112,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const roomIconInputRef = useRef(null);
   const longPressTimer = useRef(null);
   const [msgMenu, setMsgMenu] = useState(null); // { msg, x, y } 長押しメニュー
+  const [editingMessage, setEditingMessage] = useState(null); // { id, content }
+  const [showBgPicker, setShowBgPicker] = useState(false);
+  const [chatBg, setChatBg] = useState(() => localStorage.getItem('chatBg') || 'default');
+  const [editText, setEditText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -171,7 +175,21 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       setRooms((prev) => prev.map(r => r.id === roomId ? { ...r, ...(name && { name }), ...(icon && { icon }) } : r));
       setSelectedRoom((prev) => prev?.id === roomId ? { ...prev, ...(name && { name }), ...(icon && { icon }) } : prev);
     });
-    return () => { socket.off('message:receive'); socket.off('message:read_update'); socket.off('message:reacted'); socket.off('room:new'); socket.off('room:updated'); };
+    socket.on('message:edited', ({ messageId, content: newContent }) => {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: newContent, edited: true } : m));
+      if (messagesCache.current[selectedRoom?.id])
+        messagesCache.current[selectedRoom.id] = messagesCache.current[selectedRoom.id].map(m => m.id === messageId ? { ...m, content: newContent, edited: true } : m);
+    });
+    socket.on('message:deleted', ({ messageId }) => {
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      if (messagesCache.current[selectedRoom?.id])
+        messagesCache.current[selectedRoom.id] = messagesCache.current[selectedRoom.id].filter(m => m.id !== messageId);
+    });
+    return () => {
+      socket.off('message:receive'); socket.off('message:read_update');
+      socket.off('message:reacted'); socket.off('room:new'); socket.off('room:updated');
+      socket.off('message:edited'); socket.off('message:deleted');
+    };
   }, [socket, selectedRoom]);
 
   useEffect(() => {
@@ -342,6 +360,14 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 onClick={() => setSelectedRoom(room)}>
                 <div style={{ position:'relative' }}>
                   <div className="room-avatar">{room.icon ? <img src={`${SERVER_URL}${room.icon}`} alt="" style={{width:40,height:40,borderRadius:'50%',objectFit:'cover'}} /> : (room.name?.[0] || '?')}</div>
+                  {/* オンラインドット */}
+                  {room.members?.some(mid => mid !== currentUser.id && onlineUsers.has(mid)) && (
+                    <span style={{
+                      position:'absolute', bottom:0, right:0,
+                      width:13, height:13, background:'#06c755',
+                      border:'2px solid var(--surface)', borderRadius:'50%'
+                    }} />
+                  )}
                   {unreadCounts[room.id] > 0 && (
                     <span style={{
                       position:'absolute', top:-4, right:-4,
@@ -376,6 +402,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
             <button className="icon-btn" onClick={() => { setShowSearch(!showSearch); setSearchQuery(''); setSearchResults([]); }}>🔍</button>
             <button className="icon-btn" onClick={() => setShowNote(true)}>📝</button>
+            <button className="icon-btn" onClick={() => setShowBgPicker(true)}>🎨</button>
             <button className="call-icon-btn" onClick={() => {
               if (selectedRoom.members?.length > 2) {
                 // グループ通話
@@ -442,15 +469,60 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   { icon:'↩', label:'返信', action: () => setReplyTo(msgMenu.msg) },
                   { icon:'😊', label:'リアクション', action: () => setReactionPicker({ msgId: msgMenu.msg.id, x: msgMenu.x, y: msgMenu.y }) },
                   { icon:'📤', label:'転送', action: () => setForwardMsg(msgMenu.msg) },
+                  ...(msgMenu.msg.senderId === currentUser.id ? [
+                    { icon:'✏️', label:'編集', action: () => { setEditingMessage(msgMenu.msg); setEditText(msgMenu.msg.content || ''); } },
+                    { icon:'🗑️', label:'削除', danger: true, action: () => {
+                      if (window.confirm('このメッセージを削除しますか？')) {
+                        socket.emit('message:delete', { roomId: selectedRoom.id, messageId: msgMenu.msg.id });
+                      }
+                    }},
+                  ] : []),
                 ].map(item => (
                   <button key={item.label} onClick={() => { item.action(); setMsgMenu(null); }} style={{
                     display:'flex', alignItems:'center', gap:10, width:'100%', padding:'12px 16px',
                     background:'none', border:'none', cursor:'pointer', fontSize:14, color:'var(--text)',
                     borderBottom:'1px solid var(--border)'
                   }}>
-                    <span>{item.icon}</span>{item.label}
+                    <span>{item.icon}</span><span style={{ color: item.danger ? 'var(--danger)' : 'inherit' }}>{item.label}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+          {showBgPicker && (
+            <div className="modal-overlay" onClick={() => setShowBgPicker(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-title">🎨 背景を変更</div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 }}>
+                  {[{id:"default",label:"デフォルト",color:"#efeff4"},{id:"#ffffff",label:"白",color:"#ffffff"},{id:"#1a1a2e",label:"深夜",color:"#1a1a2e"},{id:"#fef3e2",label:"温かみ",color:"#fef3e2"},{id:"#e8f5e9",label:"グリーン",color:"#e8f5e9"},{id:"#e3f2fd",label:"スカイ",color:"#e3f2fd"},{id:"#f3e5f5",label:"ラベンダー",color:"#f3e5f5"},{id:"#fff8e1",label:"サンシャイン",color:"#fff8e1"}].map(bg => (
+                    <div key={bg.id} onClick={() => { setChatBg(bg.id); localStorage.setItem('chatBg', bg.id); }}
+                      style={{
+                        height:64, borderRadius:12, background:bg.color, cursor:'pointer',
+                        border: chatBg === bg.id ? '3px solid var(--primary)' : '2px solid var(--border)',
+                        display:'flex', alignItems:'flex-end', justifyContent:'center', padding:4,
+                        fontSize:11, color:'#333', fontWeight:600, boxSizing:'border-box',
+                      }}>{bg.label}</div>
+                  ))}
+                </div>
+                <button className="btn btn-secondary" style={{width:'100%'}} onClick={() => setShowBgPicker(false)}>閉じる</button>
+              </div>
+            </div>
+          )}
+          {editingMessage && (
+            <div className="modal-overlay" onClick={() => setEditingMessage(null)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-title">✏️ メッセージを編集</div>
+                <textarea className="form-input" value={editText} onChange={e => setEditText(e.target.value)}
+                  style={{ minHeight:80, resize:'vertical' }} autoFocus />
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setEditingMessage(null)}>キャンセル</button>
+                  <button className="btn btn-primary" onClick={() => {
+                    if (editText.trim()) {
+                      socket.emit('message:edit', { roomId: selectedRoom.id, messageId: editingMessage.id, content: editText.trim() });
+                      setEditingMessage(null);
+                    }
+                  }}>保存</button>
+                </div>
               </div>
             </div>
           )}
@@ -569,7 +641,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 style={{ fontSize:16, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
             </div>
           )}
-          <div className="messages-container">
+          <div className="messages-container" style={chatBg !== 'default' ? {
+            backgroundImage: chatBg.startsWith('#') ? 'none' : `url(${chatBg})`,
+            backgroundColor: chatBg.startsWith('#') ? chatBg : undefined,
+            backgroundSize: 'cover', backgroundPosition: 'center',
+          } : {}}>
             {messages.reduce((acc, msg, i) => {
               const d = new Date(msg.createdAt);
               const dateStr = d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
@@ -581,7 +657,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               acc.push(renderMessage(msg, i));
               return acc;
             }, [])}
-            {typingUsers.length > 0 && <div className="typing-indicator">{typingUsers.join(', ')} が入力中...</div>}
+            {typingUsers.length > 0 && (
+              <div className="typing-indicator">
+                <span className="typing-dots"><span/><span/><span/></span>
+                <span style={{ marginLeft:6 }}>{typingUsers.join(', ')} が入力中</span>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
           <div className="input-area">
@@ -663,7 +744,8 @@ export default function App() {
   const [allStampSets, setAllStampSets] = useState([]);
   const [acquiredStampIds, setAcquiredStampIds] = useState([]);
   const [friendsList, setFriendsList] = useState([]);
-  const [incomingCall, setIncomingCall] = useState(null); // { from, fromName, offer, roomId }
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState(new Set()); // { from, fromName, offer, roomId }
   const [activeCall, setActiveCall] = useState(null); // { roomId, targetUserId, isCaller, offer }
   const [callMinimized, setCallMinimized] = useState(false);
   const [groupCall, setGroupCall] = useState(null); // { roomId, members, roomName }
@@ -699,6 +781,11 @@ export default function App() {
       setNotifications((prev) => ({ ...prev, friends: prev.friends + 1 }));
     });
     s.on('friend:accepted', (data) => showToast(`${data.by_name} と友達になりました！`, 'success'));
+    // message:edited / message:deleted はChatScreen内のuseEffectで処理
+    s.on('user:online', ({ userId }) => setOnlineUsers(prev => new Set([...prev, userId])));
+    s.on('user:offline', ({ userId }) => setOnlineUsers(prev => { const n = new Set(prev); n.delete(userId); return n; }));
+    // 初回接続時にオンラインユーザー一覧を取得
+    axios.get('/api/users/online').then(r => setOnlineUsers(new Set(r.data))).catch(() => {});
     s.on('call:incoming', (data) => {
       setIncomingCall(data);
     });
@@ -774,7 +861,7 @@ export default function App() {
   const renderTabs = () => (
     <>
       <div style={{ display: activeTab === 'chat' ? 'contents' : 'none' }}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} />
       </div>
       <div style={{ display: activeTab === 'friends' ? 'contents' : 'none' }}>
         <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />

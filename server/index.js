@@ -8,6 +8,18 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+// Cloudinary設定（環境変数から読み込み）
+if (process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+}
+const useCloudinary = !!(process.env.CLOUDINARY_CLOUD_NAME);
 const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
@@ -41,11 +53,21 @@ const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 app.use('/uploads', express.static(uploadDir));
 
-const storage = multer.diskStorage({
+const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, uuidv4() + path.extname(file.originalname))
 });
+const cloudStorage = useCloudinary ? new CloudinaryStorage({
+  cloudinary,
+  params: { folder: 'line-killer', allowed_formats: ['jpg','jpeg','png','gif','webp','mp4','pdf'] },
+}) : null;
+
+const storage = cloudStorage || diskStorage;
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const getFileUrl = (req) => {
+  if (useCloudinary && req.file?.path) return req.file.path; // Cloudinaryは絶対URL
+  return req.file ? \`/uploads/\${req.file.filename}\` : null;
+};
 const JWT_SECRET = 'super-secret-key';
 
 const auth = (req) => {
@@ -290,7 +312,7 @@ app.patch('/api/users/me', upload.single('avatar'), async (req, res) => {
     const decoded = auth(req);
     const { status, displayName, bio } = req.body;
     const update = {};
-    if (req.file) update.avatar = `/uploads/${req.file.filename}`;
+    if (req.file) update.avatar = getFileUrl(req);
     if (status !== undefined) update.status = status;
     if (displayName !== undefined) update.display_name = displayName;
     if (bio !== undefined) update.bio = bio;
@@ -435,7 +457,7 @@ app.post('/api/posts', upload.single('image'), async (req, res) => {
       id, user_id: decoded.id, username: decoded.username,
       avatar: user.avatar || null,
       content: content || '',
-      image: req.file ? `/uploads/${req.file.filename}` : null
+      image: req.file ? getFileUrl(req) : null
     });
     io.emit('post:new', post);
     res.json(post);
@@ -522,7 +544,7 @@ app.patch('/api/rooms/:roomId/name', async (req, res) => {
 app.post('/api/rooms/:roomId/icon', upload.single('icon'), async (req, res) => {
   try {
     const decoded = auth(req);
-    const icon = `/uploads/${req.file.filename}`;
+    const icon = getFileUrl(req);
     const room = await Room.findOneAndUpdate(
       { id: req.params.roomId, members: decoded.id },
       { icon }, { new: true }
@@ -680,7 +702,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     const isImage = /jpeg|jpg|png|gif/.test(req.file.mimetype);
     const isAudio = /webm|ogg|mp3|wav/.test(req.file.mimetype);
     res.json({
-      url: `/uploads/${req.file.filename}`,
+      url: getFileUrl(req),
       filename: Buffer.from(req.file.originalname, "latin1").toString("utf8"),
       mimetype: req.file.mimetype,
       size: req.file.size,
@@ -707,6 +729,10 @@ io.use(async (socket, next) => {
 io.on('connection', async (socket) => {
   console.log('接続:', socket.user.username);
   socket.join('user_' + socket.user.id);
+  // オンライン状態をブロードキャスト
+  if (!io.onlineUsers) io.onlineUsers = new Map();
+  io.onlineUsers.set(socket.user.id, { name: socket.user.username, since: Date.now() });
+  io.emit('user:online', { userId: socket.user.id });
   const myRooms = await Room.find({ members: socket.user.id });
   myRooms.forEach(r => socket.join(r.id));
 
@@ -883,7 +909,19 @@ io.on('connection', async (socket) => {
     io.to('user_' + to).emit('call:rejected', { from: socket.user.id });
   });
 
-  socket.on('disconnect', () => console.log('切断:', socket.user.username));
+  socket.on('disconnect', () => {
+    console.log('切断:', socket.user.username);
+    if (io.onlineUsers) {
+      io.onlineUsers.delete(socket.user.id);
+      io.emit('user:offline', { userId: socket.user.id, lastSeen: Date.now() });
+    }
+  });
+});
+
+// オンラインユーザー一覧
+app.get('/api/users/online', authenticateToken, (req, res) => {
+  const list = io.onlineUsers ? Array.from(io.onlineUsers.keys()) : [];
+  res.json(list);
 });
 
 // gzip圧縮（全レスポンスに適用）
