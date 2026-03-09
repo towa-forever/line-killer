@@ -5,6 +5,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   const remoteVideoRef = useRef(null);
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
+  const iceCandidateBuffer = useRef([]); // remoteDescription設定前のICE候補をバッファ
   const [status, setStatus] = useState(isCaller ? 'ringing' : 'connecting');
   const [isMuted, setIsMuted] = useState(false);
   const [isCamOff, setIsCamOff] = useState(false);
@@ -18,7 +19,25 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
-        ]
+          { urls: 'stun:stun2.l.google.com:19302' },
+          // 無料TURNサーバー（NAT越えのため）
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+        ],
+        iceCandidatePoolSize: 10,
       });
       pcRef.current = pc;
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
@@ -59,6 +78,11 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
         const pc = initPC(stream);
         await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
+        // バッファに溜まったICE candidateを処理
+        while (iceCandidateBuffer.current.length > 0) {
+          const buffered = iceCandidateBuffer.current.shift();
+          try { await pc.addIceCandidate(new RTCIceCandidate(buffered)); } catch(e) {}
+        }
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit('call:answer', { answer, to: targetUserId });
@@ -71,6 +95,11 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     socket.on('call:answered', async ({ answer }) => {
       if (pcRef.current) {
         await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer));
+        // バッファに溜まったICE candidateを処理
+        while (iceCandidateBuffer.current.length > 0) {
+          const buffered = iceCandidateBuffer.current.shift();
+          try { await pcRef.current.addIceCandidate(new RTCIceCandidate(buffered)); } catch(e) {}
+        }
         setStatus('active');
       }
     });
@@ -79,6 +108,14 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       try {
         if (pcRef.current?.remoteDescription) {
           await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+          // バッファに溜まったICE candidateを処理
+          while (iceCandidateBuffer.current.length > 0) {
+            const buffered = iceCandidateBuffer.current.shift();
+            await pcRef.current.addIceCandidate(new RTCIceCandidate(buffered));
+          }
+        } else {
+          // remoteDescriptionがまだなければバッファに積む
+          iceCandidateBuffer.current.push(candidate);
         }
       } catch (e) {}
     });
