@@ -92,7 +92,7 @@ function RoomNameEditor({ room, onClose }) {
   );
 }
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set() }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -114,6 +114,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [msgMenu, setMsgMenu] = useState(null); // { msg, x, y } 長押しメニュー
   const [editingMessage, setEditingMessage] = useState(null); // { id, content }
   const [showBgPicker, setShowBgPicker] = useState(false);
+  const [showBookmarks, setShowBookmarks] = useState(false);
+  const [bookmarkedMsgs, setBookmarkedMsgs] = useState([]);
+  const [showAnnounce, setShowAnnounce] = useState(false);
+  const [announceText, setAnnounceText] = useState('');
   const [chatBg, setChatBg] = useState(() => localStorage.getItem('chatBg') || 'default');
   const [editText, setEditText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -174,6 +178,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     socket.on('room:updated', ({ roomId, name, icon }) => {
       setRooms((prev) => prev.map(r => r.id === roomId ? { ...r, ...(name && { name }), ...(icon && { icon }) } : r));
       setSelectedRoom((prev) => prev?.id === roomId ? { ...prev, ...(name && { name }), ...(icon && { icon }) } : prev);
+    });
+    socket.on('room:announcement', ({ roomId, text, by }) => {
+      if (roomId === selectedRoom?.id) {
+        // アナウンスをシステムメッセージ風に表示
+        const sysMsg = { id: 'ann_' + Date.now(), type: 'announcement', content: text, senderId: by, createdAt: new Date().toISOString() };
+        setMessages(prev => [...prev, sysMsg]);
+      }
     });
     socket.on('message:edited', ({ messageId, content: newContent }) => {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: newContent, edited: true } : m));
@@ -277,6 +288,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   };
 
   const renderMessage = (msg) => {
+    // アナウンスはシステムメッセージとして表示
+    if (msg.type === 'announcement') {
+      return (
+        <div key={msg.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', margin:'4px 0', background:'rgba(6,199,85,0.1)', borderRadius:10, border:'1px solid rgba(6,199,85,0.3)' }}>
+          <span style={{ fontSize:16 }}>📢</span>
+          <span style={{ fontSize:13, color:'var(--text)', flex:1 }}>{msg.content}</span>
+        </div>
+      );
+    }
     const isMine = msg.senderId === currentUser.id;
     const time = new Date(msg.createdAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
     const readByOthers = msg.read_by?.some(id => id !== currentUser.id);
@@ -380,7 +400,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 </div>
                 <div className="room-info">
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <div className={`room-name ${unreadCounts[room.id] > 0 ? 'unread' : ''}`}>{room.name}</div>
+                    <div className={`room-name ${unreadCounts[room.id] > 0 ? 'unread' : ''}`}>
+                      {room.name}
+                      {mutedRooms.has(room.id) && <span style={{ fontSize:11, color:'var(--text2)', marginLeft:4 }}>🔕</span>}
+                    </div>
                     {lastMsg?.createdAt && <div style={{ fontSize:11, color:'var(--text2)' }}>{new Date(lastMsg.createdAt).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}</div>}
                   </div>
                   <div className={`room-last-msg ${unreadCounts[room.id] > 0 ? 'unread' : ''}`}>
@@ -401,6 +424,19 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               {selectedRoom.name} <span style={{ fontSize:12, color:'var(--text2)' }}>⚙️</span>
             </div>
             <button className="icon-btn" onClick={() => { setShowSearch(!showSearch); setSearchQuery(''); setSearchResults([]); }}>🔍</button>
+            <button className="icon-btn" title="ブックマーク" onClick={() => {
+              axios.get('/api/bookmarks').then(r => { setBookmarkedMsgs(r.data); setShowBookmarks(true); }).catch(() => {});
+            }}>🔖</button>
+            <button className="icon-btn" title={mutedRooms.has(selectedRoom.id) ? 'ミュート中' : 'ミュート'} onClick={() => {
+              const isMuted = mutedRooms.has(selectedRoom.id);
+              if (isMuted) {
+                axios.delete('/api/rooms/' + selectedRoom.id + '/mute');
+                setMutedRooms(prev => { const n = new Set(prev); n.delete(selectedRoom.id); return n; });
+              } else {
+                axios.post('/api/rooms/' + selectedRoom.id + '/mute');
+                setMutedRooms(prev => new Set([...prev, selectedRoom.id]));
+              }
+            }}>{mutedRooms.has(selectedRoom.id) ? '🔕' : '🔔'}</button>
             <button className="icon-btn" onClick={() => setShowNote(true)}>📝</button>
             <button className="icon-btn" onClick={() => setShowBgPicker(true)}>🎨</button>
             <button className="call-icon-btn" onClick={() => {
@@ -469,6 +505,24 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   { icon:'↩', label:'返信', action: () => setReplyTo(msgMenu.msg) },
                   { icon:'😊', label:'リアクション', action: () => setReactionPicker({ msgId: msgMenu.msg.id, x: msgMenu.x, y: msgMenu.y }) },
                   { icon:'📤', label:'転送', action: () => setForwardMsg(msgMenu.msg) },
+                  { icon:'📋', label:'コピー', action: () => {
+                    const text = msgMenu.msg.content || '';
+                    if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+                    else { const el = document.createElement('textarea'); el.value = text; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); }
+                  }},
+                  { icon: bookmarks.has(msgMenu.msg.id) ? '🔖' : '📌', label: bookmarks.has(msgMenu.msg.id) ? 'ブックマーク解除' : 'ブックマーク', action: () => {
+                    const isBm = bookmarks.has(msgMenu.msg.id);
+                    if (isBm) {
+                      axios.delete('/api/bookmarks/' + msgMenu.msg.id);
+                      setBookmarks(prev => { const n = new Set(prev); n.delete(msgMenu.msg.id); return n; });
+                    } else {
+                      axios.post('/api/bookmarks/' + msgMenu.msg.id);
+                      setBookmarks(prev => new Set([...prev, msgMenu.msg.id]));
+                    }
+                  }},
+                  ...(selectedRoom?.members?.length > 2 && msgMenu.msg.senderId === currentUser.id ? [
+                    { icon:'📢', label:'アナウンス', action: () => { setAnnounceText(msgMenu.msg.content || ''); setShowAnnounce(true); } },
+                  ] : []),
                   ...(msgMenu.msg.senderId === currentUser.id ? [
                     { icon:'✏️', label:'編集', action: () => { setEditingMessage(msgMenu.msg); setEditText(msgMenu.msg.content || ''); } },
                     { icon:'🗑️', label:'削除', danger: true, action: () => {
@@ -486,6 +540,44 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     <span>{item.icon}</span><span style={{ color: item.danger ? 'var(--danger)' : 'inherit' }}>{item.label}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+          {showAnnounce && (
+            <div className="modal-overlay" onClick={() => setShowAnnounce(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-title">📢 アナウンス</div>
+                <textarea className="form-input" value={announceText} onChange={e => setAnnounceText(e.target.value)}
+                  placeholder="グループ全員に伝えたいことを書いてな" style={{ minHeight:100, resize:'vertical' }} autoFocus />
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setShowAnnounce(false)}>キャンセル</button>
+                  <button className="btn btn-primary" onClick={() => {
+                    axios.post('/api/rooms/' + selectedRoom.id + '/announcement', { text: announceText });
+                    setShowAnnounce(false);
+                  }}>送信</button>
+                </div>
+              </div>
+            </div>
+          )}
+          {showBookmarks && (
+            <div className="modal-overlay" onClick={() => setShowBookmarks(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
+                <div className="modal-title">🔖 ブックマーク</div>
+                {bookmarkedMsgs.length === 0
+                  ? <div style={{ textAlign:'center', color:'var(--text2)', padding:'20px 0' }}>ブックマークがまだないで</div>
+                  : bookmarkedMsgs.map(msg => (
+                    <div key={msg.id} style={{ padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                      <div style={{ fontSize:12, color:'var(--text2)', marginBottom:4 }}>{msg.senderName} · {new Date(msg.createdAt).toLocaleDateString('ja-JP')}</div>
+                      <div style={{ fontSize:14 }}>{msg.content}</div>
+                      <button style={{ fontSize:11, color:'var(--danger)', marginTop:4 }} onClick={() => {
+                        axios.delete('/api/bookmarks/' + msg.id);
+                        setBookmarks(prev => { const n = new Set(prev); n.delete(msg.id); return n; });
+                        setBookmarkedMsgs(prev => prev.filter(m => m.id !== msg.id));
+                      }}>削除</button>
+                    </div>
+                  ))
+                }
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowBookmarks(false)}>閉じる</button>
               </div>
             </div>
           )}
@@ -745,7 +837,9 @@ export default function App() {
   const [acquiredStampIds, setAcquiredStampIds] = useState([]);
   const [friendsList, setFriendsList] = useState([]);
   const [incomingCall, setIncomingCall] = useState(null);
-  const [onlineUsers, setOnlineUsers] = useState(new Set()); // { from, fromName, offer, roomId }
+  const [onlineUsers, setOnlineUsers] = useState(new Set());
+  const [bookmarks, setBookmarks] = useState(new Set());
+  const [mutedRooms, setMutedRooms] = useState(new Set());
   const [activeCall, setActiveCall] = useState(null); // { roomId, targetUserId, isCaller, offer }
   const [callMinimized, setCallMinimized] = useState(false);
   const [groupCall, setGroupCall] = useState(null); // { roomId, members, roomName }
@@ -770,6 +864,11 @@ export default function App() {
     axios.get('/api/stamps').then(res => setAllStampSets(res.data)).catch(() => {});
     axios.get('/api/stamps/mysets').then(res => setAcquiredStampIds(res.data.acquired || [])).catch(() => {});
     axios.get('/api/friends').then(res => setFriendsList(res.data)).catch(() => {});
+    // ミュート・ブックマーク初期化
+    axios.get('/api/auth/me').then(res => {
+      if (res.data.user.mutedRooms) setMutedRooms(new Set(res.data.user.mutedRooms));
+      if (res.data.user.bookmarks) setBookmarks(new Set(res.data.user.bookmarks));
+    }).catch(() => {});
   }, [currentUser]);
 
   useEffect(() => {
@@ -861,7 +960,7 @@ export default function App() {
   const renderTabs = () => (
     <>
       <div style={{ display: activeTab === 'chat' ? 'contents' : 'none' }}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} />
       </div>
       <div style={{ display: activeTab === 'friends' ? 'contents' : 'none' }}>
         <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />

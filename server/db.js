@@ -15,7 +15,10 @@ const UserSchema = new mongoose.Schema({
   acquired_stamps: { type: [Number], default: [] },
   blocked_users: { type: [String], default: [] },
   muted_rooms: { type: [String], default: [] },
-  created_at: { type: Date, default: Date.now }
+  bookmarked_messages: { type: [String], default: [] },
+  created_at: { type: Date, default: Date.now },
+  creator_id: String,
+  announcement: String
 });
 
 const RoomSchema = new mongoose.Schema({

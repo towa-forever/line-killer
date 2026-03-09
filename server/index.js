@@ -284,7 +284,7 @@ app.get('/api/auth/me', async (req, res) => {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id }, { password: 0 });
     if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
-    res.json({ user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '' } });
+    res.json({ user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '', mutedRooms: user.muted_rooms || [], bookmarks: user.bookmarked_messages || [] } });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
@@ -429,6 +429,43 @@ app.post('/api/rooms/:roomId/mute', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
+// ブックマーク追加・削除
+app.post('/api/bookmarks/:messageId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { bookmarked_messages: req.params.messageId } });
+    res.json({ ok: true });
+  } catch { res.status(400).json({ error: 'エラー' }); }
+});
+app.delete('/api/bookmarks/:messageId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { bookmarked_messages: req.params.messageId } });
+    res.json({ ok: true });
+  } catch { res.status(400).json({ error: 'エラー' }); }
+});
+app.get('/api/bookmarks', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id });
+    const msgs = await Message.find({ id: { $in: user.bookmarked_messages || [] } });
+    res.json(msgs.map(m => ({ id: m.id, content: m.content, type: m.type, senderId: m.sender_id, senderName: m.sender_name, roomId: m.room_id, createdAt: m.created_at })));
+  } catch { res.status(400).json({ error: 'エラー' }); }
+});
+
+// アナウンス設定・取得
+app.post('/api/rooms/:roomId/announcement', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId });
+    if (!room) return res.status(404).json({ error: 'ルームが見つかりません' });
+    // 作成者またはメンバーなら設定可能
+    await Room.findOneAndUpdate({ id: req.params.roomId }, { announcement: req.body.text });
+    io.to(req.params.roomId).emit('room:announcement', { roomId: req.params.roomId, text: req.body.text, by: decoded.id });
+    res.json({ ok: true });
+  } catch { res.status(400).json({ error: 'エラー' }); }
+});
+
 app.delete('/api/rooms/:roomId/mute', async (req, res) => {
   try {
     const decoded = auth(req);
@@ -507,7 +544,12 @@ app.get('/api/rooms', async (req, res) => {
   try {
     const decoded = auth(req);
     const rooms = await Room.find({ members: decoded.id });
-    res.json(rooms);
+    res.json(rooms.map(r => ({
+      id: r.id, name: r.name, icon: r.icon, members: r.members,
+      pinned_message_id: r.pinned_message_id,
+      announcement: r.announcement || null,
+      creator_id: r.creator_id || null,
+    })));
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
@@ -522,7 +564,7 @@ app.post('/api/rooms', async (req, res) => {
     console.log("friends:", friendIds, "valid:", validMembers);
     const members = [...new Set([decoded.id, ...validMembers])];
     const id = 'room_' + uuidv4();
-    const room = await Room.create({ id, name, members });
+    const room = await Room.create({ id, name, members, creator_id: decoded.id });
     members.forEach(mid => io.to('user_' + mid).emit('room:new', room));
     res.json(room);
   } catch { res.status(401).json({ error: '認証エラー' }); }
@@ -625,8 +667,21 @@ app.get('/api/rooms/:roomId/search', async (req, res) => {
     const decoded = auth(req);
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
     if (!room) return res.status(403).json({ error: '権限なし' });
-    const msgs = await Message.find({ room_id: req.params.roomId, content: new RegExp(req.query.q, 'i'), deleted: false }).sort({ created_at: 1 });
-    res.json(msgs);
+    const q = req.query.q || '';
+    const query = {
+      room_id: req.params.roomId, deleted: false,
+      $or: [
+        { content: new RegExp(q, 'i') },
+        { sender_name: new RegExp(q, 'i') },
+      ]
+    };
+    const msgs = await Message.find(query).sort({ created_at: 1 }).limit(50);
+    res.json(msgs.map(m => ({
+      id: m.id, content: m.content, type: m.type,
+      senderId: m.sender_id, senderName: m.sender_name,
+      createdAt: m.created_at, roomId: m.room_id,
+      highlight: q,
+    })));
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
