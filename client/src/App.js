@@ -4,6 +4,7 @@ import io from 'socket.io-client';
 import axios from 'axios';
 import ErrorBoundary from "./components/ErrorBoundary";
 import VideoCall from "./components/VideoCall";
+import GroupVideoCall from "./components/GroupVideoCall";
 import './App.css';
 
 // 遅延読み込み（初回ロード高速化）
@@ -91,7 +92,7 @@ function RoomNameEditor({ room, onClose }) {
   );
 }
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -369,7 +370,16 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
             <button className="icon-btn" onClick={() => { setShowSearch(!showSearch); setSearchQuery(''); setSearchResults([]); }}>🔍</button>
             <button className="icon-btn" onClick={() => setShowNote(true)}>📝</button>
-            <button className="call-icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) onCall({ roomId: selectedRoom.id, targetUserId: other, isCaller: true, offer: null }); }}>📞</button>
+            <button className="call-icon-btn" onClick={() => {
+              if (selectedRoom.members?.length > 2) {
+                // グループ通話
+                setGroupCall && setGroupCall({ roomId: selectedRoom.id, members: selectedRoom.members, roomName: selectedRoom.name });
+              } else {
+                // 1対1通話
+                const other = selectedRoom.members?.find(m => m !== currentUser.id);
+                if(other) onCall({ roomId: selectedRoom.id, targetUserId: other, isCaller: true, offer: null });
+              }
+            }}>📞</button>
           </div>
           {showNote && <Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} />}
           {showRoomSettings && (
@@ -640,6 +650,7 @@ export default function App() {
   const [incomingCall, setIncomingCall] = useState(null); // { from, fromName, offer, roomId }
   const [activeCall, setActiveCall] = useState(null); // { roomId, targetUserId, isCaller, offer }
   const [callMinimized, setCallMinimized] = useState(false);
+  const [groupCall, setGroupCall] = useState(null); // { roomId, members, roomName }
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -734,7 +745,7 @@ export default function App() {
   const renderTabs = () => (
     <>
       <div style={{ display: activeTab === 'chat' ? 'contents' : 'none' }}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} />
       </div>
       <div style={{ display: activeTab === 'friends' ? 'contents' : 'none' }}>
         <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />
@@ -774,6 +785,18 @@ export default function App() {
         </main>
         <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} />
         {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
+        {groupCall && (
+          <GroupVideoCall
+            socket={socket}
+            currentUser={currentUser}
+            roomId={groupCall.roomId}
+            members={groupCall.members}
+            roomName={groupCall.roomName}
+            onEnd={() => { setGroupCall(null); setCallMinimized(false); }}
+            minimized={callMinimized}
+            onToggleMinimize={() => setCallMinimized(m => !m)}
+          />
+        )}
         {activeCall && (
           <VideoCall
             currentUser={currentUser}

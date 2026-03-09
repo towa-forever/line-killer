@@ -838,6 +838,47 @@ io.on('connection', async (socket) => {
     }
   });
 
+  // ===== グループ通話シグナリング =====
+  // gcallRooms: roomId -> Set of { userId, socketId, name }
+  // グローバルに管理（再起動でリセット）
+  socket.on('gcall:join', ({ roomId, name }) => {
+    if (!io.gcallRooms) io.gcallRooms = {};
+    if (!io.gcallRooms[roomId]) io.gcallRooms[roomId] = new Map();
+    // 既存メンバー全員に通知
+    for (const [uid, info] of io.gcallRooms[roomId]) {
+      io.to(info.socketId).emit('gcall:peer_joined', { userId: socket.user.id, name });
+    }
+    io.gcallRooms[roomId].set(socket.user.id, { socketId: socket.id, name });
+    socket.join('gcall_' + roomId);
+  });
+
+  socket.on('gcall:offer', ({ offer, to, roomId, fromName }) => {
+    io.to('user_' + to).emit('gcall:offer', { offer, from: socket.user.id, fromName });
+  });
+
+  socket.on('gcall:answer', ({ answer, to, roomId }) => {
+    io.to('user_' + to).emit('gcall:answer', { answer, from: socket.user.id });
+  });
+
+  socket.on('gcall:ice', ({ candidate, to, roomId }) => {
+    io.to('user_' + to).emit('gcall:ice', { candidate, from: socket.user.id });
+  });
+
+  socket.on('gcall:leave', ({ roomId }) => {
+    if (io.gcallRooms?.[roomId]) {
+      io.gcallRooms[roomId].delete(socket.user.id);
+      if (io.gcallRooms[roomId].size === 0) delete io.gcallRooms[roomId];
+    }
+    socket.to('gcall_' + roomId).emit('gcall:peer_left', { userId: socket.user.id });
+    socket.leave('gcall_' + roomId);
+  });
+
+  socket.on('gcall:end', ({ roomId }) => {
+    if (io.gcallRooms?.[roomId]) delete io.gcallRooms[roomId];
+    socket.to('gcall_' + roomId).emit('gcall:ended');
+    io.socketsLeave('gcall_' + roomId);
+  });
+
   socket.on('call:reject', ({ to }) => {
     io.to('user_' + to).emit('call:rejected', { from: socket.user.id });
   });
