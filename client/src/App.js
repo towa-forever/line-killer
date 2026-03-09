@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-route
 import io from 'socket.io-client';
 import axios from 'axios';
 import ErrorBoundary from "./components/ErrorBoundary";
+import VideoCall from "./components/VideoCall";
 import './App.css';
 
 // 遅延読み込み（初回ロード高速化）
@@ -11,7 +12,7 @@ const Timeline = lazy(() => import('./components/Timeline'));
 const StampShop = lazy(() => import('./components/StampShop'));
 const Album = lazy(() => import('./components/Album'));
 const Profile = lazy(() => import('./components/Profile'));
-const VideoCall = lazy(() => import('./components/VideoCall'));
+
 const CreateRoom = lazy(() => import('./components/CreateRoom'));
 const Note = lazy(() => import('./components/Note'));
 
@@ -90,7 +91,7 @@ function RoomNameEditor({ room, onClose }) {
   );
 }
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -355,7 +356,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
             <button className="icon-btn" onClick={() => { setShowSearch(!showSearch); setSearchQuery(''); setSearchResults([]); }}>🔍</button>
             <button className="icon-btn" onClick={() => setShowNote(true)}>📝</button>
-            <button className="icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) window.location.href=`/videocall/${selectedRoom.id}/${other}?caller=true`; }}>📞</button>
+            <button className="icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) onCall({ roomId: selectedRoom.id, targetUserId: other, isCaller: true, offer: null }); }}>📞</button>
           </div>
           {showNote && <Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} />}
           {showRoomSettings && (
@@ -625,6 +626,7 @@ export default function App() {
   const [acquiredStampIds, setAcquiredStampIds] = useState([]);
   const [friendsList, setFriendsList] = useState([]);
   const [incomingCall, setIncomingCall] = useState(null); // { from, fromName, offer, roomId }
+  const [activeCall, setActiveCall] = useState(null); // { roomId, targetUserId, isCaller, offer }
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -705,10 +707,9 @@ export default function App() {
 
   const handleAcceptCall = () => {
     if (!incomingCall) return;
-    const { from, roomId } = incomingCall;
-    sessionStorage.setItem('_incomingCall', JSON.stringify(incomingCall)); // ページ遷移後も保持
+    const { from, roomId, offer } = incomingCall;
     setIncomingCall(null);
-    window.location.href = `/videocall/${roomId}/${from}?caller=false`;
+    setActiveCall({ roomId, targetUserId: from, isCaller: false, offer });
   };
 
   const handleRejectCall = () => {
@@ -720,7 +721,7 @@ export default function App() {
   const renderTabs = () => (
     <>
       <div style={{ display: activeTab === 'chat' ? 'contents' : 'none' }}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} />
       </div>
       <div style={{ display: activeTab === 'friends' ? 'contents' : 'none' }}>
         <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />
@@ -760,6 +761,17 @@ export default function App() {
         </main>
         <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} />
         {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
+        {activeCall && (
+          <VideoCall
+            currentUser={currentUser}
+            socket={socket}
+            roomId={activeCall.roomId}
+            targetUserId={activeCall.targetUserId}
+            isCaller={activeCall.isCaller}
+            incomingOffer={activeCall.offer}
+            onEnd={() => setActiveCall(null)}
+          />
+        )}
         {incomingCall && (
           <div style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999,
