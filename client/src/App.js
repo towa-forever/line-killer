@@ -356,8 +356,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         </div>
       </div>
 
-      {selectedRoom ? (
-        <div className="message-area">
+      <div className={`message-area ${selectedRoom ? "visible" : ""}`}>
+        {selectedRoom && <>
           <div className="chat-header">
             <button className="icon-btn back-btn" onClick={() => setSelectedRoom(null)}>←</button>
             <div className="chat-header-name" onClick={() => setShowRoomSettings(true)} style={{ cursor:'pointer' }}>
@@ -588,10 +588,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>送信</button>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="no-room-selected"><div>💬</div><p>トークを選択してください</p></div>
-      )}
+        </>}
+        {!selectedRoom && <div className="no-room-selected"><div>💬</div><p>トークを選択してください</p></div>}
+      </div>
 
       {showCreateRoom && (
         <CreateRoom currentUser={currentUser} friendsList={friendsList} onClose={() => setShowCreateRoom(false)}
