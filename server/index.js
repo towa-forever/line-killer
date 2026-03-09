@@ -977,6 +977,21 @@ io.on('connection', async (socket) => {
   });
 });
 
+// ===== TWA用 assetlinks.json =====
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  const packageName = process.env.TWA_PACKAGE_NAME || 'com.example.linekiller';
+  const sha256 = process.env.TWA_SHA256 || '';
+  if (!sha256) return res.json([]); // 未設定の場合は空配列
+  res.json([{
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: {
+      namespace: 'android_app',
+      package_name: packageName,
+      sha256_cert_fingerprints: [sha256]
+    }
+  }]);
+});
+
 // オンラインユーザー一覧
 app.get('/api/users/online', authenticateToken, (req, res) => {
   const list = io.onlineUsers ? Array.from(io.onlineUsers.keys()) : [];
