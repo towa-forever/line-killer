@@ -329,6 +329,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           <button className="icon-btn" onClick={() => setShowCreateRoom(true)}>✏️</button>
         </div>
         <div className="room-items">
+          {rooms.length === 0 && (
+            <div className="room-empty">
+              <div className="room-empty-icon">💬</div>
+              <div className="room-empty-text">まだトークがないで！<br/>右上の ✏️ からトークを始めよう</div>
+            </div>
+          )}
           {rooms.map((room) => {
             const lastMsg = room.lastMessage;
             return (
@@ -564,7 +570,17 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
           )}
           <div className="messages-container">
-            {messages.map(renderMessage)}
+            {messages.reduce((acc, msg, i) => {
+              const d = new Date(msg.createdAt);
+              const dateStr = d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+              const prevMsg = messages[i - 1];
+              const prevDate = prevMsg ? new Date(prevMsg.createdAt).toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' }) : null;
+              if (!prevDate || prevDate !== d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' })) {
+                acc.push(<div key={`date-${i}`} className="date-divider">{dateStr}</div>);
+              }
+              acc.push(renderMessage(msg, i));
+              return acc;
+            }, [])}
             {typingUsers.length > 0 && <div className="typing-indicator">{typingUsers.join(', ')} が入力中...</div>}
             <div ref={messagesEndRef} />
           </div>
@@ -717,6 +733,19 @@ export default function App() {
     };
     registerPush();
   }, [currentUser]);
+
+  // iOS Safari: キーボード表示時に画面が押し上げられるよう対応
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handler = () => {
+      const offset = window.innerHeight - vv.height - vv.offsetTop;
+      document.documentElement.style.setProperty('--keyboard-offset', `${Math.max(0, offset)}px`);
+    };
+    vv.addEventListener('resize', handler);
+    vv.addEventListener('scroll', handler);
+    return () => { vv.removeEventListener('resize', handler); vv.removeEventListener('scroll', handler); };
+  }, []);
 
   const handleLogin = (user) => setCurrentUser(user);
 

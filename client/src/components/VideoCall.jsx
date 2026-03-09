@@ -12,6 +12,8 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   const [isMuted, setIsMuted] = useState(false);
   const [isCamOff, setIsCamOff] = useState(false);
   const [error, setError] = useState('');
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const screenTrackRef = useRef(null);
 
   useEffect(() => {
     if (!socket) return;
@@ -139,6 +141,47 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     setIsCamOff(c => !c);
   };
 
+  const toggleScreenShare = async () => {
+    if (isScreenSharing) {
+      // 画面共有を停止してカメラに戻す
+      if (screenTrackRef.current) {
+        screenTrackRef.current.stop();
+        screenTrackRef.current = null;
+      }
+      try {
+        const camStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const camTrack = camStream.getVideoTracks()[0];
+        const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) await sender.replaceTrack(camTrack);
+        // ローカルストリームのビデオトラックも差し替え
+        localStreamRef.current?.getVideoTracks().forEach(t => t.stop());
+        if (localVideoRef.current) {
+          const newStream = new MediaStream([camTrack, ...localStreamRef.current.getAudioTracks()]);
+          localVideoRef.current.srcObject = newStream;
+          localStreamRef.current = newStream;
+        }
+      } catch(e) {}
+      setIsScreenSharing(false);
+    } else {
+      // 画面共有開始
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        const screenTrack = screenStream.getVideoTracks()[0];
+        screenTrackRef.current = screenTrack;
+        const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) await sender.replaceTrack(screenTrack);
+        if (localVideoRef.current) {
+          const newStream = new MediaStream([screenTrack, ...localStreamRef.current.getAudioTracks()]);
+          localVideoRef.current.srcObject = newStream;
+        }
+        screenTrack.onended = () => toggleScreenShare(); // 共有停止ボタンで自動解除
+        setIsScreenSharing(true);
+      } catch(e) {
+        if (e.name !== 'NotAllowedError') setError('画面共有を開始できませんでした');
+      }
+    }
+  };
+
   const statusText = { connecting: '接続中…', ringing: '呼び出し中…', ended: '通話終了', rejected: '拒否されました' };
 
   // ========== ミニ表示（PiP風） ==========
@@ -217,6 +260,10 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
           {/* カメラ */}
           <button onClick={toggleCamera} style={btnStyle(isCamOff ? '#c0392b' : 'rgba(255,255,255,0.2)')}>
             {isCamOff ? '📷' : '📹'}
+          </button>
+          {/* 画面共有 */}
+          <button onClick={toggleScreenShare} style={btnStyle(isScreenSharing ? '#f39c12' : 'rgba(255,255,255,0.2)', 48)}>
+            {isScreenSharing ? '🖥️' : '📺'}
           </button>
           {/* チャットに戻る（ミニ化） */}
           <button onClick={onToggleMinimize} style={btnStyle('rgba(255,255,255,0.2)', 48)}>

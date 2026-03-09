@@ -18,6 +18,8 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
   const [isMuted, setIsMuted] = useState(false);
   const [isCamOff, setIsCamOff] = useState(false);
   const [error, setError] = useState('');
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const screenTrackRef = useRef(null);
 
   const ICE = {
     iceServers: [
@@ -192,6 +194,37 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
     setIsCamOff(c => !c);
   };
 
+  const toggleScreenShare = async () => {
+    if (isScreenSharing) {
+      if (screenTrackRef.current) { screenTrackRef.current.stop(); screenTrackRef.current = null; }
+      try {
+        const camStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const camTrack = camStream.getVideoTracks()[0];
+        Object.values(pcsRef.current).forEach(async pc => {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) await sender.replaceTrack(camTrack);
+        });
+        if (localVideoRef.current) localVideoRef.current.srcObject = new MediaStream([camTrack, ...localStreamRef.current.getAudioTracks()]);
+      } catch(e) {}
+      setIsScreenSharing(false);
+    } else {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const screenTrack = screenStream.getVideoTracks()[0];
+        screenTrackRef.current = screenTrack;
+        Object.values(pcsRef.current).forEach(async pc => {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) await sender.replaceTrack(screenTrack);
+        });
+        if (localVideoRef.current) localVideoRef.current.srcObject = new MediaStream([screenTrack, ...localStreamRef.current.getAudioTracks()]);
+        screenTrack.onended = () => { setIsScreenSharing(false); screenTrackRef.current = null; };
+        setIsScreenSharing(true);
+      } catch(e) {
+        if (e.name !== 'NotAllowedError') setError('画面共有を開始できませんでした');
+      }
+    }
+  };
+
   const allVideos = Object.entries(remoteStreams); // [[userId, {stream, name}]]
   const totalCount = allVideos.length + 1; // +自分
 
@@ -292,6 +325,9 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
         </Btn>
         <Btn onClick={toggleCamera} bg={isCamOff ? '#c0392b' : 'rgba(255,255,255,0.15)'}>
           {isCamOff ? '📷' : '📹'}
+        </Btn>
+        <Btn onClick={toggleScreenShare} bg={isScreenSharing ? '#f39c12' : 'rgba(255,255,255,0.15)'} size={48}>
+          {isScreenSharing ? '🖥️' : '📺'}
         </Btn>
         <Btn onClick={onToggleMinimize} bg='rgba(255,255,255,0.15)' size={48}>💬</Btn>
         <Btn onClick={endCall} bg='#e74c3c' size={64}>📵</Btn>
