@@ -175,16 +175,20 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
   useEffect(() => {
     if (!selectedRoom) return;
+    messagesCache.current._current = selectedRoom.id; // 現在のルームを記録
     // キャッシュがあれば即表示
     if (messagesCache.current[selectedRoom.id]) {
       setMessages(messagesCache.current[selectedRoom.id]);
     } else {
       setMessages([]);
     }
+    const currentRoomId = selectedRoom.id;
     (async () => {
       try {
-        const res = await axios.get(`/api/rooms/${selectedRoom.id}/messages`);
-        messagesCache.current[selectedRoom.id] = res.data;
+        const res = await axios.get(`/api/rooms/${currentRoomId}/messages`);
+        // ルームが切り替わってたら無視
+        if (messagesCache.current._current !== currentRoomId) return;
+        messagesCache.current[currentRoomId] = res.data;
         setMessages(res.data);
         // ピン留め状態を復元
         if (selectedRoom.pinned_message_id) {
@@ -365,7 +369,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
             <button className="icon-btn" onClick={() => { setShowSearch(!showSearch); setSearchQuery(''); setSearchResults([]); }}>🔍</button>
             <button className="icon-btn" onClick={() => setShowNote(true)}>📝</button>
-            <button className="icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) onCall({ roomId: selectedRoom.id, targetUserId: other, isCaller: true, offer: null }); }}>📞</button>
+            <button className="call-icon-btn" onClick={() => { const other = selectedRoom.members?.find(m => m !== currentUser.id); if(other) onCall({ roomId: selectedRoom.id, targetUserId: other, isCaller: true, offer: null }); }}>📞</button>
           </div>
           {showNote && <Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} />}
           {showRoomSettings && (
@@ -585,7 +589,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <textarea className="message-input" value={inputText} onChange={handleTyping}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
                 placeholder="メッセージを入力..." rows={1} />
-              <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>送信</button>
+              <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>➤</button>
             </div>
           </div>
         </>}
@@ -635,6 +639,7 @@ export default function App() {
   const [friendsList, setFriendsList] = useState([]);
   const [incomingCall, setIncomingCall] = useState(null); // { from, fromName, offer, roomId }
   const [activeCall, setActiveCall] = useState(null); // { roomId, targetUserId, isCaller, offer }
+  const [callMinimized, setCallMinimized] = useState(false);
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -777,7 +782,9 @@ export default function App() {
             targetUserId={activeCall.targetUserId}
             isCaller={activeCall.isCaller}
             incomingOffer={activeCall.offer}
-            onEnd={() => setActiveCall(null)}
+            onEnd={() => { setActiveCall(null); setCallMinimized(false); }}
+            minimized={callMinimized}
+            onToggleMinimize={() => setCallMinimized(m => !m)}
           />
         )}
         {incomingCall && (

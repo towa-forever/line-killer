@@ -474,3 +474,81 @@ a { text-decoration: none; color: var(--accent); }
 @supports (-webkit-touch-callout: none) {
   .app { height: -webkit-fill-available; }
 }
+
+/* ===== 追加デザイン調整 ===== */
+
+/* ルーム一覧 - 時刻表示エリア */
+.room-item-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.room-time {
+  font-size: 11px;
+  color: var(--text2);
+  white-space: nowrap;
+}
+.unread-badge {
+  background: var(--danger);
+  color: white;
+  border-radius: 12px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* チャットヘッダーの通話ボタン */
+.call-icon-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.call-icon-btn:active { background: rgba(255,255,255,0.35); }
+
+/* メッセージ送信ボタン（矢印アイコン） */
+.send-btn { font-size: 18px; }
+
+/* スタンプパネル改善 */
+.stamp-set-tabs {
+  display: flex; gap: 4px; padding: 6px 8px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.stamp-tab {
+  padding: 4px 10px; border-radius: 8px 8px 0 0;
+  font-size: 12px; cursor: pointer; flex-shrink: 0;
+  color: var(--text2); background: transparent;
+}
+.stamp-tab.active { background: var(--primary); color: white; }
+
+/* 通話中バナー（ミニ化時） */
+.call-banner {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  background: #1c8c3c;
+  color: white; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+.call-banner:active { background: #17753200; }
+
+/* ダークモードのチャット背景 */
+body.dark .messages-container {
+  background: var(--bg);
+}
+
+/* メッセージ間隔調整 */
+.message + .message.mine { margin-top: 1px; }
+.message + .message.theirs { margin-top: 1px; }
+
+/* 転送メッセージスタイル */
+.forwarded-label {
+  font-size: 11px; color: var(--text2);
+  margin-bottom: 3px; padding-left: 2px;
+}
