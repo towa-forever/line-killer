@@ -132,7 +132,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showStampPanel, setShowStampPanel] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [showNote, setShowNote] = useState(false);
-  const [typingUsers] = useState([]);
+  const [typingUsers, setTypingUsers] = useState([]);
   const [replyTo, setReplyTo] = useState(null); // 返信先メッセージ
   const [showSearch, setShowSearch] = useState(false);
   const [reactionPicker, setReactionPicker] = useState(null); // { msgId, x, y }
@@ -193,6 +193,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const isAtBottomRef = useRef(true); // スクロール最下部にいるかどうか
 
   const myStampSets = allStampSets.filter(s => acquiredStampIds.includes(s.id));
 
@@ -202,6 +203,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, []);
 
   useEffect(() => { fetchRooms(); }, [fetchRooms]);
+
+  // タイピングタイムアウトのクリーンアップ
+  useEffect(() => {
+    const ref = typingTimeoutRef.current;
+    return () => { if (ref) clearTimeout(ref); };
+  }, []);
 
   // ヘッダーメニュー・入力メニューを画面外タップで閉じる
   useEffect(() => {
@@ -225,7 +232,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     if (!socket) return;
     socket.on('message:receive', (msg) => {
       if (msg.roomId === selectedRoom?.id) {
-        setMessages((prev) => [...prev, msg]);
+        setMessages((prev) => { const next = [...prev, msg]; return next.length > 500 ? next.slice(-500) : next; });
         if (msg.senderId !== currentUser.id) {
           socket.emit('message:read', { messageId: msg.id, roomId: msg.roomId });
           sounds.receive(soundTheme);
@@ -239,13 +246,14 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0))
       );
     });
-    socket.on('message:read_update', ({ messageId, readBy }) => {
+    socket.on('message:read_update', ({ messageId, readBy, readByDetail }) => {
+      if (readByDetail) setReadByDetailMap(prev => ({ ...prev, [messageId]: readByDetail }));
       setMessages((prev) => prev.map(m => m.id === messageId ? { ...m, read_by: readBy } : m));
-      // キャッシュも更新
       Object.keys(messagesCache.current).forEach(roomId => {
-        messagesCache.current[roomId] = messagesCache.current[roomId]?.map(
-          m => m.id === messageId ? { ...m, read_by: readBy } : m
-        );
+        if (Array.isArray(messagesCache.current[roomId]))
+          messagesCache.current[roomId] = messagesCache.current[roomId].map(
+            m => m.id === messageId ? { ...m, read_by: readBy } : m
+          );
       });
     });
     socket.on('message:reacted', ({ messageId, reactions }) => {
@@ -265,16 +273,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       setRooms((prev) => prev.map(r => r.id === roomId ? { ...r, ...(name && { name }), ...(icon && { icon }) } : r));
       setSelectedRoom((prev) => prev?.id === roomId ? { ...prev, ...(name && { name }), ...(icon && { icon }) } : prev);
     });
-    socket.on('message:read_update', ({ messageId, readBy, readByDetail }) => {
-      if (readByDetail) setReadByDetailMap(prev => ({ ...prev, [messageId]: readByDetail }));
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read_by: readBy } : m));
-    });
     socket.on('poll:updated', (poll) => {
       setPolls(prev => ({ ...prev, [poll.id]: poll }));
     });
     socket.on('room:announcement', ({ roomId, text, by }) => {
       if (roomId === selectedRoom?.id) {
-        // アナウンスをシステムメッセージ風に表示
         const sysMsg = { id: 'ann_' + Date.now(), type: 'announcement', content: text, senderId: by, createdAt: new Date().toISOString() };
         setMessages(prev => [...prev, sysMsg]);
       }
@@ -289,10 +292,19 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       if (messagesCache.current[selectedRoom?.id])
         messagesCache.current[selectedRoom.id] = messagesCache.current[selectedRoom.id].map(m => m.id === messageId ? { ...m, deleted: true, content: '' } : m);
     });
+    // タイピングインジケーター
+    socket.on('typing:update', ({ username, isTyping }) => {
+      setTypingUsers(prev =>
+        isTyping ? (prev.includes(username) ? prev : [...prev, username])
+                 : prev.filter(u => u !== username)
+      );
+    });
     return () => {
       socket.off('message:receive'); socket.off('message:read_update');
       socket.off('message:reacted'); socket.off('room:new'); socket.off('room:updated');
       socket.off('message:edited'); socket.off('message:deleted');
+      socket.off('room:pinned'); socket.off('poll:updated');
+      socket.off('room:announcement'); socket.off('typing:update');
     };
   }, [socket, selectedRoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -344,7 +356,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     })();
   }, [selectedRoom, socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useEffect(() => {
+    if (isAtBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   const handleSend = async () => {
     if (!inputText.trim() || !selectedRoom || !socket) return;
@@ -1215,11 +1231,16 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 style={{ fontSize:16, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
             </div>
           )}
-          <div className="messages-container" style={chatBg !== 'default' ? {
-            backgroundImage: chatBg.startsWith('#') ? 'none' : `url(${chatBg})`,
-            backgroundColor: chatBg.startsWith('#') ? chatBg : undefined,
-            backgroundSize: 'cover', backgroundPosition: 'center',
-          } : {}}>
+          <div className="messages-container"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+            }}
+            style={chatBg !== 'default' ? {
+              backgroundImage: chatBg.startsWith('#') ? 'none' : `url(${chatBg})`,
+              backgroundColor: chatBg.startsWith('#') ? chatBg : undefined,
+              backgroundSize: 'cover', backgroundPosition: 'center',
+            } : {}}>
             {messages.reduce((acc, msg, i) => {
               const d = new Date(msg.createdAt);
               const dateStr = d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
@@ -1358,6 +1379,22 @@ export default function App() {
   const [socket, setSocket] = useState(null);
   const [activeTab, setActiveTab] = useState('chat');
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+
+  // axiosインターセプター: 401のとき自動ログアウト
+  useEffect(() => {
+    const id = axios.interceptors.response.use(
+      res => res,
+      err => {
+        if (err.response?.status === 401 && currentUser) {
+          localStorage.removeItem('token');
+          setCurrentUser(null);
+          setSocket(s => { s?.disconnect(); return null; });
+        }
+        return Promise.reject(err);
+      }
+    );
+    return () => axios.interceptors.response.eject(id);
+  }, [currentUser]);
   const [notifications, setNotifications] = useState({ friends: 0 });
   const [toast, setToast] = useState(null);
   const [allStampSets, setAllStampSets] = useState([]);

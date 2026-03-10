@@ -993,6 +993,9 @@ io.on('connection', async (socket) => {
   socket.on('typing:start', ({ roomId }) => {
     socket.to(roomId).emit('typing:update', { username: socket.user.username, isTyping: true });
   });
+  socket.on('typing:stop', ({ roomId }) => {
+    socket.to(roomId).emit('typing:update', { username: socket.user.username, isTyping: false });
+  });
 
   socket.on('call:start', ({ roomId, offer, to }) => {
     // toが指定されていればそのユーザーに直接送る、なければroomにブロードキャスト
