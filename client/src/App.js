@@ -168,6 +168,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showTaskPanel, setShowTaskPanel] = useState(false);
   const [showVoice, setShowVoice] = useState(false);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState(null); // { message, onOk }
+  const appConfirm = (message, onOk) => setConfirmDialog({ message, onOk });
   const [showInputMenu, setShowInputMenu] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
@@ -233,7 +235,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         setUnreadCounts((prev) => ({ ...prev, [msg.roomId]: (prev[msg.roomId] || 0) + 1 }));
       }
       setRooms((prev) =>
-        prev.map((r) => r.id === msg.roomId ? { ...r, lastMessage: msg } : r)
+        prev.map((r) => r.id === msg.roomId ? { ...r, lastMessage: msg, lastActivity: msg.createdAt } : r)
+          .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0))
       );
     });
     socket.on('message:read_update', ({ messageId, readBy }) => {
@@ -282,9 +285,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         messagesCache.current[selectedRoom.id] = messagesCache.current[selectedRoom.id].map(m => m.id === messageId ? { ...m, content: newContent, edited: true } : m);
     });
     socket.on('message:deleted', ({ messageId }) => {
-      setMessages(prev => prev.filter(m => m.id !== messageId));
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, deleted: true, content: '' } : m));
       if (messagesCache.current[selectedRoom?.id])
-        messagesCache.current[selectedRoom.id] = messagesCache.current[selectedRoom.id].filter(m => m.id !== messageId);
+        messagesCache.current[selectedRoom.id] = messagesCache.current[selectedRoom.id].map(m => m.id === messageId ? { ...m, deleted: true, content: '' } : m);
     });
     return () => {
       socket.off('message:receive'); socket.off('message:read_update');
@@ -340,6 +343,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     socket.emit('message:send', { roomId: selectedRoom.id, content: inputText, type: 'text', replyTo: replyTo ? { id: replyTo.id, content: replyTo.content, senderName: replyTo.senderName } : null });
     setInputText('');
     setReplyTo(null);
+    // textareaの高さをリセット
+    const ta = document.querySelector('.message-input');
+    if (ta) { ta.style.height = 'auto'; }
   };
 
   const handleSendStamp = (stampSet, stamp) => {
@@ -372,6 +378,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
   const handleTyping = (e) => {
     setInputText(e.target.value);
+    // textareaの高さを自動調整
+    const ta = e.target;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
     if (!socket || !selectedRoom) return;
     socket.emit('typing:start', { roomId: selectedRoom.id });
     clearTimeout(typingTimeoutRef.current);
@@ -422,11 +432,28 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     }
     const time = new Date(msg.createdAt || msg.created_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
     const readByOthers = msg.read_by?.some(id => id !== currentUser.id);
+    // 削除済みメッセージ
+    if (msg.deleted) {
+      return (
+        <div key={msg.id} className={`message ${isMine ? 'mine' : 'theirs'}`} style={{ marginBottom: 2 }}>
+          <div className="message-avatar" style={{ background: isMine ? 'var(--primary)' : 'var(--surface2)', opacity: 0.5, flexShrink: 0 }}>
+            {msg.senderName?.[0] || '?'}
+          </div>
+          <div className="message-body">
+            <div className="message-sender" style={{ color: 'var(--text2)', textAlign: isMine ? 'right' : 'left' }}>{msg.senderName}</div>
+            <div className="message-bubble" style={{ opacity: 0.5, fontStyle: 'italic', fontSize: 13, color: 'var(--text2)', background: 'var(--surface2)', border: '1px dashed var(--border)' }}>
+              🚫 送信取消しました
+            </div>
+          </div>
+        </div>
+      );
+    }
     let content;
     if (msg.type === 'stamp') {
       content = <span style={{ fontSize: 36 }}>{msg.content}</span>;
     } else if (msg.type === 'image' && msg.fileData?.url) {
-      content = <img src={`${SERVER_URL}${msg.fileData.url}`} alt="img" className="chat-image" />;
+      const imgSrc = msg.fileData.url?.startsWith('http') ? msg.fileData.url : `${SERVER_URL}${msg.fileData.url}`;
+      content = <img src={imgSrc} alt="img" className="chat-image" loading="lazy" />;
     } else if (msg.type === 'file' && msg.fileData?.url) {
       const fileUrl = msg.fileData.url?.startsWith('http') ? msg.fileData.url : `${SERVER_URL}${msg.fileData.url}`;
       const ext = (msg.fileData.url || '').split('.').pop().toLowerCase();
@@ -713,15 +740,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   ] : []),
                   ...(msgMenu.msg.senderId === currentUser.id ? [
                     { icon:'↩️', label:'送信取消', danger: true, action: () => {
-                      if (window.confirm('送信を取り消しますか？')) {
-                        socket.emit('message:delete', { roomId: selectedRoom.id, messageId: msgMenu.msg.id, recall: true });
-                      }
+                      appConfirm('送信を取り消しますか？', () => socket.emit('message:delete', { roomId: selectedRoom.id, messageId: msgMenu.msg.id, recall: true }));
                     }},
                     { icon:'✏️', label:'編集', action: () => { setEditingMessage(msgMenu.msg); setEditText(msgMenu.msg.content || ''); } },
                     { icon:'🗑️', label:'削除', danger: true, action: () => {
-                      if (window.confirm('このメッセージを削除しますか？')) {
-                        socket.emit('message:delete', { roomId: selectedRoom.id, messageId: msgMenu.msg.id });
-                      }
+                      appConfirm('このメッセージを削除しますか？', () => socket.emit('message:delete', { roomId: selectedRoom.id, messageId: msgMenu.msg.id }));
                     }},
                   ] : []),
                 ].map(item => (
@@ -737,7 +760,29 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               </div>
             </div>
           )}
-          {showEventCal && <Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense>}
+          {/* カスタム確認ダイアログ */}
+      {confirmDialog && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={() => setConfirmDialog(null)}>
+          <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:320, boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:15, fontWeight:500, color:'var(--text)', marginBottom:20, textAlign:'center', lineHeight:1.6 }}>
+              {confirmDialog.message}
+            </div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setConfirmDialog(null)}
+                style={{ flex:1, padding:'12px', borderRadius:12, background:'var(--surface2)', color:'var(--text)', border:'none', fontSize:15, fontWeight:600, cursor:'pointer' }}>
+                キャンセル
+              </button>
+              <button onClick={() => { confirmDialog.onOk(); setConfirmDialog(null); }}
+                style={{ flex:1, padding:'12px', borderRadius:12, background:'var(--danger)', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer' }}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showEventCal && <Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense>}
           {showMiniGame && <Suspense fallback={null}><MiniGame onSendResult={text => { socket.emit('message:send', { roomId: selectedRoom.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense>}
           {showFavorites && (
             <div className="modal-overlay" onClick={() => setShowFavorites(false)}>
@@ -922,19 +967,21 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                       </div>
                       {(amCreator && !isMe && !isCreator) && (
                         <button onClick={() => {
-                          if (!window.confirm(`${name}をグループから削除しますか？`)) return;
-                          axios.delete(`/api/rooms/${selectedRoom.id}/members/${mid}`).then(() => {
-                            setSelectedRoom(prev => ({ ...prev, members: prev.members.filter(m => m !== mid) }));
-                          });
+                          appConfirm(`${name}をグループから削除しますか？`, () => {
+                            axios.delete(`/api/rooms/${selectedRoom.id}/members/${mid}`).then(() => {
+                              setSelectedRoom(prev => ({ ...prev, members: prev.members.filter(m => m !== mid) }));
+                            });
+                          })
                         }} style={{ fontSize:12, color:'var(--danger)', padding:'4px 10px', borderRadius:8, border:'1px solid var(--danger)', background:'none', cursor:'pointer' }}>
                           削除
                         </button>
                       )}
                       {isMe && !isCreator && (
                         <button onClick={() => {
-                          if (!window.confirm('グループを退出しますか？')) return;
-                          axios.delete(`/api/rooms/${selectedRoom.id}/members/${currentUser.id}`).then(() => {
-                            setSelectedRoom(null); setShowMemberMgr(false); fetchRooms();
+                          appConfirm('グループを退出しますか？', () => {
+                            axios.delete(`/api/rooms/${selectedRoom.id}/members/${currentUser.id}`).then(() => {
+                              setSelectedRoom(null); setShowMemberMgr(false); fetchRooms();
+                            });
                           });
                         }} style={{ fontSize:12, color:'var(--danger)', padding:'4px 10px', borderRadius:8, border:'1px solid var(--danger)', background:'none', cursor:'pointer' }}>
                           退出
@@ -958,8 +1005,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     ? <div style={{ gridColumn:'1/-1', textAlign:'center', color:'var(--text2)', padding:'20px 0' }}>画像・動画がまだないで</div>
                     : messages.filter(m => m.type === 'image' && m.fileData?.url).map(m => (
                       <div key={m.id} style={{ aspectRatio:'1', overflow:'hidden', borderRadius:8, cursor:'pointer' }}
-                        onClick={() => window.open(`${process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com'}${m.fileData.url}`, '_blank')}>
-                        <img src={`${process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com'}${m.fileData.url}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                        onClick={() => window.open(m.fileData.url?.startsWith('http') ? m.fileData.url : `${SERVER_URL}${m.fileData.url}`, '_blank')}>
+                        <img src={m.fileData.url?.startsWith('http') ? m.fileData.url : `${SERVER_URL}${m.fileData.url}`} alt="" loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                       </div>
                     ))
                   }

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://64fde7fe19fce4dbde3f94452ac4a619:Passtowa0806@17a.mongo.evennode.com:27031,17b.mongo.evennode.com:27031/64fde7fe19fce4dbde3f94452ac4a619?replicaSet=eu-17';
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) { console.error('MONGO_URI環境変数が設定されてへん！'); process.exit(1); }
 mongoose.connect(MONGO_URI)
   .then(() => console.log('MongoDB接続成功'))
   .catch(err => console.error('MongoDB接続失敗', err));
@@ -178,6 +179,20 @@ const StorySchema = new mongoose.Schema({
   expires_at: { type: Date, default: () => new Date(Date.now() + 24*60*60*1000) },
   created_at: { type: Date, default: Date.now },
 });
+
+// ===== パフォーマンス向上のためのインデックス =====
+MessageSchema.index({ room_id: 1, created_at: -1 }); // ルームのメッセージ取得（最多クエリ）
+MessageSchema.index({ sender_id: 1 });                // 統計・検索
+MessageSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 }); // 期限切れメッセージを自動削除
+RoomSchema.index({ members: 1 });                     // ユーザーのルーム一覧取得
+FriendSchema.index({ user_id: 1 });                   // 友達一覧取得
+FriendRequestSchema.index({ to_id: 1, status: 1 });  // 申請一覧取得
+TaskSchema.index({ room_id: 1, done: 1 });            // ルームのタスク取得
+EventSchema.index({ room_id: 1, start_at: 1 });       // ルームのイベント取得
+ScheduledMessageSchema.index({ send_at: 1, sent: 1 }); // スケジュール送信チェック
+StorySchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 }); // 期限切れストーリーを自動削除
+GameScoreSchema.index({ game: 1, score: -1 });         // ゲームランキング取得
+FavoriteSchema.index({ user_id: 1 });                  // お気に入り一覧取得
 
 module.exports = {
   User: mongoose.model('User', UserSchema),

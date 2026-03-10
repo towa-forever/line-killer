@@ -552,12 +552,25 @@ app.get('/api/rooms', async (req, res) => {
   try {
     const decoded = auth(req);
     const rooms = await Room.find({ members: decoded.id });
-    res.json(rooms.map(r => ({
-      id: r.id, name: r.name, icon: r.icon, members: r.members,
-      pinned_message_id: r.pinned_message_id,
-      announcement: r.announcement || null,
-      creator_id: r.creator_id || null,
-    })));
+    // 各ルームの最新メッセージを一括取得（N+1を避けるためPromise.all）
+    const roomsWithLast = await Promise.all(rooms.map(async r => {
+      const lastMsg = await Message.findOne({ room_id: r.id, deleted: false })
+        .sort({ created_at: -1 }).select('content type sender_name created_at');
+      return {
+        id: r.id, name: r.name, icon: r.icon, members: r.members,
+        pinned_message_id: r.pinned_message_id,
+        announcement: r.announcement || null,
+        creator_id: r.creator_id || null,
+        lastMessage: lastMsg ? {
+          content: lastMsg.content, type: lastMsg.type,
+          senderName: lastMsg.sender_name, createdAt: lastMsg.created_at
+        } : null,
+        lastActivity: lastMsg ? lastMsg.created_at : r.created_at,
+      };
+    }));
+    // 最新メッセージ順にソート
+    roomsWithLast.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
+    res.json(roomsWithLast);
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
@@ -769,7 +782,7 @@ app.get('/api/rooms/:roomId/album', async (req, res) => {
     const decoded = auth(req);
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
     if (!room) return res.status(403).json({ error: '権限なし' });
-    const imgs = await Message.find({ room_id: req.params.roomId, type: 'image', deleted: false }).sort({ created_at: -1 });
+    const imgs = await Message.find({ room_id: req.params.roomId, type: { $in: ['image', 'file'] }, deleted: false }).sort({ created_at: -1 }).limit(200);
     res.json(imgs);
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -817,7 +830,20 @@ io.on('connection', async (socket) => {
 
   socket.on('room:join', (roomId) => socket.join(roomId));
 
+  // メッセージ送信レートリミット（10秒間に20件まで）
+  const msgRateMap = new Map();
   socket.on('message:send', async ({ roomId, content, type = 'text', fileData, replyTo, stampLabel }) => {
+    const now = Date.now();
+    const key = socket.user.id;
+    if (!msgRateMap.has(key)) msgRateMap.set(key, []);
+    const times = msgRateMap.get(key).filter(t => now - t < 10000);
+    if (times.length >= 20) return; // レートリミット
+    times.push(now);
+    msgRateMap.set(key, times);
+    if (!roomId) return;
+    // バリデーション: テキストは4000文字まで、空メッセージはファイル系のみ許可
+    if (type === 'text' && (!content || !content.trim())) return;
+    if (content && content.length > 4000) return;
     const room = await Room.findOne({ id: roomId, members: socket.user.id });
     if (!room) return;
     if (room.members.length === 2) {
@@ -828,7 +854,8 @@ io.on('connection', async (socket) => {
     const id = uuidv4();
     const msg = await Message.create({
       id, room_id: roomId, sender_id: socket.user.id, sender_name: socket.user.username,
-      content, type, file_data: fileData || null, reply_to: replyTo || null, stamp_label: stampLabel || null,
+      content: typeof content === 'string' ? content.trim() : content,
+      type, file_data: fileData || null, reply_to: replyTo || null, stamp_label: stampLabel || null,
       read_by: [socket.user.id], reactions: [],
       // 秘密メッセージのexpiresAt対応
       expires_at: type === 'secret' && fileData?.timer ? new Date(Date.now() + fileData.timer * 1000) : null,
