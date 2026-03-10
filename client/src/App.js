@@ -100,14 +100,7 @@ function RoomNameEditor({ room, onClose }) {
 }
 
 // アバターフレームコンポーネント
-// const AVATAR_FRAMES = [
-  { id: 'none', label: 'なし' },
-  { id: 'gold', label: '✨ ゴールド' },
-  { id: 'rainbow', label: '🌈 レインボー' },
-  { id: 'heart', label: '💗 ハート' },
-  { id: 'blue', label: '💙 ブルー' },
-  { id: 'glow', label: '💚 グロウ' },
-];
+// AVATAR_FRAMES removed
 function AvatarImg({ src, name, size = 40, frame = 'none' }) {
   const inner = src
     ? <img src={src} alt="" style={{ width:size, height:size, borderRadius:'50%', objectFit:'cover', display:'block' }} />
