@@ -24,7 +24,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task } = require('./db');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite } = require('./db');
 
 const app = express();
 
@@ -996,6 +996,113 @@ io.on('connection', async (socket) => {
       io.emit('user:offline', { userId: socket.user.id, lastSeen: Date.now() });
     }
   });
+});
+
+// ===== 全トーク横断検索 =====
+app.get('/api/search', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const q = req.query.q || '';
+    if (!q.trim()) return res.json([]);
+    // 自分が参加しているルームを取得
+    const rooms = await Room.find({ members: decoded.id });
+    const roomIds = rooms.map(r => r.id);
+    const roomMap = Object.fromEntries(rooms.map(r => [r.id, r]));
+    // 全ルームのメッセージを検索
+    const msgs = await Message.find({
+      room_id: { $in: roomIds }, deleted: false,
+      $or: [{ content: new RegExp(q, 'i') }, { sender_name: new RegExp(q, 'i') }]
+    }).sort({ created_at: -1 }).limit(50);
+    res.json(msgs.map(m => ({
+      id: m.id, content: m.content, type: m.type,
+      senderId: m.sender_id, senderName: m.sender_name,
+      roomId: m.room_id, roomName: roomMap[m.room_id]?.name || '',
+      createdAt: m.created_at
+    })));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== ダッシュボード =====
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const rooms = await Room.find({ members: decoded.id });
+    const roomIds = rooms.map(r => r.id);
+    // 未読メッセージ数（ルームごと）
+    const unreadByRoom = await Promise.all(rooms.map(async r => {
+      const count = await Message.countDocuments({ room_id: r.id, deleted: false, read_by: { $ne: decoded.id }, sender_id: { $ne: decoded.id } });
+      return { roomId: r.id, roomName: r.name, count };
+    }));
+    // 未完了タスク
+    const tasks = await Task.find({ room_id: { $in: roomIds }, done: false }).sort({ due: 1 }).limit(5);
+    // 今後のイベント
+    const events = await Event.find({ room_id: { $in: roomIds }, start_at: { $gte: new Date() } }).sort({ start_at: 1 }).limit(5);
+    // スケジュール送信
+    const scheduled = await ScheduledMessage.find({ sender_id: decoded.id, sent: false }).sort({ send_at: 1 }).limit(3);
+    res.json({
+      unread: unreadByRoom.filter(r => r.count > 0),
+      tasks: tasks.map(t => ({ id: t.id, title: t.title, roomId: t.room_id, due: t.due, assigneeName: t.assignee_name })),
+      events: events.map(e => ({ id: e.id, title: e.title, roomId: e.room_id, startAt: e.start_at })),
+      scheduled: scheduled.map(s => ({ id: s.id, content: s.content, roomId: s.room_id, sendAt: s.send_at })),
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== お気に入り =====
+app.post('/api/favorites', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { messageId, roomId, content, senderName } = req.body;
+    const { v4: uuidv4 } = require('uuid');
+    const existing = await Favorite.findOne({ user_id: decoded.id, message_id: messageId });
+    if (existing) { await Favorite.deleteOne({ _id: existing._id }); return res.json({ removed: true }); }
+    const fav = await Favorite.create({ id: 'fav_' + uuidv4(), user_id: decoded.id, message_id: messageId, room_id: roomId, content, sender_name: senderName });
+    res.json(fav);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+app.get('/api/favorites', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const favs = await Favorite.find({ user_id: decoded.id }).sort({ created_at: -1 });
+    res.json(favs);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+// ===== イベント・カレンダー =====
+app.post('/api/rooms/:roomId/events', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { v4: uuidv4 } = require('uuid');
+    const { title, description, startAt, endAt } = req.body;
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    const event = await Event.create({
+      id: 'evt_' + uuidv4(), room_id: req.params.roomId, creator_id: decoded.id,
+      title, description, start_at: new Date(startAt), end_at: endAt ? new Date(endAt) : null,
+      attendees: room.members.map(uid => ({ user_id: uid, status: uid === decoded.id ? 'going' : 'pending' }))
+    });
+    io.to(req.params.roomId).emit('event:new', event);
+    res.json(event);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+app.get('/api/rooms/:roomId/events', async (req, res) => {
+  try {
+    auth(req);
+    const events = await Event.find({ room_id: req.params.roomId }).sort({ start_at: 1 });
+    res.json(events);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+app.patch('/api/events/:eventId/attend', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { status } = req.body; // going | maybe | notgoing
+    const event = await Event.findOneAndUpdate(
+      { id: req.params.eventId, 'attendees.user_id': decoded.id },
+      { $set: { 'attendees.$.status': status } }, { new: true }
+    );
+    io.to(event.room_id).emit('event:updated', event);
+    res.json(event);
+  } catch(e) { res.status(400).json({ error: e.message }); }
 });
 
 // ===== SEO用エンドポイント =====

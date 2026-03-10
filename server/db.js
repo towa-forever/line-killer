@@ -120,6 +120,28 @@ const TaskSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+const EventSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  room_id: String,
+  creator_id: String,
+  title: String,
+  description: { type: String, default: '' },
+  start_at: Date,
+  end_at: Date,
+  attendees: [{ user_id: String, status: { type: String, default: 'pending' } }],
+  created_at: { type: Date, default: Date.now }
+});
+
+const FavoriteSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  user_id: String,
+  message_id: String,
+  room_id: String,
+  content: String,
+  sender_name: String,
+  created_at: { type: Date, default: Date.now }
+});
+
 module.exports = {
   User: mongoose.model('User', UserSchema),
   Note: mongoose.model('Note', NoteSchema),
@@ -131,4 +153,6 @@ module.exports = {
   ScheduledMessage: mongoose.model('ScheduledMessage', ScheduledMessageSchema),
   Poll: mongoose.model('Poll', PollSchema),
   Task: mongoose.model('Task', TaskSchema),
+  Event: mongoose.model('Event', EventSchema),
+  Favorite: mongoose.model('Favorite', FavoriteSchema),
 };

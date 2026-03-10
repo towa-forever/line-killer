@@ -5,6 +5,9 @@ import axios from 'axios';
 import ErrorBoundary from "./components/ErrorBoundary";
 import VideoCall from "./components/VideoCall";
 import { sounds } from "./utils/sounds";
+import Dashboard from "./components/Dashboard";
+import EventCalendar from "./components/EventCalendar";
+import MiniGame from "./components/MiniGame";
 import AIAssistant from "./components/AIAssistant";
 import PollCard from "./components/PollCard";
 import TaskPanel from "./components/TaskPanel";
@@ -156,6 +159,14 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [announceText, setAnnounceText] = useState('');
   const [showAI, setShowAI] = useState(false);
+  const [showEventCal, setShowEventCal] = useState(false);
+  const [showMiniGame, setShowMiniGame] = useState(false);
+  const [showFavorites, setShowFavorites] = useState(false);
+  const [favoritesList, setFavoritesList] = useState([]);
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [globalQuery, setGlobalQuery] = useState('');
+  const [globalResults, setGlobalResults] = useState([]);
+  const [globalSearching, setGlobalSearching] = useState(false);
   const [showTaskPanel, setShowTaskPanel] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [scheduleText, setScheduleText] = useState('');
@@ -575,6 +586,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             }}>{mutedRooms.has(selectedRoom.id) ? '🔕' : '🔔'}</button>
             <button className="icon-btn" onClick={() => setShowNote(true)}>📝</button>
             <button className="icon-btn" title="画像・動画" onClick={() => setShowMediaList(true)}>🖼️</button>
+            <button className="icon-btn" title="カレンダー" onClick={() => setShowEventCal(true)}>📅</button>
+            <button className="icon-btn" title="ゲーム" onClick={() => setShowMiniGame(true)}>🎮</button>
             <button className="icon-btn" title="AIアシスタント" onClick={() => setShowAI(true)}>🤖</button>
             <button className="icon-btn" title="タスク" onClick={() => setShowTaskPanel(true)}>✅</button>
             <button className="icon-btn" onClick={() => setShowBgPicker(true)}>🎨</button>
@@ -644,6 +657,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   { icon:'↩', label:'返信', action: () => setReplyTo(msgMenu.msg) },
                   { icon:'😊', label:'リアクション', action: () => setReactionPicker({ msgId: msgMenu.msg.id, x: msgMenu.x, y: msgMenu.y }) },
                   { icon:'📤', label:'転送', action: () => setForwardMsg(msgMenu.msg) },
+                  { icon:'⭐', label: favoritesList.some(f => f.message_id === msgMenu.msg.id) ? 'お気に入り解除' : 'お気に入り', action: () => {
+                    axios.post('/api/favorites', { messageId: msgMenu.msg.id, roomId: selectedRoom.id, content: msgMenu.msg.content, senderName: msgMenu.msg.senderName })
+                      .then(r => {
+                        if (r.data.removed) setFavoritesList(prev => prev.filter(f => f.message_id !== msgMenu.msg.id));
+                        else setFavoritesList(prev => [...prev, { message_id: msgMenu.msg.id, content: msgMenu.msg.content, sender_name: msgMenu.msg.senderName }]);
+                      });
+                  }},
                   { icon:'📋', label:'コピー', action: () => {
                     const text = msgMenu.msg.content || '';
                     if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
@@ -684,6 +704,65 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     <span>{item.icon}</span><span style={{ color: item.danger ? 'var(--danger)' : 'inherit' }}>{item.label}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+          {showEventCal && <EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} />}
+          {showMiniGame && <MiniGame onSendResult={text => { socket.emit('message:send', { roomId: selectedRoom.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} />}
+          {showFavorites && (
+            <div className="modal-overlay" onClick={() => setShowFavorites(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
+                <div className="modal-title">⭐ お気に入り</div>
+                {favoritesList.length === 0
+                  ? <div style={{ textAlign:'center', color:'var(--text2)', padding:'20px 0' }}>お気に入りがまだないで！</div>
+                  : favoritesList.map((f, i) => (
+                    <div key={f.message_id || i} style={{ padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                      <div style={{ fontSize:12, color:'var(--text2)', marginBottom:4 }}>{f.sender_name}</div>
+                      <div style={{ fontSize:14 }}>{f.content}</div>
+                      <button style={{ fontSize:11, color:'var(--danger)', marginTop:4, background:'none', border:'none', cursor:'pointer', padding:0 }}
+                        onClick={() => { axios.post('/api/favorites', { messageId: f.message_id }); setFavoritesList(prev => prev.filter(x => x.message_id !== f.message_id)); }}>
+                        削除
+                      </button>
+                    </div>
+                  ))
+                }
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowFavorites(false)}>閉じる</button>
+              </div>
+            </div>
+          )}
+          {showGlobalSearch && (
+            <div className="modal-overlay" onClick={() => setShowGlobalSearch(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'85vh', display:'flex', flexDirection:'column' }}>
+                <div className="modal-title">🔍 全トーク検索</div>
+                <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+                  <input className="form-input" style={{ flex:1, marginBottom:0 }} value={globalQuery}
+                    onChange={e => setGlobalQuery(e.target.value)} placeholder="キーワードを入力..."
+                    onKeyDown={e => { if (e.key === 'Enter' && globalQuery.trim()) {
+                      setGlobalSearching(true);
+                      axios.get('/api/search?q=' + encodeURIComponent(globalQuery)).then(r => { setGlobalResults(r.data); setGlobalSearching(false); });
+                    }}} autoFocus />
+                  <button className="btn btn-primary" style={{ padding:'0 14px' }} onClick={() => {
+                    if (!globalQuery.trim()) return;
+                    setGlobalSearching(true);
+                    axios.get('/api/search?q=' + encodeURIComponent(globalQuery)).then(r => { setGlobalResults(r.data); setGlobalSearching(false); });
+                  }}>検索</button>
+                </div>
+                <div style={{ overflowY:'auto', flex:1 }}>
+                  {globalSearching && <div style={{ textAlign:'center', color:'var(--text2)', padding:20 }}>検索中...</div>}
+                  {!globalSearching && globalResults.length === 0 && globalQuery && <div style={{ textAlign:'center', color:'var(--text2)', padding:20 }}>見つからんかった</div>}
+                  {globalResults.map(msg => (
+                    <div key={msg.id} style={{ padding:'10px 0', borderBottom:'1px solid var(--border)', cursor:'pointer' }}
+                      onClick={() => { setShowGlobalSearch(false); setSelectedRoom(rooms.find(r => r.id === msg.roomId)); }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                        <span style={{ fontSize:12, color:'var(--primary)', fontWeight:600 }}>{msg.roomName}</span>
+                        <span style={{ fontSize:11, color:'var(--text2)' }}>{new Date(msg.createdAt).toLocaleDateString('ja-JP', { month:'numeric', day:'numeric' })}</span>
+                      </div>
+                      <div style={{ fontSize:12, color:'var(--text2)', marginBottom:2 }}>{msg.senderName}</div>
+                      <div style={{ fontSize:14, color:'var(--text)' }}>{msg.content?.slice(0, 60)}{msg.content?.length > 60 ? '…' : ''}</div>
+                    </div>
+                  ))}
+                </div>
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowGlobalSearch(false)}>閉じる</button>
               </div>
             </div>
           )}
@@ -1128,6 +1207,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
 function TabBar({ activeTab, setActiveTab, notifications }) {
   const tabs = [
+    { id: 'dashboard', label: 'ホーム', icon: '🏠' },
     { id: 'chat', label: 'トーク', icon: '💬' },
     { id: 'friends', label: '友達', icon: '👥' },
     { id: 'timeline', label: 'タイムライン', icon: '📰' },
@@ -1293,6 +1373,9 @@ export default function App() {
 
   const renderTabs = () => (
     <>
+      <div style={{ display: activeTab === 'dashboard' ? 'flex' : 'none', flexDirection:'column', flex:1, overflow:'hidden' }}>
+        <Dashboard currentUser={currentUser} onNavigateRoom={(roomId) => { setActiveTab('chat'); }} />
+      </div>
       <div style={{ display: activeTab === 'chat' ? 'contents' : 'none' }}>
         <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} />
       </div>
