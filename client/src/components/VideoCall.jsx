@@ -13,6 +13,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   const [isCamOff, setIsCamOff] = useState(false);
   const [error, setError] = useState('');
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [facingMode, setFacingMode] = useState('user');
   const screenTrackRef = useRef(null);
 
   useEffect(() => {
@@ -72,7 +73,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
 
     const startCall = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
         localStreamRef.current = stream;
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
         const pc = initPC(stream);
@@ -124,6 +125,25 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       socket.off('call:ended'); socket.off('call:rejected');
     };
   }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const switchCamera = async () => {
+    const newFacing = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newFacing);
+    try {
+      const oldStream = localStreamRef.current;
+      const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: newFacing }, audio: true });
+      // 音声トラックは既存のもの（ミュート状態を維持）
+      const audioTrack = oldStream?.getAudioTracks()[0];
+      if (audioTrack) newStream.removeTrack(newStream.getAudioTracks()[0]);
+      if (audioTrack) newStream.addTrack(audioTrack);
+      oldStream?.getVideoTracks().forEach(t => t.stop());
+      localStreamRef.current = newStream;
+      if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
+      // PeerConnectionのビデオトラックを差し替え
+      const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
+      if (sender) sender.replaceTrack(newStream.getVideoTracks()[0]).catch(() => {});
+    } catch(e) { console.error('カメラ切り替えエラー:', e); }
+  };
 
   const endCall = () => {
     socket?.emit('call:end', { roomId, to: targetUserId });

@@ -979,7 +979,18 @@ io.on('connection', async (socket) => {
     socket.leave('gcall_' + roomId);
   });
 
+  // 自分だけ退出（他の人は続けられる）
   socket.on('gcall:end', ({ roomId }) => {
+    if (io.gcallRooms?.[roomId]) {
+      io.gcallRooms[roomId].delete(socket.user.id);
+      if (io.gcallRooms[roomId].size === 0) delete io.gcallRooms[roomId];
+    }
+    socket.to('gcall_' + roomId).emit('gcall:peer_left', { userId: socket.user.id });
+    socket.leave('gcall_' + roomId);
+  });
+
+  // 全員強制終話（主催者用）
+  socket.on('gcall:end_all', ({ roomId }) => {
     if (io.gcallRooms?.[roomId]) delete io.gcallRooms[roomId];
     socket.to('gcall_' + roomId).emit('gcall:ended');
     io.socketsLeave('gcall_' + roomId);
