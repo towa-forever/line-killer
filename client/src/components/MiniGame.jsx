@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 
 // チャット内ミニゲーム: 反射神経ゲーム・数字当てゲーム
 export default function MiniGame({ onSendResult, onClose }) {

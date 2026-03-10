@@ -30,7 +30,6 @@ export default function EventCalendar({ room, currentUser, socket, onClose }) {
     await axios.patch('/api/events/' + eventId + '/attend', { status });
   };
 
-  const STATUS_LABEL = { going: '✅ 参加', maybe: '🤔 未定', notgoing: '❌ 不参加', pending: '？ 未回答' };
   const STATUS_COLOR = { going: '#06c755', maybe: '#ff9500', notgoing: '#ff3b30', pending: 'var(--text2)' };
 
   // カレンダーグリッド

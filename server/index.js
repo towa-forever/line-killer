@@ -1140,7 +1140,7 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
 });
 
 // オンラインユーザー一覧
-app.get('/api/users/online', authenticateToken, (req, res) => {
+app.get('/api/users/online', (req, res) => {
   const list = io.onlineUsers ? Array.from(io.onlineUsers.keys()) : [];
   res.json(list);
 });

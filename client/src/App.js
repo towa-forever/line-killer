@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -100,7 +100,7 @@ function RoomNameEditor({ room, onClose }) {
 }
 
 // アバターフレームコンポーネント
-const AVATAR_FRAMES = [
+// const AVATAR_FRAMES = [
   { id: 'none', label: 'なし' },
   { id: 'gold', label: '✨ ゴールド' },
   { id: 'rainbow', label: '🌈 レインボー' },
@@ -133,7 +133,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showStampPanel, setShowStampPanel] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [showNote, setShowNote] = useState(false);
-  const [typingUsers, setTypingUsers] = useState([]);
+  const [typingUsers] = useState([]);
   const [replyTo, setReplyTo] = useState(null); // 返信先メッセージ
   const [showSearch, setShowSearch] = useState(false);
   const [reactionPicker, setReactionPicker] = useState(null); // { msgId, x, y }
@@ -153,7 +153,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showMediaList, setShowMediaList] = useState(false);
   const [showMemberMgr, setShowMemberMgr] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(null); // { id, name, avatar, status }
-  const [readByDetailMap, setReadByDetailMap] = useState({}); // msgId -> [{id,name,avatar}]
+  const [, setReadByDetailMap] = useState({}); // msgId -> [{id,name,avatar}]
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [bookmarkedMsgs, setBookmarkedMsgs] = useState([]);
   const [showAnnounce, setShowAnnounce] = useState(false);
