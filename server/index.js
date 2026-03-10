@@ -910,6 +910,7 @@ io.on('connection', async (socket) => {
   // メッセージ送信レートリミット（10秒間に20件まで）
   const msgRateMap = new Map();
   socket.on('message:send', async ({ roomId, content, type = 'text', fileData, replyTo, stampLabel }) => {
+    try {
     const now = Date.now();
     const key = socket.user.id;
     if (!msgRateMap.has(key)) msgRateMap.set(key, []);
@@ -967,6 +968,7 @@ io.on('connection', async (socket) => {
         url: '/',
       })).catch(() => { pushSubscriptions.delete(memberId); PushSubscription.deleteOne({ user_id: memberId }).catch(() => {}); });
     }
+    } catch(e) { console.error('message:send error:', e); }
   });
 
   socket.on('message:edit', async ({ roomId, messageId, content }) => {
@@ -993,48 +995,58 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('message:read', async ({ messageId, roomId }) => {
-    await Message.findOneAndUpdate({ id: messageId }, { $addToSet: { read_by: socket.user.id } });
-    const msg = await Message.findOne({ id: messageId });
-    // 既読ユーザーの名前も一緒に送る
-    const readers = await User.find({ id: { $in: msg.read_by } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
-    const readByDetail = readers.map(u => ({ id: u.id, name: u.display_name || u.username, avatar: u.avatar }));
-    io.to(roomId).emit('message:read_update', { messageId, readBy: msg.read_by, readByDetail, roomId });
+    try {
+      await Message.findOneAndUpdate({ id: messageId }, { $addToSet: { read_by: socket.user.id } });
+      const msg = await Message.findOne({ id: messageId });
+      if (!msg) return;
+      const readers = await User.find({ id: { $in: msg.read_by } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
+      const readByDetail = readers.map(u => ({ id: u.id, name: u.display_name || u.username, avatar: u.avatar }));
+      io.to(roomId).emit('message:read_update', { messageId, readBy: msg.read_by, readByDetail, roomId });
+    } catch(e) { console.error('message:read error:', e); }
   });
 
   socket.on('message:react', async ({ roomId, messageId, emoji }) => {
-    const msg = await Message.findOne({ id: messageId });
-    if (!msg) return;
-    const existing = msg.reactions.find(r => r.user_id === socket.user.id);
-    if (existing) {
-      if (existing.emoji === emoji) {
-        await Message.findOneAndUpdate({ id: messageId }, { $pull: { reactions: { user_id: socket.user.id } } });
+    try {
+      if (!emoji || typeof emoji !== 'string' || emoji.length > 10) return;
+      const msg = await Message.findOne({ id: messageId });
+      if (!msg) return;
+      const existing = msg.reactions.find(r => r.user_id === socket.user.id);
+      if (existing) {
+        if (existing.emoji === emoji) {
+          await Message.findOneAndUpdate({ id: messageId }, { $pull: { reactions: { user_id: socket.user.id } } });
+        } else {
+          await Message.findOneAndUpdate({ id: messageId, 'reactions.user_id': socket.user.id }, { $set: { 'reactions.$.emoji': emoji } });
+        }
       } else {
-        await Message.findOneAndUpdate({ id: messageId, 'reactions.user_id': socket.user.id }, { $set: { 'reactions.$.emoji': emoji } });
+        await Message.findOneAndUpdate({ id: messageId }, { $push: { reactions: { emoji, user_id: socket.user.id } } });
       }
-    } else {
-      await Message.findOneAndUpdate({ id: messageId }, { $push: { reactions: { emoji, user_id: socket.user.id } } });
-    }
-    const updated = await Message.findOne({ id: messageId });
-    io.to(roomId).emit('message:reacted', { messageId, reactions: updated.reactions, roomId });
+      const updated = await Message.findOne({ id: messageId });
+      if (!updated) return;
+      io.to(roomId).emit('message:reacted', { messageId, reactions: updated.reactions, roomId });
+    } catch(e) { console.error('message:react error:', e); }
   });
 
   socket.on('room:leave', async ({ roomId }) => {
-    await Room.findOneAndUpdate({ id: roomId }, { $pull: { members: socket.user.id } });
-    socket.leave(roomId);
-    const room = await Room.findOne({ id: roomId });
-    io.to(roomId).emit('room:members_updated', { roomId, members: room.members });
-    const sysId = uuidv4();
-    await Message.create({
-      id: sysId, room_id: roomId, sender_id: 'system', sender_name: 'system',
-      content: `${socket.user.username} がグループを退出しました`, type: 'system'
-    });
-    io.to(roomId).emit('message:receive', {
-      id: sysId, roomId, senderId: 'system', senderName: 'system',
-      content: `${socket.user.username} がグループを退出しました`,
-      type: 'system', replyTo: null, edited: false, deleted: false, readBy: [], reactions: [],
-      createdAt: new Date().toISOString()
-    });
-    socket.emit('room:left', { roomId });
+    try {
+      await Room.findOneAndUpdate({ id: roomId }, { $pull: { members: socket.user.id } });
+      socket.leave(roomId);
+      const room = await Room.findOne({ id: roomId });
+      if (room) {
+        io.to(roomId).emit('room:members_updated', { roomId, members: room.members });
+      }
+      const sysId = uuidv4();
+      await Message.create({
+        id: sysId, room_id: roomId, sender_id: 'system', sender_name: 'system',
+        content: `${socket.user.username} がグループを退出しました`, type: 'system'
+      });
+      io.to(roomId).emit('message:receive', {
+        id: sysId, roomId, senderId: 'system', senderName: 'system',
+        content: `${socket.user.username} がグループを退出しました`,
+        type: 'system', replyTo: null, edited: false, deleted: false, readBy: [], reactions: [],
+        createdAt: new Date().toISOString()
+      });
+      socket.emit('room:left', { roomId });
+    } catch(e) { console.error('room:leave error:', e); }
   });
 
   socket.on('typing:start', ({ roomId }) => {

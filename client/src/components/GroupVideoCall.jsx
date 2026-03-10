@@ -74,7 +74,8 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
     if (isInitiator) {
       pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
         .then(offer => pc.setLocalDescription(offer))
-        .then(() => socket?.emit('gcall:offer', { offer: pc.localDescription, to: targetId, roomId, fromName: currentUser.username }));
+        .then(() => socket?.emit('gcall:offer', { offer: pc.localDescription, to: targetId, roomId, fromName: currentUser.username }))
+        .catch(e => console.error('gcall offer error:', e));
     }
     return pc;
   }, [socket, roomId, currentUser.username, addRemoteStream, removeRemoteStream]); // eslint-disable-line react-hooks/exhaustive-deps

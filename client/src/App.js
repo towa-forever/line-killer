@@ -743,7 +743,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                       .then(r => {
                         if (r.data.removed) setFavoritesList(prev => prev.filter(f => f.message_id !== msgMenu.msg.id));
                         else setFavoritesList(prev => [...prev, { message_id: msgMenu.msg.id, content: msgMenu.msg.content, sender_name: msgMenu.msg.senderName }]);
-                      });
+                      }).catch(() => {});
                   }},
                   { icon:'📋', label:'コピー', action: () => {
                     const text = msgMenu.msg.content || '';
@@ -995,7 +995,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                           appConfirm(`${name}をグループから削除しますか？`, () => {
                             axios.delete(`/api/rooms/${selectedRoom.id}/members/${mid}`).then(() => {
                               setSelectedRoom(prev => ({ ...prev, members: prev.members.filter(m => m !== mid) }));
-                            });
+                            }).catch(() => {});
                           })
                         }} style={{ fontSize:12, color:'var(--danger)', padding:'4px 10px', borderRadius:8, border:'1px solid var(--danger)', background:'none', cursor:'pointer' }}>
                           削除
@@ -1006,7 +1006,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                           appConfirm('グループを退出しますか？', () => {
                             axios.delete(`/api/rooms/${selectedRoom.id}/members/${currentUser.id}`).then(() => {
                               setSelectedRoom(null); setShowMemberMgr(false); fetchRooms();
-                            });
+                            }).catch(() => {});
                           });
                         }} style={{ fontSize:12, color:'var(--danger)', padding:'4px 10px', borderRadius:8, border:'1px solid var(--danger)', background:'none', cursor:'pointer' }}>
                           退出
