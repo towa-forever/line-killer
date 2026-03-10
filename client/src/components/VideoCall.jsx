@@ -130,18 +130,19 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     const newFacing = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(newFacing);
     try {
-      const oldStream = localStreamRef.current;
-      const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: newFacing }, audio: true });
-      // 音声トラックは既存のもの（ミュート状態を維持）
-      const audioTrack = oldStream?.getAudioTracks()[0];
-      if (audioTrack) newStream.removeTrack(newStream.getAudioTracks()[0]);
-      if (audioTrack) newStream.addTrack(audioTrack);
-      oldStream?.getVideoTracks().forEach(t => t.stop());
-      localStreamRef.current = newStream;
-      if (localVideoRef.current) localVideoRef.current.srcObject = newStream;
+      // 新しいビデオトラックだけ取得
+      const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: newFacing }, audio: false });
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      // 古いビデオトラックを停止
+      localStreamRef.current?.getVideoTracks().forEach(t => t.stop());
+      // 既存の音声トラックと新ビデオトラックで新ストリームを作成
+      const audioTracks = localStreamRef.current?.getAudioTracks() || [];
+      const combined = new MediaStream([newVideoTrack, ...audioTracks]);
+      localStreamRef.current = combined;
+      if (localVideoRef.current) localVideoRef.current.srcObject = combined;
       // PeerConnectionのビデオトラックを差し替え
       const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
-      if (sender) sender.replaceTrack(newStream.getVideoTracks()[0]).catch(() => {});
+      if (sender) sender.replaceTrack(newVideoTrack).catch(() => {});
     } catch(e) { console.error('カメラ切り替えエラー:', e); }
   };
 
@@ -280,6 +281,10 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
           {/* カメラ */}
           <button onClick={toggleCamera} style={btnStyle(isCamOff ? '#c0392b' : 'rgba(255,255,255,0.2)')}>
             {isCamOff ? '📷' : '📹'}
+          </button>
+          {/* カメラ切り替え（内/外） */}
+          <button onClick={switchCamera} style={btnStyle('rgba(255,255,255,0.2)', 44)} title="カメラ切り替え">
+            🔄
           </button>
           {/* 画面共有 */}
           <button onClick={toggleScreenShare} style={btnStyle(isScreenSharing ? '#f39c12' : 'rgba(255,255,255,0.2)', 48)}>

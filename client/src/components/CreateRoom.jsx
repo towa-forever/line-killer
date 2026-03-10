@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
-const api = axios.create({ baseURL: SERVER_URL });
 
 export default function CreateRoom({ currentUser, friendsList = [], onClose, onCreated }) {
   const [tab, setTab] = useState('dm');
@@ -25,7 +23,7 @@ export default function CreateRoom({ currentUser, friendsList = [], onClose, onC
       const payload = tab === 'dm'
         ? { memberIds: [selectedUsers[0]], name: "DM" }
         : { memberIds: selectedUsers, name: groupName };
-      const res = await api.post('/api/rooms', payload);
+      const res = await axios.post('/api/rooms', payload);
       onCreated(res.data);
     } catch (err) {
       setError('エラー: ' + (err.response?.data?.error || err.response?.data?.message || err.message || 'ルーム作成に失敗しました') + ' / payload: ' + JSON.stringify({memberIds: selectedUsers, name: groupName || 'DM'}));

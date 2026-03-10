@@ -18,7 +18,7 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
     clearInterval(timerRef.current);
     cancelAnimationFrame(animRef.current);
     mediaRecorderRef.current?.stop();
-    URL.revokeObjectURL(audioUrl);
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
   }, [audioUrl]);
 
   const startRecording = async () => {
@@ -46,7 +46,12 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
       setState('recording');
       setDuration(0);
       timerRef.current = setInterval(() => setDuration(d => {
-        if (d >= 59) { stopRecording(); return d; }
+        if (d >= 59) {
+          clearInterval(timerRef.current);
+          cancelAnimationFrame(animRef.current);
+          mediaRecorderRef.current?.stop();
+          return 60;
+        }
         return d + 1;
       }), 1000);
       drawWave();

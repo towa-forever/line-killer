@@ -322,8 +322,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const handleSend = async () => {
-    sounds.send(soundTheme);
     if (!inputText.trim() || !selectedRoom || !socket) return;
+    sounds.send(soundTheme);
     socket.emit('message:send', { roomId: selectedRoom.id, content: inputText, type: 'text', replyTo: replyTo ? { id: replyTo.id, content: replyTo.content, senderName: replyTo.senderName } : null });
     setInputText('');
     setReplyTo(null);
@@ -407,7 +407,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         </div>
       );
     }
-    const time = new Date(msg.createdAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    const time = new Date(msg.createdAt || msg.created_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
     const readByOthers = msg.read_by?.some(id => id !== currentUser.id);
     let content;
     if (msg.type === 'stamp') {
@@ -525,6 +525,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           <span>トーク</span>
           <button className="icon-btn" onClick={() => setShowCreateRoom(true)}>✏️</button>
         </div>
+        <StoryBar currentUser={currentUser} friendsList={friendsList} socket={socket} />
         <div className="room-items">
           {rooms.length === 0 && (
             <div className="room-empty">
@@ -1225,7 +1226,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,video/*,audio/*,.pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onChange={handleFileUpload} />
               <textarea className="message-input" value={inputText} onChange={handleTyping}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-                placeholder="メッセージを入力..." rows={1} />
+                placeholder={lang === "en" ? "Type a message..." : lang === "zh" ? "输入消息..." : lang === "ko" ? "메시지 입력..." : "メッセージを入力..."} rows={1} />
               <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>➤</button>
             </div>
           </div>

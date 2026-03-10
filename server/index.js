@@ -42,6 +42,7 @@ const io = new Server(httpServer, {
 app.set('io', io);
 
 app.use(cors());
+app.use(compression()); // gzip圧縮（全ルートに有効）
 app.get('/admin/reset-requests', async (req, res) => {
   await FriendRequest.deleteMany({});
   res.json({ ok: true });
@@ -221,7 +222,7 @@ app.post('/api/push/subscribe', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: '認証エラー' });
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    const decoded = jwt.verify(token, JWT_SECRET);
     pushSubscriptions.set(decoded.id, req.body);
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
@@ -231,7 +232,7 @@ app.delete('/api/push/subscribe', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: '認証エラー' });
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    const decoded = jwt.verify(token, JWT_SECRET);
     pushSubscriptions.delete(decoded.id);
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
@@ -679,7 +680,7 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
     const decoded = auth(req);
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
     if (!room) return res.status(403).json({ error: '権限なし' });
-    const msgs = await Message.find({ room_id: req.params.roomId }).sort({ created_at: 1 });
+    const msgs = await Message.find({ room_id: req.params.roomId }).sort({ created_at: -1 }).limit(200).then(r => r.reverse());
     res.json(msgs);
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -827,7 +828,9 @@ io.on('connection', async (socket) => {
     const msg = await Message.create({
       id, room_id: roomId, sender_id: socket.user.id, sender_name: socket.user.username,
       content, type, file_data: fileData || null, reply_to: replyTo || null, stamp_label: stampLabel || null,
-      read_by: [socket.user.id], reactions: []
+      read_by: [socket.user.id], reactions: [],
+      // 秘密メッセージのexpiresAt対応
+      expires_at: type === 'secret' && fileData?.timer ? new Date(Date.now() + fileData.timer * 1000) : null,
     });
     io.to(roomId).emit('message:receive', {
       id, roomId, senderId: socket.user.id, senderName: socket.user.username,
@@ -1006,6 +1009,16 @@ io.on('connection', async (socket) => {
       io.onlineUsers.delete(socket.user.id);
       io.emit('user:offline', { userId: socket.user.id, lastSeen: Date.now() });
     }
+    // グループ通話から自動退出
+    if (io.gcallRooms) {
+      for (const [roomId, members] of Object.entries(io.gcallRooms)) {
+        if (members.has(socket.user.id)) {
+          members.delete(socket.user.id);
+          socket.to('gcall_' + roomId).emit('gcall:peer_left', { userId: socket.user.id });
+          if (members.size === 0) delete io.gcallRooms[roomId];
+        }
+      }
+    }
   });
 });
 
@@ -1147,24 +1160,6 @@ app.get('/api/rooms/:roomId/stats', async (req, res) => {
 });
 
 
-// ===== チャット統計API =====
-app.get('/api/rooms/:roomId/stats', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
-    if (!room) return res.status(403).json({ error: '権限なし' });
-    const msgs = await Message.find({ room_id: req.params.roomId, deleted: false });
-    const countMap = {}, typeMap = {}, hourMap = Array(24).fill(0);
-    msgs.forEach(m => {
-      countMap[m.sender_name] = (countMap[m.sender_name] || 0) + 1;
-      typeMap[m.type || 'text'] = (typeMap[m.type || 'text'] || 0) + 1;
-      hourMap[new Date(m.created_at).getHours()]++;
-    });
-    const ranking = Object.entries(countMap).sort((a,b)=>b[1]-a[1]).map(([name,count])=>({name,count}));
-    const mostActiveHour = hourMap.indexOf(Math.max(...hourMap));
-    res.json({ total: msgs.length, ranking, types: typeMap, hourMap, mostActiveHour, firstMessage: msgs[0]?.created_at });
-  } catch(e) { res.status(400).json({ error: e.message }); }
-});
 
 // ===== ストーリーAPI =====
 app.get('/api/stories', async (req, res) => {
@@ -1592,8 +1587,6 @@ setInterval(async () => {
   } catch(e) { console.error('スケジュール送信エラー:', e); }
 }, 60000);
 
-// gzip圧縮（全レスポンスに適用）
-app.use(compression());
 
 const clientBuild = join(__dirname, '../client/build');
 

@@ -4,10 +4,9 @@ import axios from 'axios';
 const SERVER = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 
 // ストーリー一覧（上部リスト）
-export function StoryBar({ currentUser, friendsList, socket }) {
+export function StoryBar({ currentUser, friendsList, socket }) { // eslint-disable-line no-unused-vars
   const [stories, setStories] = useState([]);
   const [viewing, setViewing] = useState(null); // { userId, stories[], idx }
-  const [showCreate, setShowCreate] = useState(false);
   const fileRef = useRef(null);
 
   const load = () => axios.get('/api/stories').then(r => setStories(r.data)).catch(() => {});
@@ -32,7 +31,7 @@ export function StoryBar({ currentUser, friendsList, socket }) {
     const res = await axios.post('/api/upload', form);
     await axios.post('/api/stories', { type: file.type.startsWith('video') ? 'video' : 'image', url: res.data.url });
     load();
-    setShowCreate(false);
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   return (
@@ -85,7 +84,7 @@ function StoryViewer({ data, onClose }) {
       }
     }, 50);
     return () => clearInterval(id);
-  }, [idx]);
+  }, [idx, data.items.length, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!story) return null;
   const url = story.url?.startsWith('http') ? story.url : (process.env.REACT_APP_SERVER_URL||'https://line-killer-server.onrender.com') + story.url;

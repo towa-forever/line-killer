@@ -23,8 +23,9 @@ export default function TaskPanel({ room, currentUser, socket, onClose }) {
   const addTask = async () => {
     if (!title.trim()) return;
     await axios.post('/api/rooms/' + room.id + '/tasks', {
-      title: title.trim(), assigneeId: assigneeId || currentUser.id,
-      assigneeName: assigneeId === currentUser.id || !assigneeId ? currentUser.username : assigneeId,
+      title: title.trim(),
+      assigneeId: assigneeId || currentUser.id,
+      assigneeName: !assigneeId || assigneeId === currentUser.id ? currentUser.username : assigneeId,
       due: due || null
     });
     setTitle(''); setAssigneeId(''); setDue('');

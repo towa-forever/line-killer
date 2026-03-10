@@ -19,8 +19,6 @@ const UserSchema = new mongoose.Schema({
   muted_rooms: { type: [String], default: [] },
   bookmarked_messages: { type: [String], default: [] },
   created_at: { type: Date, default: Date.now },
-  creator_id: String,
-  announcement: String
 });
 
 const RoomSchema = new mongoose.Schema({
@@ -29,7 +27,9 @@ const RoomSchema = new mongoose.Schema({
   icon: String,
   pinned_message_id: String,
   members: [String],
-  created_at: { type: Date, default: Date.now }
+  created_at: { type: Date, default: Date.now },
+  creator_id: String,
+  announcement: String,
 });
 
 const MessageSchema = new mongoose.Schema({

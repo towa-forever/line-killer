@@ -43,7 +43,7 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
 
   const sendRequest = async (userId) => {
     try {
-      await axios.post('/api/friend-requests', { to_id: userId });
+      await axios.post('/api/friend-requests', { toId: userId });
       setMessage('友達申請を送りました！');
       setSearchResults((prev) => prev.filter((u) => u._id !== userId && u.id !== userId));
     } catch (err) { setMessage(err.response?.data?.message || '申請に失敗しました'); }

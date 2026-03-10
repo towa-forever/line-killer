@@ -90,7 +90,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
     (async () => {
       try {
         const stream = await getLocalStream(facingMode);
-        if (!mounted) return;
+        if (!mounted || !stream) return;
         setStatus('active');
         socket?.emit('gcall:join', { roomId, name: currentUser.username });
       } catch(e) {
