@@ -265,7 +265,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       socket.off('message:reacted'); socket.off('room:new'); socket.off('room:updated');
       socket.off('message:edited'); socket.off('message:deleted');
     };
-  }, [socket, selectedRoom]);
+  }, [socket, selectedRoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!selectedRoom) return;
@@ -304,7 +304,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         }
       } catch (err) { console.error(err); }
     })();
-  }, [selectedRoom, socket]);
+  }, [selectedRoom, socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 

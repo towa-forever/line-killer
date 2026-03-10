@@ -1227,6 +1227,11 @@ app.get('/api/game/me', async (req, res) => {
   } catch(e) { res.status(401).json({ error: '認証エラー' }); }
 });
 
+// ===== ヘルスチェック =====
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString(), version: '2.0.0' });
+});
+
 // ===== SEO用エンドポイント =====
 app.get('/sitemap.xml', (req, res) => {
   res.header('Content-Type', 'application/xml');

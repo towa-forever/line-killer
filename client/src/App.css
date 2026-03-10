@@ -671,3 +671,89 @@ body.dark .messages-container {
   font-size: 11px; color: var(--text2); font-style: italic;
   max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* ===== 最終調整 ===== */
+
+/* スムーズスクロール */
+.messages-container {
+  scroll-behavior: smooth;
+}
+
+/* メッセージバブルの長文対応 */
+.message-bubble {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* 画像メッセージ最適化 */
+.message-bubble img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  display: block;
+}
+
+/* 送信ボタンのハプティクスっぽいアニメ */
+.send-btn:active {
+  transform: scale(0.9);
+  transition: transform 0.1s;
+}
+
+/* ルーム一覧のホバー */
+@media (hover: hover) {
+  .room-item:hover {
+    background: var(--surface2);
+    transition: background 0.15s;
+  }
+}
+
+/* メッセージ日付区切り */
+.date-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  color: var(--text2);
+  font-size: 12px;
+}
+.date-divider::before, .date-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* no-room-selected改善 */
+.no-room-selected {
+  justify-content: center;
+}
+
+/* タブバーのアクティブライン */
+.tab-btn.active::after {
+  content: '';
+  display: block;
+  width: 20px;
+  height: 3px;
+  background: var(--primary);
+  border-radius: 2px;
+  margin: 2px auto 0;
+}
+
+/* プッシュアニメーション */
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.modal {
+  animation: slideUp 0.25s ease;
+}
+
+/* 接続エラーバナー */
+.connection-error {
+  background: #ff3b30;
+  color: white;
+  font-size: 11px;
+  padding: 4px 12px;
+  text-align: center;
+  font-weight: 600;
+}

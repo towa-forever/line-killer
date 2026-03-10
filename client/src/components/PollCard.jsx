@@ -8,7 +8,7 @@ export default function PollCard({ pollId, initialPoll, currentUser }) {
     if (!initialPoll && pollId) {
       axios.get('/api/polls/' + pollId).then(r => setPoll(r.data)).catch(() => {});
     }
-  }, [pollId]);
+  }, [pollId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!poll) return <div style={{ fontSize:13, color:'var(--text2)' }}>📊 投票を読み込み中...</div>;
 

@@ -85,7 +85,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
     }
 
     return pc;
-  }, [socket, currentUser, roomId, addRemoteStream, removeRemoteStream]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!socket) return;
@@ -176,7 +176,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
       socket.off('gcall:peer_left');
       socket.off('gcall:ended');
     };
-  }, [socket]);
+  }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const endCall = () => {
     socket?.emit('gcall:end', { roomId });

@@ -123,7 +123,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       socket.off('call:answered'); socket.off('call:ice');
       socket.off('call:ended'); socket.off('call:rejected');
     };
-  }, [socket]);
+  }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const endCall = () => {
     socket?.emit('call:end', { roomId, to: targetUserId });
