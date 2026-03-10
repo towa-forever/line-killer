@@ -839,12 +839,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     onChange={e => setGlobalQuery(e.target.value)} placeholder="キーワードを入力..."
                     onKeyDown={e => { if (e.key === 'Enter' && globalQuery.trim()) {
                       setGlobalSearching(true);
-                      axios.get('/api/search?q=' + encodeURIComponent(globalQuery)).then(r => { setGlobalResults(r.data); setGlobalSearching(false); });
+                      axios.get('/api/search?q=' + encodeURIComponent(globalQuery)).then(r => { setGlobalResults(r.data); setGlobalSearching(false); }).catch(() => setGlobalSearching(false));
                     }}} autoFocus />
                   <button className="btn btn-primary" style={{ padding:'0 14px' }} onClick={() => {
                     if (!globalQuery.trim()) return;
                     setGlobalSearching(true);
-                    axios.get('/api/search?q=' + encodeURIComponent(globalQuery)).then(r => { setGlobalResults(r.data); setGlobalSearching(false); });
+                    axios.get('/api/search?q=' + encodeURIComponent(globalQuery)).then(r => { setGlobalResults(r.data); setGlobalSearching(false); }).catch(() => setGlobalSearching(false));
                   }}>検索</button>
                 </div>
                 <div style={{ overflowY:'auto', flex:1 }}>
@@ -976,8 +976,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <div className="modal-title">👥 メンバー管理</div>
                 <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12 }}>{selectedRoom.members?.length}人</div>
                 {selectedRoom.members?.map(mid => {
-                  const friend = friendsList.find(f => f.friend_id === mid);
-                  const name = friend ? (friend.display_name || friend.username) : mid === currentUser.id ? currentUser.username : mid;
+                  const friend = friendsList.find(f => (f.id || f._id) === mid);
+                  const name = friend ? (friend.display_name || friend.username) : mid === currentUser.id ? (currentUser.displayName || currentUser.username) : '(不明なユーザー)';
                   const isCreator = mid === selectedRoom.creator_id;
                   const isMe = mid === currentUser.id;
                   const amCreator = currentUser.id === selectedRoom.creator_id;
@@ -1066,7 +1066,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     <div key={msg.id} style={{ padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
                       <div style={{ fontSize:12, color:'var(--text2)', marginBottom:4 }}>{msg.senderName} · {new Date(msg.createdAt).toLocaleDateString('ja-JP')}</div>
                       <div style={{ fontSize:14 }}>{msg.content}</div>
-                      <button style={{ fontSize:11, color:'var(--danger)', marginTop:4 }} onClick={() => {
+                      <button style={{ fontSize:11, color:'var(--danger)', marginTop:4, background:'none', border:'none', cursor:'pointer', padding:0 }} onClick={() => {
                         axios.delete('/api/bookmarks/' + msg.id);
                         setBookmarks(prev => { const n = new Set(prev); n.delete(msg.id); return n; });
                         setBookmarkedMsgs(prev => prev.filter(m => m.id !== msg.id));

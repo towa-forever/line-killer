@@ -357,7 +357,8 @@ app.get('/api/users/search', async (req, res) => {
     const { authorization } = req.headers;
     const token = authorization?.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
-    const q = req.query.q || '';
+    const q = (req.query.q || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 50);
+    if (!q) return res.json([]);
     const users = await User.find(
       { username: { $regex: q, $options: 'i' }, id: { $ne: decoded.id } },
       { password: 0 }
@@ -601,7 +602,8 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
   try {
     const decoded = auth(req);
     const { content } = req.body;
-    const comment = { id: uuidv4(), user_id: decoded.id, username: decoded.username, content, created_at: new Date() };
+    if (!content || !content.trim()) return res.status(400).json({ error: 'コメントを入力してください' });
+    const comment = { id: uuidv4(), user_id: decoded.id, username: decoded.username, content: content.trim().slice(0, 500), created_at: new Date() };
     await Post.findOneAndUpdate({ id: req.params.postId }, { $push: { comments: comment } });
     io.emit('post:commented', { postId: req.params.postId, comment });
     const updatedPost = await Post.findOne({ id: req.params.postId });
@@ -649,12 +651,15 @@ app.post('/api/rooms', async (req, res) => {
   try {
     const decoded = auth(req);
     const { name, memberIds } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'ルーム名を入力してください' });
+    if (name.trim().length > 50) return res.status(400).json({ error: 'ルーム名は50文字以内にしてください' });
+    const safeIds = Array.isArray(memberIds) ? memberIds.filter(id => typeof id === 'string') : [];
     const friends = await Friend.find({ user_id: decoded.id });
     const friendIds = friends.map(f => f.friend_id);
-    const validMembers = memberIds.filter(id => friendIds.includes(id));
+    const validMembers = safeIds.filter(id => friendIds.includes(id));
     const members = [...new Set([decoded.id, ...validMembers])];
     const id = 'room_' + uuidv4();
-    const room = await Room.create({ id, name, members, creator_id: decoded.id });
+    const room = await Room.create({ id, name: name.trim(), members, creator_id: decoded.id });
     members.forEach(mid => io.to('user_' + mid).emit('room:new', room));
     res.json(room);
   } catch { res.status(401).json({ error: '認証エラー' }); }
@@ -965,21 +970,26 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('message:edit', async ({ roomId, messageId, content }) => {
-    const msg = await Message.findOneAndUpdate(
-      { id: messageId, sender_id: socket.user.id },
-      { content, edited: true }, { new: true }
-    );
-    if (!msg) return;
-    io.to(roomId).emit('message:edited', { messageId, content, roomId });
+    try {
+      if (!content || !content.trim() || content.length > 4000) return;
+      const msg = await Message.findOneAndUpdate(
+        { id: messageId, sender_id: socket.user.id },
+        { content: content.trim(), edited: true }, { new: true }
+      );
+      if (!msg) return;
+      io.to(roomId).emit('message:edited', { messageId, content: content.trim(), roomId });
+    } catch(e) {}
   });
 
   socket.on('message:delete', async ({ roomId, messageId }) => {
-    const msg = await Message.findOneAndUpdate(
-      { id: messageId, sender_id: socket.user.id },
-      { deleted: true, content: 'このメッセージは削除されました' }
-    );
-    if (!msg) return;
-    io.to(roomId).emit('message:deleted', { messageId, roomId });
+    try {
+      const msg = await Message.findOneAndUpdate(
+        { id: messageId, sender_id: socket.user.id },
+        { deleted: true, content: 'このメッセージは削除されました' }
+      );
+      if (!msg) return;
+      io.to(roomId).emit('message:deleted', { messageId, roomId });
+    } catch(e) {}
   });
 
   socket.on('message:read', async ({ messageId, roomId }) => {
@@ -1231,11 +1241,13 @@ app.get('/api/rooms/:roomId/events', async (req, res) => {
 app.patch('/api/events/:eventId/attend', async (req, res) => {
   try {
     const decoded = auth(req);
-    const { status } = req.body; // going | maybe | notgoing
+    const { status } = req.body;
+    if (!['going','maybe','notgoing'].includes(status)) return res.status(400).json({ error: '不正なステータス' });
     const event = await Event.findOneAndUpdate(
       { id: req.params.eventId, 'attendees.user_id': decoded.id },
       { $set: { 'attendees.$.status': status } }, { new: true }
     );
+    if (!event) return res.status(404).json({ error: 'イベントが見つかりません' });
     io.to(event.room_id).emit('event:updated', event);
     res.json(event);
   } catch(e) { res.status(400).json({ error: e.message }); }
@@ -1609,6 +1621,7 @@ app.post('/api/polls/:pollId/close', async (req, res) => {
   try {
     const decoded = auth(req);
     const poll = await Poll.findOneAndUpdate({ id: req.params.pollId, creator_id: decoded.id }, { closed: true }, { new: true });
+    if (!poll) return res.status(404).json({ error: '投票が見つかりません' });
     io.to(poll.room_id).emit('poll:updated', poll);
     res.json(poll);
   } catch(e) { res.status(400).json({ error: e.message }); }
@@ -1639,7 +1652,11 @@ app.get('/api/rooms/:roomId/tasks', async (req, res) => {
 app.patch('/api/tasks/:taskId', async (req, res) => {
   try {
     auth(req);
-    const task = await Task.findOneAndUpdate({ id: req.params.taskId }, req.body, { new: true });
+    const allowed = {};
+    if (req.body.done !== undefined) allowed.done = !!req.body.done;
+    if (req.body.title) allowed.title = String(req.body.title).slice(0, 200);
+    if (req.body.due !== undefined) allowed.due = req.body.due ? new Date(req.body.due) : null;
+    const task = await Task.findOneAndUpdate({ id: req.params.taskId }, allowed, { new: true });
     io.to(task.room_id).emit('task:updated', task);
     res.json(task);
   } catch(e) { res.status(400).json({ error: e.message }); }
@@ -1674,10 +1691,11 @@ app.post('/api/rooms/:roomId/ephemeral', async (req, res) => {
       expiresAt, createdAt: msg.created_at
     });
     // TTL後に自動削除
+    const safeTtl = Math.max(5, Math.min(Number(ttlSeconds) || 30, 3600)); // 5秒〜1時間
     setTimeout(async () => {
       await Message.deleteOne({ id: msg.id });
       io.to(req.params.roomId).emit('message:deleted', { messageId: msg.id, roomId: req.params.roomId });
-    }, ttlSeconds * 1000);
+    }, safeTtl * 1000);
     res.json(msg);
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
