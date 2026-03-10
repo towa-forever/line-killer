@@ -18,7 +18,7 @@ export default function CreateRoom({ currentUser, friendsList = [], onClose, onC
   const handleCreate = async () => {
     if (selectedUsers.length === 0) { setError('相手を選んでください'); return; }
     if (tab === 'group' && !groupName.trim()) { setError('グループ名を入力してください'); return; }
-    setCreating(true); setError(''); console.log('送信payload:', JSON.stringify(tab === 'dm' ? { memberIds: [selectedUsers[0]], name: 'DM' } : { memberIds: selectedUsers, name: groupName }));
+    setCreating(true); setError('');
     try {
       const payload = tab === 'dm'
         ? { memberIds: [selectedUsers[0]], name: "DM" }
@@ -26,7 +26,7 @@ export default function CreateRoom({ currentUser, friendsList = [], onClose, onC
       const res = await axios.post('/api/rooms', payload);
       onCreated(res.data);
     } catch (err) {
-      setError('エラー: ' + (err.response?.data?.error || err.response?.data?.message || err.message || 'ルーム作成に失敗しました') + ' / payload: ' + JSON.stringify({memberIds: selectedUsers, name: groupName || 'DM'}));
+      setError('エラー: ' + (err.response?.data?.error || err.response?.data?.message || err.message || 'ルーム作成に失敗しました'));
     } finally { setCreating(false); }
   };
 

@@ -43,7 +43,10 @@ app.set('io', io);
 
 app.use(cors());
 app.use(compression()); // gzip圧縮（全ルートに有効）
+// 管理エンドポイント（ADMIN_KEY必須）
 app.get('/admin/reset-requests', async (req, res) => {
+  const key = req.query.key || req.headers['x-admin-key'];
+  if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) return res.status(403).json({ error: 'forbidden' });
   await FriendRequest.deleteMany({});
   res.json({ ok: true });
 });
@@ -69,7 +72,7 @@ const getFileUrl = (req) => {
   if (useCloudinary && req.file?.path) return req.file.path; // Cloudinaryは絶対URL
   return req.file ? `/uploads/${req.file.filename}` : null;
 };
-const JWT_SECRET = 'super-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-production';
 
 const auth = (req) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -562,11 +565,9 @@ app.post('/api/rooms', async (req, res) => {
   try {
     const decoded = auth(req);
     const { name, memberIds } = req.body;
-    console.log("room create:", { name, memberIds, decodedId: decoded.id });
     const friends = await Friend.find({ user_id: decoded.id });
     const friendIds = friends.map(f => f.friend_id);
     const validMembers = memberIds.filter(id => friendIds.includes(id));
-    console.log("friends:", friendIds, "valid:", validMembers);
     const members = [...new Set([decoded.id, ...validMembers])];
     const id = 'room_' + uuidv4();
     const room = await Room.create({ id, name, members, creator_id: decoded.id });
@@ -841,7 +842,16 @@ io.on('connection', async (socket) => {
     });
 
     // Push通知: ルームにいない他のメンバーに通知
-    const notifyBody = type === 'stamp' ? `${socket.user.username}: ${content}` : `${socket.user.username}: ${content}`;
+    const notifyBody = (() => {
+      const name = socket.user.username;
+      if (type === 'stamp') return `${name}: スタンプ`;
+      if (type === 'voice') return `${name}: 音声メッセージ 🎤`;
+      if (type === 'location') return `${name}: 位置情報を共有 📍`;
+      if (type === 'secret') return `${name}: 秘密メッセージ 🔐`;
+      if (type === 'image') return `${name}: 画像 📷`;
+      if (type === 'file') return `${name}: ファイル 📎`;
+      return `${name}: ${content}`;
+    })();
     for (const memberId of room.members) {
       if (memberId === socket.user.id) continue;
       const sub = pushSubscriptions.get(memberId);

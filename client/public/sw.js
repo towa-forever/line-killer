@@ -1,10 +1,7 @@
 // LINE Killer Service Worker
 
-const CACHE_NAME = 'line-killer-v1';
-const STATIC_ASSETS = ['/', '/static/js/', '/static/css/'];
-
-// インストール時にキャッシュ
-self.addEventListener('install', (event) => {
+// インストール時：即座に有効化
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
@@ -35,7 +32,7 @@ self.addEventListener('notificationclick', (event) => {
       for (const client of clientList) {
         if ('focus' in client) return client.focus();
       }
-      if (clients.openWindow) return clients.openWindow('/');
+      if (clients.openWindow) return clients.openWindow(event.notification.data || '/');
     })
   );
 });

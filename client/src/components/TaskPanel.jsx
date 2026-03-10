@@ -25,7 +25,7 @@ export default function TaskPanel({ room, currentUser, socket, onClose }) {
     await axios.post('/api/rooms/' + room.id + '/tasks', {
       title: title.trim(),
       assigneeId: assigneeId || currentUser.id,
-      assigneeName: !assigneeId || assigneeId === currentUser.id ? currentUser.username : assigneeId,
+      assigneeName: currentUser.username, // 自分のみ選択可能なので常にcurrentUser.username
       due: due || null
     });
     setTitle(''); setAssigneeId(''); setDue('');
