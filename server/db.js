@@ -142,6 +142,31 @@ const FavoriteSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+const GameScoreSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  user_id: String,
+  username: String,
+  avatar: String,
+  game: String,       // 'puzzle' | 'card' | 'quiz' | 'runner' | 'match'
+  score: Number,
+  coins_earned: { type: Number, default: 0 },
+  played_at: { type: Date, default: Date.now }
+});
+
+const GameCoinSchema = new mongoose.Schema({
+  user_id: { type: String, unique: true },
+  coins: { type: Number, default: 100 },  // 初期コイン100枚
+  updated_at: { type: Date, default: Date.now }
+});
+
+const GameItemSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  user_id: String,
+  item_type: String,  // 'stamp_set' | 'avatar_frame' | 'theme'
+  item_id: String,
+  purchased_at: { type: Date, default: Date.now }
+});
+
 module.exports = {
   User: mongoose.model('User', UserSchema),
   Note: mongoose.model('Note', NoteSchema),
@@ -154,5 +179,8 @@ module.exports = {
   Poll: mongoose.model('Poll', PollSchema),
   Task: mongoose.model('Task', TaskSchema),
   Event: mongoose.model('Event', EventSchema),
+  GameScore: mongoose.model('GameScore', GameScoreSchema),
+  GameCoin: mongoose.model('GameCoin', GameCoinSchema),
+  GameItem: mongoose.model('GameItem', GameItemSchema),
   Favorite: mongoose.model('Favorite', FavoriteSchema),
 };

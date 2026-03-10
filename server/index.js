@@ -24,7 +24,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite } = require('./db');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem } = require('./db');
 
 const app = express();
 
@@ -1103,6 +1103,128 @@ app.patch('/api/events/:eventId/attend', async (req, res) => {
     io.to(event.room_id).emit('event:updated', event);
     res.json(event);
   } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+
+// ===== ゲーム連携API =====
+const GAME_ORIGINS = ['https://killer-games.onrender.com', 'http://localhost:3001'];
+
+// ゲームアプリ用CORS（別オリジン許可）
+app.use('/api/game', (req, res, next) => {
+  const origin = req.headers.origin;
+  if (GAME_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
+// コイン残高取得 / 初期化
+app.get('/api/game/coins', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    let wallet = await GameCoin.findOne({ user_id: decoded.id });
+    if (!wallet) wallet = await GameCoin.create({ user_id: decoded.id, coins: 100 });
+    res.json({ coins: wallet.coins });
+  } catch(e) { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// スコア送信 → コイン付与
+app.post('/api/game/score', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { game, score } = req.body;
+    const user = await User.findOne({ id: decoded.id });
+    const coinsEarned = Math.floor(score / 100);  // 100点ごとに1コイン
+    const id = 'gs_' + require('uuid').v4();
+    await GameScore.create({
+      id, user_id: decoded.id,
+      username: user?.display_name || user?.username,
+      avatar: user?.avatar,
+      game, score, coins_earned: coinsEarned
+    });
+    // コインを加算
+    await GameCoin.findOneAndUpdate(
+      { user_id: decoded.id },
+      { $inc: { coins: coinsEarned }, updated_at: new Date() },
+      { upsert: true, new: true }
+    );
+    res.json({ ok: true, coinsEarned });
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+// ランキング取得
+app.get('/api/game/ranking/:game', async (req, res) => {
+  try {
+    const scores = await GameScore.find({ game: req.params.game })
+      .sort({ score: -1 }).limit(20);
+    // ユーザーごとのベストスコアのみ
+    const best = {};
+    scores.forEach(s => {
+      if (!best[s.user_id] || best[s.user_id].score < s.score) best[s.user_id] = s;
+    });
+    res.json(Object.values(best).sort((a, b) => b.score - a.score).slice(0, 10));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// 友達ランキング
+app.get('/api/game/ranking/:game/friends', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const friends = await Friend.find({ user_id: decoded.id });
+    const friendIds = [...friends.map(f => f.friend_id), decoded.id];
+    const scores = await GameScore.find({ game: req.params.game, user_id: { $in: friendIds } }).sort({ score: -1 });
+    const best = {};
+    scores.forEach(s => { if (!best[s.user_id] || best[s.user_id].score < s.score) best[s.user_id] = s; });
+    res.json(Object.values(best).sort((a, b) => b.score - a.score));
+  } catch(e) { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// ショップアイテム購入
+app.post('/api/game/shop/buy', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { itemType, itemId, price } = req.body;
+    const wallet = await GameCoin.findOne({ user_id: decoded.id });
+    if (!wallet || wallet.coins < price) return res.status(400).json({ error: 'コイン不足' });
+    // 既に持っているか確認
+    const existing = await GameItem.findOne({ user_id: decoded.id, item_id: itemId });
+    if (existing) return res.status(400).json({ error: '既に持ってるで' });
+    await GameCoin.findOneAndUpdate({ user_id: decoded.id }, { $inc: { coins: -price }, updated_at: new Date() });
+    const item = await GameItem.create({ id: 'gi_' + require('uuid').v4(), user_id: decoded.id, item_type: itemType, item_id: itemId });
+    // アバターフレーム購入の場合はUserにも反映
+    if (itemType === 'avatar_frame') await User.findOneAndUpdate({ id: decoded.id }, { avatar_frame: itemId });
+    res.json({ ok: true, item, remainingCoins: wallet.coins - price });
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+// 所持アイテム一覧
+app.get('/api/game/items', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const items = await GameItem.find({ user_id: decoded.id });
+    const wallet = await GameCoin.findOne({ user_id: decoded.id });
+    res.json({ items, coins: wallet?.coins || 0 });
+  } catch(e) { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// プレイヤー情報（ゲームアプリのログイン用）
+app.get('/api/game/me', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id });
+    const wallet = await GameCoin.findOne({ user_id: decoded.id });
+    if (!wallet) await GameCoin.create({ user_id: decoded.id, coins: 100 });
+    res.json({
+      id: decoded.id,
+      username: user?.display_name || user?.username,
+      avatar: user?.avatar,
+      coins: wallet?.coins ?? 100,
+      avatarFrame: user?.avatar_frame,
+    });
+  } catch(e) { res.status(401).json({ error: '認証エラー' }); }
 });
 
 // ===== SEO用エンドポイント =====
