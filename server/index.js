@@ -73,10 +73,12 @@ app.use('/api/auth', authLimiter);
 app.use('/api/', apiLimiter);
 // 管理エンドポイント（ADMIN_KEY必須）
 app.get('/admin/reset-requests', async (req, res) => {
-  const key = req.query.key || req.headers['x-admin-key'];
-  if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) return res.status(403).json({ error: 'forbidden' });
-  await FriendRequest.deleteMany({});
-  res.json({ ok: true });
+  try {
+    const key = req.query.key || req.headers['x-admin-key'];
+    if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) return res.status(403).json({ error: 'forbidden' });
+    await FriendRequest.deleteMany({});
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
 app.use(express.json());
@@ -360,8 +362,10 @@ app.get('/api/users/search', async (req, res) => {
 });
 
 app.get('/api/users', async (req, res) => {
-  const users = await User.find({}, { password: 0 });
-  res.json(users);
+  try {
+    const users = await User.find({}, { password: 0 });
+    res.json(users);
+  } catch (e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
 app.patch('/api/users/me', upload.single('avatar'), async (req, res) => {
@@ -856,9 +860,6 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.get('/api/debug-path', (req, res) => {
-  res.json({ __dirname, clientBuild: join(__dirname, '../client/build') });
-});
 
 // Socket.io
 io.use(async (socket, next) => {
@@ -881,7 +882,11 @@ io.on('connection', async (socket) => {
   const myRooms = await Room.find({ members: socket.user.id });
   myRooms.forEach(r => socket.join(r.id));
 
-  socket.on('room:join', (roomId) => socket.join(roomId));
+  socket.on('room:join', async (roomId) => {
+    // 自分がメンバーのルームのみjoin許可
+    const room = await Room.findOne({ id: roomId, members: socket.user.id });
+    if (room) socket.join(roomId);
+  });
 
   // メッセージ送信レートリミット（10秒間に20件まで）
   const msgRateMap = new Map();

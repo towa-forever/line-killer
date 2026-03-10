@@ -1409,9 +1409,11 @@ export default function App() {
   const [groupCall, setGroupCall] = useState(null); // { roomId, members, roomName }
   const [darkAutoMode, setDarkAutoMode] = useState(() => localStorage.getItem('darkAutoMode') === 'true');
 
+  const toastTimerRef = useRef(null);
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
   }, []);
 
   useEffect(() => {
