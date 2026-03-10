@@ -1008,3 +1008,90 @@ body.dark .input-menu-grid {
 .message-bubble:active {
   opacity: 0.85;
 }
+
+/* ===== 送信者表示・ボトムシートメニュー改善 ===== */
+
+/* 自分のメッセージも送信者名を表示 */
+.message.mine .message-sender {
+  text-align: right;
+  padding-right: 4px;
+  color: rgba(255,255,255,0.7);
+  font-size: 11px;
+}
+.message.theirs .message-sender {
+  padding-left: 4px;
+  color: var(--text2);
+  font-size: 11px;
+}
+
+/* 自分のアバター（右側） */
+.message.mine .message-avatar {
+  background: var(--primary);
+  order: 2;
+}
+
+/* バブルの幅を少し広げる（アバター常時表示のため） */
+.message-body { max-width: 72%; }
+@media (max-width: 480px) {
+  .message-body { max-width: 74%; }
+}
+
+/* 長押しメニュー ボトムシート */
+.msg-bottom-sheet {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  overflow: hidden;
+  z-index: 3001;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: slideUp 0.22s ease;
+}
+.msg-bottom-sheet-handle {
+  width: 36px; height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 10px auto 4px;
+}
+
+/* リアクションバー（長押し時上部に出る） */
+.quick-reaction-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border-radius: 32px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+  z-index: 3002;
+  animation: popIn 0.18s ease;
+}
+@keyframes popIn {
+  from { opacity: 0; transform: translateX(-50%) scale(0.85); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
+/* ボトムシートのアクションアイテム */
+.msg-action-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 15px 20px;
+  font-size: 15px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.msg-action-item:active { background: var(--surface2); }
+.msg-action-item:last-child { border-bottom: none; }
+.msg-action-icon { font-size: 20px; width: 28px; text-align: center; }
+
+/* 自分のメッセージ時刻の位置調整 */
+.message.mine .message-time {
+  flex-direction: row-reverse;
+  text-align: right;
+}

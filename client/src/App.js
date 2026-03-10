@@ -136,7 +136,6 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [replyTo, setReplyTo] = useState(null); // 返信先メッセージ
   const [showSearch, setShowSearch] = useState(false);
   const [reactionPicker, setReactionPicker] = useState(null); // { msgId, x, y }
-  const [hoveredMsg, setHoveredMsg] = useState(null);
   const [translating, setTranslating] = useState({}); // { msgId: translated text }
   const QUICK_REACTIONS = ['👍','❤️','😂','😮','😢','🔥'];
   const [pinnedMessage, setPinnedMessage] = useState(null); // ピン留めメッセージ
@@ -453,12 +452,14 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         }}
         onTouchEnd={() => clearTimeout(longPressTimer.current)}
         onTouchMove={() => clearTimeout(longPressTimer.current)}>
-        {!isMine && <div className="message-avatar" style={{ cursor:'pointer' }}
+        <div className="message-avatar" style={{ cursor:'pointer', flexShrink:0, background: isMine ? 'var(--primary)' : 'var(--surface2)' }}
           onClick={() => setShowUserProfile({ id: msg.senderId, name: msg.senderName, avatar: msg.senderAvatar })}>
-          {msg.senderAvatar ? <img src={`${SERVER_URL}${msg.senderAvatar}`} alt="" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} /> : (msg.senderName?.[0] || '?')}
-        </div>}
+          {msg.senderAvatar
+            ? <img src={msg.senderAvatar.startsWith('http') ? msg.senderAvatar : `${SERVER_URL}${msg.senderAvatar}`} alt="" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} />
+            : <span style={{fontSize:15,fontWeight:700,color:isMine?'#fff':'var(--text)',display:'flex',alignItems:'center',justifyContent:'center',height:'100%'}}>{msg.senderName?.[0] || '?'}</span>}
+        </div>
         <div className="message-body">
-          {!isMine && <div className="message-sender">{msg.senderName}</div>}
+          <div className="message-sender" style={{ color: isMine ? 'rgba(255,255,255,0.75)' : 'var(--text2)', textAlign: isMine ? 'right' : 'left' }}>{msg.senderName}</div>
           {msg.forwarded && (
             <div style={{ fontSize:11, color:'var(--text2)', marginBottom:4 }}>📤 転送されたメッセージ</div>
           )}
@@ -468,41 +469,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <span className="reply-content">{msg.replyTo.content?.slice(0, 40)}{msg.replyTo.content?.length > 40 ? '...' : ''}</span>
             </div>
           )}
-          <div style={{ position:'relative' }}
-            onMouseEnter={() => setHoveredMsg(msg.id)}
-            onMouseLeave={() => setHoveredMsg(null)}
-          >
-            {hoveredMsg === msg.id && (
-              <div style={{
-                position:'absolute', [isMine ? 'left' : 'right']:'calc(100% + 4px)',
-                top:'50%', transform:'translateY(-50%)',
-                display:'flex', gap:2, background:'var(--surface)',
-                borderRadius:20, padding:'4px 6px', boxShadow:'0 2px 8px rgba(0,0,0,0.15)',
-                zIndex:100, whiteSpace:'nowrap'
-              }}>
-                {QUICK_REACTIONS.map(emoji => (
-                  <button key={emoji} onClick={() => { socket.emit('message:react', { messageId: msg.id, roomId: selectedRoom.id, emoji }); setHoveredMsg(null); }}
-                    style={{ fontSize:18, padding:'2px 3px', border:'none', background:'none', cursor:'pointer', borderRadius:6 }}
-                    onMouseEnter={e => e.target.style.background='var(--surface2)'}
-                    onMouseLeave={e => e.target.style.background='none'}
-                  >{emoji}</button>
-                ))}
-                <button onClick={async () => {
-                  if (translating[msg.id]) { setTranslating(p => ({...p, [msg.id]: null})); return; }
-                  setTranslating(p => ({...p, [msg.id]: '翻訳中...'}));
-                  try {
-                    const res = await axios.post('/api/translate', { text: msg.content, targetLang: '日本語' });
-                    setTranslating(p => ({...p, [msg.id]: res.data.result}));
-                  } catch { setTranslating(p => ({...p, [msg.id]: '翻訳失敗'})); }
-                  setHoveredMsg(null);
-                }} style={{ fontSize:14, padding:'2px 5px', border:'none', background:'none', cursor:'pointer', borderRadius:6, color:'var(--text2)' }}
-                  title="翻訳">🌐</button>
-              </div>
-            )}
-            <div className="message-bubble"
-              onDoubleClick={(e) => setReactionPicker({ msgId: msg.id, x: e.clientX, y: e.clientY })}
-              onContextMenu={(e) => { e.preventDefault(); setReactionPicker({ msgId: msg.id, x: e.clientX, y: e.clientY }); }}
-            >{content}
+          <div style={{ position:'relative' }}>
+            <div className="message-bubble">{content}
             {translating[msg.id] && (
               <div style={{ marginTop:6, paddingTop:6, borderTop:'1px solid rgba(0,0,0,0.1)', fontSize:12, color: translating[msg.id] === '翻訳中...' ? 'var(--text2)' : 'var(--text)', fontStyle:'italic' }}>
                 🌐 {translating[msg.id]}
@@ -674,13 +642,40 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
           )}
           {msgMenu && (
-            <div style={{ position:'fixed', inset:0, zIndex:3000 }} onClick={() => setMsgMenu(null)}>
+            <div style={{ position:'fixed', inset:0, zIndex:3000, background:'rgba(0,0,0,0.4)' }} onClick={() => setMsgMenu(null)}>
+              {/* リアクションバー */}
               <div style={{
                 position:'fixed',
-                left: Math.min(msgMenu.x, window.innerWidth - 160),
-                top: Math.min(msgMenu.y, window.innerHeight - 160),
-                background:'var(--surface)', borderRadius:12, overflow:'hidden',
-                boxShadow:'0 4px 20px rgba(0,0,0,0.2)', minWidth:150, zIndex:3001
+                bottom: 'calc(env(safe-area-inset-bottom) + 48px)',
+                left:'50%', transform:'translateX(-50%)',
+                display:'flex', gap:4, background:'var(--surface)',
+                borderRadius:32, padding:'8px 12px',
+                boxShadow:'0 4px 24px rgba(0,0,0,0.25)', zIndex:3002
+              }} onClick={e => e.stopPropagation()}>
+                {QUICK_REACTIONS.map(emoji => (
+                  <button key={emoji} onClick={() => { socket.emit('message:react', { messageId: msgMenu.msg.id, roomId: selectedRoom.id, emoji }); setMsgMenu(null); }}
+                    style={{ fontSize:26, padding:'4px 6px', border:'none', background:'none', cursor:'pointer', borderRadius:12, WebkitTapHighlightColor:'transparent' }}>{emoji}
+                  </button>
+                ))}
+                <button onClick={async () => {
+                  if (translating[msgMenu.msg.id]) { setTranslating(p => ({...p, [msgMenu.msg.id]: null})); setMsgMenu(null); return; }
+                  setTranslating(p => ({...p, [msgMenu.msg.id]: '翻訳中...'}));
+                  try {
+                    const res = await axios.post('/api/translate', { text: msgMenu.msg.content, targetLang: '日本語' });
+                    setTranslating(p => ({...p, [msgMenu.msg.id]: res.data.result}));
+                  } catch { setTranslating(p => ({...p, [msgMenu.msg.id]: '翻訳失敗'})); }
+                  setMsgMenu(null);
+                }} style={{ fontSize:20, padding:'4px 6px', border:'none', background:'none', cursor:'pointer', borderRadius:12, color:'var(--text2)' }}>🌐</button>
+              </div>
+              {/* アクションリスト（ボトムシート） */}
+              <div style={{
+                position:'fixed', bottom:0, left:0, right:0,
+                background:'var(--surface)',
+                borderRadius:'20px 20px 0 0',
+                overflow:'hidden', zIndex:3001,
+                paddingBottom:'env(safe-area-inset-bottom)',
+                boxShadow:'0 -4px 32px rgba(0,0,0,0.2)',
+                animation:'slideUp 0.22s ease'
               }} onClick={(e) => e.stopPropagation()}>
                 {[
                   { icon:'📌', label: pinnedMessage?.id === msgMenu.msg.id ? 'ピンを外す' : 'ピン留め', action: () => {
@@ -731,11 +726,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   ] : []),
                 ].map(item => (
                   <button key={item.label} onClick={() => { item.action(); setMsgMenu(null); }} style={{
-                    display:'flex', alignItems:'center', gap:10, width:'100%', padding:'12px 16px',
-                    background:'none', border:'none', cursor:'pointer', fontSize:14, color:'var(--text)',
-                    borderBottom:'1px solid var(--border)'
+                    display:'flex', alignItems:'center', gap:12, width:'100%', padding:'15px 20px',
+                    background:'none', border:'none', cursor:'pointer', fontSize:15, color: item.danger ? 'var(--danger)' : 'var(--text)',
+                    borderBottom:'1px solid var(--border)', WebkitTapHighlightColor:'transparent'
                   }}>
-                    <span>{item.icon}</span><span style={{ color: item.danger ? 'var(--danger)' : 'inherit' }}>{item.label}</span>
+                    <span style={{fontSize:20,width:28,textAlign:'center'}}>{item.icon}</span>
+                    <span style={{fontWeight:500}}>{item.label}</span>
                   </button>
                 ))}
               </div>
