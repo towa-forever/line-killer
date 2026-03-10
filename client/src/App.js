@@ -376,7 +376,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           {!isMine && <div className="message-avatar">{msg.senderName?.[0] || '?'}</div>}
           <div className="message-body">
             {!isMine && <div className="message-sender">{msg.senderName}</div>}
-            <React.Suspense fallback={<div style={{fontSize:13,color:'var(--text2)'}}>📊...</div>}><PollCard pollId={pollId} initialPoll={pollData} currentUser={currentUser} /></React.Suspense>
+            <Suspense fallback={<div style={{fontSize:13,color:'var(--text2)'}}>📊...</div>}><PollCard pollId={pollId} initialPoll={pollData} currentUser={currentUser} /></Suspense>
           </div>
         </div>
       );
@@ -618,7 +618,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               }
             }}>📞</button>
           </div>
-          {showNote && <Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} />}
+          {showNote && <Suspense fallback={null}><Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} /></Suspense>}
           {showRoomSettings && (
             <div className="modal-overlay" onClick={() => setShowRoomSettings(false)}>
               <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -723,8 +723,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               </div>
             </div>
           )}
-          {showEventCal && <React.Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></React.Suspense>}
-          {showMiniGame && <React.Suspense fallback={null}><MiniGame onSendResult={text => { socket.emit('message:send', { roomId: selectedRoom.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></React.Suspense>}
+          {showEventCal && <Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense>}
+          {showMiniGame && <Suspense fallback={null}><MiniGame onSendResult={text => { socket.emit('message:send', { roomId: selectedRoom.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense>}
           {showFavorites && (
             <div className="modal-overlay" onClick={() => setShowFavorites(false)}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
@@ -783,15 +783,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
           )}
           {showAI && (
-            <AIAssistant
+            <Suspense fallback={null}><AIAssistant
               messages={messages.filter(m => m.type === 'text').slice(-50)}
               currentRoom={selectedRoom}
               onInsert={text => { setInputText(text); setShowAI(false); }}
               onClose={() => setShowAI(false)}
-            />
+            /></Suspense>
           )}
           {showTaskPanel && (
-            <React.Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} /></React.Suspense>
+            <Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} /></Suspense>
           )}
           {showSchedule && (
             <div className="modal-overlay" onClick={() => setShowSchedule(false)}>
@@ -1197,7 +1197,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             {/* 位置情報 */}
             {showLocation && <LocationShare socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowLocation(false)} onCancel={() => setShowLocation(false)} />}
             {/* 秘密メッセージ */}
-            {showSecret && <React.Suspense fallback={null}><SecretMessage socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowSecret(false)} onCancel={() => setShowSecret(false)} /></React.Suspense>}
+            {showSecret && <Suspense fallback={null}><SecretMessage socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowSecret(false)} onCancel={() => setShowSecret(false)} /></Suspense>}
             {/* 文字スタイルパネル */}
             {showStylePicker && (
               <div style={{ padding:'10px 12px', background:'var(--surface2)', borderTop:'1px solid var(--border)', display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
@@ -1234,13 +1234,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       </div>
 
       {showStats && selectedRoom && (
-        <React.Suspense fallback={null}>
+        <Suspense fallback={null}>
           <ChatStats roomId={selectedRoom.id} roomName={selectedRoom.name} onClose={() => setShowStats(false)} />
-        </React.Suspense>
+        </Suspense>
       )}
       {showCreateRoom && (
-        <CreateRoom currentUser={currentUser} friendsList={friendsList} onClose={() => setShowCreateRoom(false)}
-          onCreated={(room) => { setRooms((prev) => [room, ...prev]); setSelectedRoom(room); setShowCreateRoom(false); }} />
+        <Suspense fallback={null}><CreateRoom currentUser={currentUser} friendsList={friendsList} onClose={() => setShowCreateRoom(false)}
+          onCreated={(room) => { setRooms((prev) => [room, ...prev]); setSelectedRoom(room); setShowCreateRoom(false); }} /></Suspense>
       )}
     </div>
   );
@@ -1412,33 +1412,34 @@ export default function App() {
     setIncomingCall(null);
   };
 
-  const renderTabs = () => (
-    <>
-      <div style={{ display: activeTab === 'dashboard' ? 'flex' : 'none', flexDirection:'column', flex:1, overflow:'hidden' }}>
-        <Dashboard currentUser={currentUser} onNavigateRoom={(roomId) => { setActiveTab('chat'); }} />
-      </div>
-      <div style={{ display: activeTab === 'chat' ? 'contents' : 'none' }}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} />
-      </div>
-      <div style={{ display: activeTab === 'friends' ? 'contents' : 'none' }}>
-        <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />
-      </div>
-      <div style={{ display: activeTab === 'timeline' ? 'contents' : 'none' }}>
-        <Timeline currentUser={currentUser} />
-      </div>
-      <div style={{ display: activeTab === 'stampshop' ? 'contents' : 'none' }}>
-        <ErrorBoundary><StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} /></ErrorBoundary>
-      </div>
-      <div style={{ display: activeTab === 'album' ? 'contents' : 'none' }}>
-        <Album currentUser={currentUser} />
-      </div>
-      <div style={{ display: activeTab === 'profile' ? 'contents' : 'none' }}>
-        <Profile currentUser={currentUser} onUpdate={(u) => { setCurrentUser(u); }} onLogout={handleLogout}
-  darkMode={darkMode} onToggleDark={() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(!darkMode); }}
-  darkAutoMode={darkAutoMode} onToggleAuto={() => { const v = !darkAutoMode; setDarkAutoMode(v); localStorage.setItem('darkAutoMode', v); if (v) { setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches); } }} />
-      </div>
-    </>
-  );
+  const renderTabs = () => {
+    const S = ({ children }) => (
+      <ErrorBoundary>
+        <Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+          {children}
+        </Suspense>
+      </ErrorBoundary>
+    );
+    // display:noneとlazy loadは相性最悪なので条件レンダリングに変更
+    switch (activeTab) {
+      case 'dashboard':
+        return <S><div style={{display:'flex',flexDirection:'column',flex:1,overflow:'hidden'}}><Dashboard currentUser={currentUser} onNavigateRoom={() => setActiveTab('chat')} /></div></S>;
+      case 'friends':
+        return <S><Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} /></S>;
+      case 'timeline':
+        return <S><Timeline currentUser={currentUser} /></S>;
+      case 'stampshop':
+        return <S><ErrorBoundary><StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} /></ErrorBoundary></S>;
+      case 'album':
+        return <S><Album currentUser={currentUser} /></S>;
+      case 'profile':
+        return <S><Profile currentUser={currentUser} onUpdate={(u) => setCurrentUser(u)} onLogout={handleLogout}
+          darkMode={darkMode} onToggleDark={() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(!darkMode); }}
+          darkAutoMode={darkAutoMode} onToggleAuto={() => { const v = !darkAutoMode; setDarkAutoMode(v); localStorage.setItem('darkAutoMode', v); if (v) setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches); }} /></S>;
+      default: // 'chat'
+        return <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} />;
+    }
+  };
 
   return (
     <Router>
