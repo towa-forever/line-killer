@@ -194,8 +194,15 @@ StorySchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 }); // 期限切れ
 GameScoreSchema.index({ game: 1, score: -1 });         // ゲームランキング取得
 FavoriteSchema.index({ user_id: 1 });                  // お気に入り一覧取得
 
+const PushSubscriptionSchema = new mongoose.Schema({
+  user_id: { type: String, required: true, unique: true },
+  subscription: { type: mongoose.Schema.Types.Mixed, required: true },
+  updated_at: { type: Date, default: Date.now },
+});
+
 module.exports = {
   User: mongoose.model('User', UserSchema),
+  PushSubscription: mongoose.model('PushSubscription', PushSubscriptionSchema),
   Note: mongoose.model('Note', NoteSchema),
   Room: mongoose.model('Room', RoomSchema),
   Message: mongoose.model('Message', MessageSchema),

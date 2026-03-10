@@ -1,5 +1,7 @@
 require("dotenv").config();
 const express = require('express');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const webpush = require('web-push');
 const { createServer } = require('http');
@@ -24,7 +26,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story } = require('./db');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription } = require('./db');
 
 const app = express();
 
@@ -34,7 +36,15 @@ const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'NYWHWUJij3EUcOYPmq17
 webpush.setVapidDetails('mailto:admin@line-killer.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 // push購読をメモリで管理（再起動でリセットされるが無料プランでは許容）
-const pushSubscriptions = new Map(); // userId -> subscription
+const pushSubscriptions = new Map(); // userId -> subscription (メモリキャッシュ)
+// 起動時にDBからpush subscriptionsを読み込む
+(async () => {
+  try {
+    const subs = await PushSubscription.find();
+    subs.forEach(s => pushSubscriptions.set(s.user_id, s.subscription));
+    console.log(`Push subscriptions loaded: ${subs.length}`);
+  } catch(e) { console.error('Push subscription load error:', e); }
+})();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
@@ -43,6 +53,24 @@ app.set('io', io);
 
 app.use(cors());
 app.use(compression()); // gzip圧縮（全ルートに有効）
+app.use(helmet({ contentSecurityPolicy: false })); // セキュリティヘッダー
+
+// ログイン・登録のレートリミット（ブルートフォース対策）
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15分
+  max: 20, // 20回まで
+  message: { error: 'リクエストが多すぎます。しばらく待ってから試してください' },
+  standardHeaders: true, legacyHeaders: false,
+});
+// APIのレートリミット（一般）
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1分
+  max: 300,
+  message: { error: 'リクエストが多すぎます' },
+  standardHeaders: true, legacyHeaders: false,
+});
+app.use('/api/auth', authLimiter);
+app.use('/api/', apiLimiter);
 // 管理エンドポイント（ADMIN_KEY必須）
 app.get('/admin/reset-requests', async (req, res) => {
   const key = req.query.key || req.headers['x-admin-key'];
@@ -227,6 +255,8 @@ app.post('/api/push/subscribe', async (req, res) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     pushSubscriptions.set(decoded.id, req.body);
+    // DBにも保存（再起動対策）
+    PushSubscription.findOneAndUpdate({ user_id: decoded.id }, { user_id: decoded.id, subscription: req.body, updated_at: new Date() }, { upsert: true, new: true }).catch(() => {});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -237,6 +267,7 @@ app.delete('/api/push/subscribe', async (req, res) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     pushSubscriptions.delete(decoded.id);
+    PushSubscription.deleteOne({ user_id: decoded.id }).catch(() => {});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -264,13 +295,17 @@ app.get('/api/stamps/mysets', async (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
-  const exists = await User.findOne({ username });
+  const uname = username.trim();
+  if (uname.length < 2 || uname.length > 20) return res.status(400).json({ error: 'ユーザー名は2〜20文字にしてください' });
+  if (!/^[a-zA-Z0-9_　-鿿＀-￯一-鿿぀-ゟ゠-ヿ]+$/.test(uname)) return res.status(400).json({ error: 'ユーザー名に使えない文字が含まれています' });
+  if (password.length < 6) return res.status(400).json({ error: 'パスワードは6文字以上にしてください' });
+  const exists = await User.findOne({ username: uname });
   if (exists) return res.status(400).json({ error: 'このユーザー名は既に使われてます' });
   const hashed = await bcrypt.hash(password, 10);
   const id = uuidv4();
-  await User.create({ id, username, password: hashed });
-  const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id, username, avatar: null, displayName: username, bio: '', status: '' } });
+  await User.create({ id, username: uname, password: hashed });
+  const token = jwt.sign({ id, username: uname }, JWT_SECRET, { expiresIn: '30d' });
+  res.json({ token, user: { id, username: uname, avatar: null, displayName: uname, bio: '', status: '' } });
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -888,7 +923,7 @@ io.on('connection', async (socket) => {
         body: notifyBody.length > 50 ? notifyBody.slice(0, 50) + '...' : notifyBody,
         tag: roomId,
         url: '/',
-      })).catch(() => pushSubscriptions.delete(memberId));
+      })).catch(() => { pushSubscriptions.delete(memberId); PushSubscription.deleteOne({ user_id: memberId }).catch(() => {}); });
     }
   });
 

@@ -297,6 +297,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, [socket, selectedRoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    // ルーム切り替え時に状態をリセット
+    setInputText('');
+    setReplyTo(null);
+    setShowInputMenu(false);
+    setShowHeaderMenu(false);
+    setShowStampPanel(false);
+    setShowVoice(false);
+    setShowLocation(false);
+    setShowSecret(false);
     if (!selectedRoom) return;
     messagesCache.current._current = selectedRoom.id; // 現在のルームを記録
     // キャッシュがあれば即表示
@@ -1128,19 +1137,20 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
           )}
           {reactionPicker && (
-            <div style={{ position:'fixed', inset:0, zIndex:3000 }} onClick={() => setReactionPicker(null)}>
+            <div style={{ position:'fixed', inset:0, zIndex:3000, background:'rgba(0,0,0,0.3)' }} onClick={() => setReactionPicker(null)}>
               <div style={{
                 position:'fixed',
-                left: Math.min(reactionPicker.x, window.innerWidth - 220),
-                top: Math.max(reactionPicker.y - 60, 10),
-                background:'var(--surface)', borderRadius:24, padding:'8px 12px',
-                boxShadow:'0 4px 20px rgba(0,0,0,0.2)', display:'flex', gap:6, zIndex:3001
+                left:'50%', transform:'translateX(-50%)',
+                bottom:'calc(env(safe-area-inset-bottom) + 80px)',
+                background:'var(--surface)', borderRadius:32, padding:'10px 14px',
+                boxShadow:'0 4px 24px rgba(0,0,0,0.25)', display:'flex', gap:4, zIndex:3001,
+                animation:'popIn 0.18s ease'
               }} onClick={(e) => e.stopPropagation()}>
                 {['❤️','👍','😂','😮','😢','🔥','👏','🎉'].map(emoji => (
                   <button key={emoji} onClick={() => {
                     socket.emit('message:react', { messageId: reactionPicker.msgId, roomId: selectedRoom.id, emoji });
                     setReactionPicker(null);
-                  }} style={{ fontSize:24, background:'none', border:'none', cursor:'pointer', padding:'4px 2px', borderRadius:8, transition:'transform 0.1s' }}
+                  }} style={{ fontSize:26, background:'none', border:'none', cursor:'pointer', padding:'4px 6px', borderRadius:10, WebkitTapHighlightColor:'transparent', transition:'transform 0.1s' }}
                     onMouseEnter={e => e.target.style.transform='scale(1.3)'}
                     onMouseLeave={e => e.target.style.transform='scale(1)'}
                   >{emoji}</button>
