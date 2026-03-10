@@ -423,8 +423,16 @@ app.post('/api/friend-requests/:requestId/accept', async (req, res) => {
     const request = await FriendRequest.findOne({ id: req.params.requestId, to_id: decoded.id });
     if (!request) return res.status(404).json({ error: '申請が見つかりません' });
     await FriendRequest.findOneAndUpdate({ id: req.params.requestId }, { status: 'accepted' });
-    await Friend.findOneAndUpdate({ user_id: decoded.id, friend_id: request.from_id }, {}, { upsert: true });
-    await Friend.findOneAndUpdate({ user_id: request.from_id, friend_id: decoded.id }, {}, { upsert: true });
+    await Friend.findOneAndUpdate(
+      { user_id: decoded.id, friend_id: request.from_id },
+      { $setOnInsert: { user_id: decoded.id, friend_id: request.from_id } },
+      { upsert: true }
+    );
+    await Friend.findOneAndUpdate(
+      { user_id: request.from_id, friend_id: decoded.id },
+      { $setOnInsert: { user_id: request.from_id, friend_id: decoded.id } },
+      { upsert: true }
+    );
     io.to('user_' + request.from_id).emit('friend:accepted', { by_id: decoded.id, by_name: decoded.username });
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
@@ -1703,4 +1711,12 @@ app.get('/{*path}', (req, res) => {
 });
 
 const PORT = process.env.PORT || 4000;
+// 起動時: 壊れたFriendレコードをクリーンアップ
+(async () => {
+  try {
+    const result = await Friend.deleteMany({ $or: [{ user_id: null }, { friend_id: null }, { user_id: '' }, { friend_id: '' }] });
+    if (result.deletedCount > 0) console.log(`壊れたFriendレコード ${result.deletedCount} 件を削除`);
+  } catch (e) {}
+})();
+
 httpServer.listen(PORT, '0.0.0.0', () => console.log('Server: http://localhost:' + PORT));
