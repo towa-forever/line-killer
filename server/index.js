@@ -616,6 +616,24 @@ app.post('/api/rooms/:roomId/members', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
+// メンバー削除API
+app.delete('/api/rooms/:roomId/members/:userId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId });
+    if (!room) return res.status(404).json({ error: 'ルームが見つかりません' });
+    // 自分自身を退出 or 作成者が他のメンバーを削除
+    if (decoded.id !== req.params.userId && room.creator_id !== decoded.id)
+      return res.status(403).json({ error: '権限なし' });
+    const updated = await Room.findOneAndUpdate(
+      { id: req.params.roomId },
+      { $pull: { members: req.params.userId } }, { new: true }
+    );
+    io.to(req.params.roomId).emit('room:members_updated', { roomId: req.params.roomId, members: updated.members, removedId: req.params.userId });
+    res.json({ members: updated.members });
+  } catch(e) { res.status(401).json({ error: '認証エラー' }); }
+});
+
 // メッセージ転送API
 app.post('/api/rooms/:roomId/forward', async (req, res) => {
   try {
@@ -855,7 +873,10 @@ io.on('connection', async (socket) => {
   socket.on('message:read', async ({ messageId, roomId }) => {
     await Message.findOneAndUpdate({ id: messageId }, { $addToSet: { read_by: socket.user.id } });
     const msg = await Message.findOne({ id: messageId });
-    io.to(roomId).emit('message:read_update', { messageId, readBy: msg.read_by, roomId });
+    // 既読ユーザーの名前も一緒に送る
+    const readers = await User.find({ id: { $in: msg.read_by } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
+    const readByDetail = readers.map(u => ({ id: u.id, name: u.display_name || u.username, avatar: u.avatar }));
+    io.to(roomId).emit('message:read_update', { messageId, readBy: msg.read_by, readByDetail, roomId });
   });
 
   socket.on('message:react', async ({ roomId, messageId, emoji }) => {

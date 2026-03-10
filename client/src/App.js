@@ -146,6 +146,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [msgMenu, setMsgMenu] = useState(null); // { msg, x, y } 長押しメニュー
   const [editingMessage, setEditingMessage] = useState(null); // { id, content }
   const [showBgPicker, setShowBgPicker] = useState(false);
+  const [showReadDetail, setShowReadDetail] = useState(null); // { msgId, readers: [] }
+  const [showMediaList, setShowMediaList] = useState(false);
+  const [showMemberMgr, setShowMemberMgr] = useState(false);
+  const [showUserProfile, setShowUserProfile] = useState(null); // { id, name, avatar, status }
+  const [readByDetailMap, setReadByDetailMap] = useState({}); // msgId -> [{id,name,avatar}]
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [bookmarkedMsgs, setBookmarkedMsgs] = useState([]);
   const [showAnnounce, setShowAnnounce] = useState(false);
@@ -177,6 +182,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, []);
 
   useEffect(() => { fetchRooms(); }, [fetchRooms]);
+
+  // タブの未読バッジ
+  useEffect(() => {
+    const total = Object.values(unreadCounts).reduce((s, n) => s + n, 0);
+    document.title = total > 0 ? `(${total}) LINE Killer` : 'LINE Killer';
+  }, [unreadCounts]);
 
   useEffect(() => {
     if (!socket) return;
@@ -220,6 +231,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     socket.on('room:updated', ({ roomId, name, icon }) => {
       setRooms((prev) => prev.map(r => r.id === roomId ? { ...r, ...(name && { name }), ...(icon && { icon }) } : r));
       setSelectedRoom((prev) => prev?.id === roomId ? { ...prev, ...(name && { name }), ...(icon && { icon }) } : prev);
+    });
+    socket.on('message:read_update', ({ messageId, readBy, readByDetail }) => {
+      if (readByDetail) setReadByDetailMap(prev => ({ ...prev, [messageId]: readByDetail }));
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read_by: readBy } : m));
     });
     socket.on('poll:updated', (poll) => {
       setPolls(prev => ({ ...prev, [poll.id]: poll }));
@@ -398,7 +413,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         }}
         onTouchEnd={() => clearTimeout(longPressTimer.current)}
         onTouchMove={() => clearTimeout(longPressTimer.current)}>
-        {!isMine && <div className="message-avatar">{msg.senderAvatar ? <img src={`${SERVER_URL}${msg.senderAvatar}`} alt="" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} /> : (msg.senderName?.[0] || '?')}</div>}
+        {!isMine && <div className="message-avatar" style={{ cursor:'pointer' }}
+          onClick={() => setShowUserProfile({ id: msg.senderId, name: msg.senderName, avatar: msg.senderAvatar })}>
+          {msg.senderAvatar ? <img src={`${SERVER_URL}${msg.senderAvatar}`} alt="" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} /> : (msg.senderName?.[0] || '?')}
+        </div>}
         <div className="message-body">
           {!isMine && <div className="message-sender">{msg.senderName}</div>}
           {msg.forwarded && (
@@ -556,6 +574,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               }
             }}>{mutedRooms.has(selectedRoom.id) ? '🔕' : '🔔'}</button>
             <button className="icon-btn" onClick={() => setShowNote(true)}>📝</button>
+            <button className="icon-btn" title="画像・動画" onClick={() => setShowMediaList(true)}>🖼️</button>
             <button className="icon-btn" title="AIアシスタント" onClick={() => setShowAI(true)}>🤖</button>
             <button className="icon-btn" title="タスク" onClick={() => setShowTaskPanel(true)}>✅</button>
             <button className="icon-btn" onClick={() => setShowBgPicker(true)}>🎨</button>
@@ -644,6 +663,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     { icon:'📢', label:'アナウンス', action: () => { setAnnounceText(msgMenu.msg.content || ''); setShowAnnounce(true); } },
                   ] : []),
                   ...(msgMenu.msg.senderId === currentUser.id ? [
+                    { icon:'↩️', label:'送信取消', danger: true, action: () => {
+                      if (window.confirm('送信を取り消しますか？')) {
+                        socket.emit('message:delete', { roomId: selectedRoom.id, messageId: msgMenu.msg.id, recall: true });
+                      }
+                    }},
                     { icon:'✏️', label:'編集', action: () => { setEditingMessage(msgMenu.msg); setEditText(msgMenu.msg.content || ''); } },
                     { icon:'🗑️', label:'削除', danger: true, action: () => {
                       if (window.confirm('このメッセージを削除しますか？')) {
@@ -725,6 +749,113 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     setShowPollCreator(false); setPollQuestion(''); setPollOptions(['', '']); setPollMulti(false);
                   }}>作成</button>
                 </div>
+              </div>
+            </div>
+          )}
+          {/* 既読詳細モーダル */}
+          {showReadDetail && (
+            <div className="modal-overlay" onClick={() => setShowReadDetail(null)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-title">👁️ 既読メンバー</div>
+                {showReadDetail.readers.length === 0
+                  ? <div style={{ textAlign:'center', color:'var(--text2)', padding:'16px 0', fontSize:14 }}>詳細情報を読み込み中...</div>
+                  : showReadDetail.readers.filter(r => r.id !== currentUser.id).map(r => (
+                    <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                      <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:700, overflow:'hidden', flexShrink:0 }}>
+                        {r.avatar ? <img src={r.avatar.startsWith('http') ? r.avatar : `${process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com'}${r.avatar}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : r.name?.[0]}
+                      </div>
+                      <span style={{ fontSize:14 }}>{r.name}</span>
+                    </div>
+                  ))
+                }
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowReadDetail(null)}>閉じる</button>
+              </div>
+            </div>
+          )}
+
+          {/* ユーザープロフィールモーダル */}
+          {showUserProfile && (
+            <div className="modal-overlay" onClick={() => setShowUserProfile(null)}>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ textAlign:'center' }}>
+                <div style={{ width:80, height:80, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, fontWeight:700, margin:'0 auto 12px', overflow:'hidden' }}>
+                  {showUserProfile.avatar
+                    ? <img src={showUserProfile.avatar.startsWith('http') ? showUserProfile.avatar : `${process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com'}${showUserProfile.avatar}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                    : showUserProfile.name?.[0]
+                  }
+                </div>
+                <div style={{ fontSize:20, fontWeight:700, marginBottom:4 }}>{showUserProfile.name}</div>
+                {showUserProfile.status && <div style={{ fontSize:13, color:'var(--text2)', marginBottom:16, fontStyle:'italic' }}>{showUserProfile.status}</div>}
+                <button className="btn btn-secondary" style={{ width:'100%' }} onClick={() => setShowUserProfile(null)}>閉じる</button>
+              </div>
+            </div>
+          )}
+
+          {/* グループメンバー管理モーダル */}
+          {showMemberMgr && selectedRoom && (
+            <div className="modal-overlay" onClick={() => setShowMemberMgr(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
+                <div className="modal-title">👥 メンバー管理</div>
+                <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12 }}>{selectedRoom.members?.length}人</div>
+                {selectedRoom.members?.map(mid => {
+                  const friend = friendsList.find(f => f.friend_id === mid);
+                  const name = friend ? (friend.display_name || friend.username) : mid === currentUser.id ? currentUser.username : mid;
+                  const isCreator = mid === selectedRoom.creator_id;
+                  const isMe = mid === currentUser.id;
+                  const amCreator = currentUser.id === selectedRoom.creator_id;
+                  return (
+                    <div key={mid} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                      <div style={{ width:40, height:40, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700, flexShrink:0 }}>
+                        {name?.[0] || '?'}
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:14, fontWeight: isCreator ? 700 : 400 }}>{name}{isMe ? ' (自分)' : ''}</div>
+                        {isCreator && <div style={{ fontSize:11, color:'var(--primary)' }}>👑 管理者</div>}
+                      </div>
+                      {(amCreator && !isMe && !isCreator) && (
+                        <button onClick={() => {
+                          if (!window.confirm(`${name}をグループから削除しますか？`)) return;
+                          axios.delete(`/api/rooms/${selectedRoom.id}/members/${mid}`).then(() => {
+                            setSelectedRoom(prev => ({ ...prev, members: prev.members.filter(m => m !== mid) }));
+                          });
+                        }} style={{ fontSize:12, color:'var(--danger)', padding:'4px 10px', borderRadius:8, border:'1px solid var(--danger)', background:'none', cursor:'pointer' }}>
+                          削除
+                        </button>
+                      )}
+                      {isMe && !isCreator && (
+                        <button onClick={() => {
+                          if (!window.confirm('グループを退出しますか？')) return;
+                          axios.delete(`/api/rooms/${selectedRoom.id}/members/${currentUser.id}`).then(() => {
+                            setSelectedRoom(null); setShowMemberMgr(false); fetchRooms();
+                          });
+                        }} style={{ fontSize:12, color:'var(--danger)', padding:'4px 10px', borderRadius:8, border:'1px solid var(--danger)', background:'none', cursor:'pointer' }}>
+                          退出
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowMemberMgr(false)}>閉じる</button>
+              </div>
+            </div>
+          )}
+
+          {/* メディア一覧モーダル */}
+          {showMediaList && (
+            <div className="modal-overlay" onClick={() => setShowMediaList(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'85vh' }}>
+                <div className="modal-title">🖼️ 画像・動画</div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:4, maxHeight:'65vh', overflowY:'auto' }}>
+                  {messages.filter(m => m.type === 'image' && m.fileData?.url).length === 0
+                    ? <div style={{ gridColumn:'1/-1', textAlign:'center', color:'var(--text2)', padding:'20px 0' }}>画像・動画がまだないで</div>
+                    : messages.filter(m => m.type === 'image' && m.fileData?.url).map(m => (
+                      <div key={m.id} style={{ aspectRatio:'1', overflow:'hidden', borderRadius:8, cursor:'pointer' }}
+                        onClick={() => window.open(`${process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com'}${m.fileData.url}`, '_blank')}>
+                        <img src={`${process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com'}${m.fileData.url}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                      </div>
+                    ))
+                  }
+                </div>
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowMediaList(false)}>閉じる</button>
               </div>
             </div>
           )}
