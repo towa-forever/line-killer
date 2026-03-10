@@ -167,6 +167,18 @@ const GameItemSchema = new mongoose.Schema({
   purchased_at: { type: Date, default: Date.now }
 });
 
+const StorySchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  user_id: String,
+  user_name: String,
+  user_avatar: String,
+  type: { type: String, default: 'image' }, // image | video | text
+  url: String,
+  text: String,
+  expires_at: { type: Date, default: () => new Date(Date.now() + 24*60*60*1000) },
+  created_at: { type: Date, default: Date.now },
+});
+
 module.exports = {
   User: mongoose.model('User', UserSchema),
   Note: mongoose.model('Note', NoteSchema),
@@ -179,6 +191,7 @@ module.exports = {
   Poll: mongoose.model('Poll', PollSchema),
   Task: mongoose.model('Task', TaskSchema),
   Event: mongoose.model('Event', EventSchema),
+  Story: mongoose.model('Story', StorySchema),
   GameScore: mongoose.model('GameScore', GameScoreSchema),
   GameCoin: mongoose.model('GameCoin', GameCoinSchema),
   GameItem: mongoose.model('GameItem', GameItemSchema),

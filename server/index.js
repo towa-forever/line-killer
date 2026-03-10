@@ -24,7 +24,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem } = require('./db');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story } = require('./db');
 
 const app = express();
 
@@ -63,7 +63,7 @@ const cloudStorage = useCloudinary ? new CloudinaryStorage({
 }) : null;
 
 const storage = cloudStorage || diskStorage;
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 const getFileUrl = (req) => {
   if (useCloudinary && req.file?.path) return req.file.path; // Cloudinaryは絶対URL
   return req.file ? `/uploads/${req.file.filename}` : null;
@@ -1116,6 +1116,89 @@ app.patch('/api/events/:eventId/attend', async (req, res) => {
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 
+
+// ===== チャット統計API =====
+app.get('/api/rooms/:roomId/stats', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    const msgs = await Message.find({ room_id: req.params.roomId, deleted: false });
+    // 送信数ランキング
+    const countMap = {};
+    const typeMap = {};
+    const hourMap = Array(24).fill(0);
+    msgs.forEach(m => {
+      countMap[m.sender_name] = (countMap[m.sender_name] || 0) + 1;
+      typeMap[m.type] = (typeMap[m.type] || 0) + 1;
+      hourMap[new Date(m.created_at).getHours()]++;
+    });
+    const ranking = Object.entries(countMap).sort((a,b)=>b[1]-a[1]).map(([name,count])=>({name,count}));
+    const mostActive = hourMap.indexOf(Math.max(...hourMap));
+    res.json({
+      total: msgs.length,
+      ranking,
+      types: typeMap,
+      hourMap,
+      mostActiveHour: mostActive,
+      firstMessage: msgs[0]?.created_at,
+    });
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+
+// ===== チャット統計API =====
+app.get('/api/rooms/:roomId/stats', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    const msgs = await Message.find({ room_id: req.params.roomId, deleted: false });
+    const countMap = {}, typeMap = {}, hourMap = Array(24).fill(0);
+    msgs.forEach(m => {
+      countMap[m.sender_name] = (countMap[m.sender_name] || 0) + 1;
+      typeMap[m.type || 'text'] = (typeMap[m.type || 'text'] || 0) + 1;
+      hourMap[new Date(m.created_at).getHours()]++;
+    });
+    const ranking = Object.entries(countMap).sort((a,b)=>b[1]-a[1]).map(([name,count])=>({name,count}));
+    const mostActiveHour = hourMap.indexOf(Math.max(...hourMap));
+    res.json({ total: msgs.length, ranking, types: typeMap, hourMap, mostActiveHour, firstMessage: msgs[0]?.created_at });
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+// ===== ストーリーAPI =====
+app.get('/api/stories', async (req, res) => {
+  try {
+    auth(req);
+    const stories = await Story.find({ expires_at: { $gt: new Date() } }).sort({ created_at: -1 });
+    res.json(stories);
+  } catch(e) { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/api/stories', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id });
+    const story = await Story.create({
+      id: 'st_' + require('uuid').v4(),
+      user_id: decoded.id,
+      user_name: user?.display_name || user?.username,
+      user_avatar: user?.avatar,
+      type: req.body.type || 'image',
+      url: req.body.url,
+      text: req.body.text,
+    });
+    res.json(story);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+app.delete('/api/stories/:id', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await Story.deleteOne({ id: req.params.id, user_id: decoded.id });
+    res.json({ ok: true });
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
 
 // ===== ゲーム連携API =====
 const GAME_ORIGINS = ['https://killer-games.onrender.com', 'http://localhost:3001'];

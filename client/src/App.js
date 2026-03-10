@@ -5,13 +5,10 @@ import axios from 'axios';
 import ErrorBoundary from "./components/ErrorBoundary";
 import VideoCall from "./components/VideoCall";
 import { sounds } from "./utils/sounds";
-import Dashboard from "./components/Dashboard";
-import EventCalendar from "./components/EventCalendar";
-import MiniGame from "./components/MiniGame";
-import AIAssistant from "./components/AIAssistant";
-import PollCard from "./components/PollCard";
-import TaskPanel from "./components/TaskPanel";
-import GroupVideoCall from "./components/GroupVideoCall";
+import VoiceMessage, { VoiceMessageBubble } from './components/VoiceMessage';
+import LocationShare, { LocationBubble } from './components/LocationShare';
+import { SecretBubble } from './components/SecretMessage';
+import { StoryBar } from './components/Story';
 import './App.css';
 
 // 遅延読み込み（初回ロード高速化）
@@ -19,6 +16,15 @@ const Friends = lazy(() => import('./components/Friends'));
 const Timeline = lazy(() => import('./components/Timeline'));
 const StampShop = lazy(() => import('./components/StampShop'));
 const Album = lazy(() => import('./components/Album'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const EventCalendar = lazy(() => import('./components/EventCalendar'));
+const MiniGame = lazy(() => import('./components/MiniGame'));
+const AIAssistant = lazy(() => import('./components/AIAssistant'));
+const PollCard = lazy(() => import('./components/PollCard'));
+const TaskPanel = lazy(() => import('./components/TaskPanel'));
+const GroupVideoCall = lazy(() => import('./components/GroupVideoCall'));
+const SecretMessage = lazy(() => import('./components/SecretMessage').then(m => ({ default: m.default })));
+const ChatStats = lazy(() => import('./components/ChatStats'));
 const Profile = lazy(() => import('./components/Profile'));
 
 const CreateRoom = lazy(() => import('./components/CreateRoom'));
@@ -161,6 +167,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [globalResults, setGlobalResults] = useState([]);
   const [globalSearching, setGlobalSearching] = useState(false);
   const [showTaskPanel, setShowTaskPanel] = useState(false);
+  const [showVoice, setShowVoice] = useState(false);
+  const [showLocation, setShowLocation] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [msgStyle, setMsgStyle] = useState(() => JSON.parse(localStorage.getItem('msgStyle') || '{"font":"default","color":""}'));
+  const [showStylePicker, setShowStylePicker] = useState(false);
+  const [lang, setLang] = useState(() => localStorage.getItem('lang') || 'ja');
   const [showSchedule, setShowSchedule] = useState(false);
   const [scheduleText, setScheduleText] = useState('');
   const [scheduleAt, setScheduleAt] = useState('');
@@ -363,7 +376,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           {!isMine && <div className="message-avatar">{msg.senderName?.[0] || '?'}</div>}
           <div className="message-body">
             {!isMine && <div className="message-sender">{msg.senderName}</div>}
-            <PollCard pollId={pollId} initialPoll={pollData} currentUser={currentUser} />
+            <React.Suspense fallback={<div style={{fontSize:13,color:'var(--text2)'}}>📊...</div>}><PollCard pollId={pollId} initialPoll={pollData} currentUser={currentUser} /></React.Suspense>
           </div>
         </div>
       );
@@ -402,9 +415,18 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     } else if (msg.type === 'image' && msg.fileData?.url) {
       content = <img src={`${SERVER_URL}${msg.fileData.url}`} alt="img" className="chat-image" />;
     } else if (msg.type === 'file' && msg.fileData?.url) {
-      content = <a href={`${SERVER_URL}${msg.fileData.url}`} target="_blank" rel="noreferrer" className="chat-file-link">📎 {msg.content}</a>;
+      const fileUrl = msg.fileData.url?.startsWith('http') ? msg.fileData.url : `${SERVER_URL}${msg.fileData.url}`;
+      const ext = (msg.fileData.url || '').split('.').pop().toLowerCase();
+      const icons = { pdf:'📄', zip:'🗜️', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊', mp4:'🎬', mov:'🎬', mp3:'🎵' };
+      content = <a href={fileUrl} target="_blank" rel="noreferrer" className="chat-file-link" download style={{ display:'flex', alignItems:'center', gap:6 }}>{icons[ext]||'📎'} {msg.content}</a>;
+    } else if (msg.type === 'voice') {
+      content = <VoiceMessageBubble msg={msg} isMine={isMine} />;
+    } else if (msg.type === 'location') {
+      content = <LocationBubble msg={msg} isMine={isMine} />;
+    } else if (msg.type === 'secret') {
+      content = <SecretBubble msg={msg} isMine={isMine} />;
     } else {
-      content = <span>{msg.content}</span>;
+      content = <span style={msgStyle.font !== 'default' ? { fontFamily: msgStyle.font } : {}}>{msg.content}</span>;
     }
     return (
       <div key={msg.id} id={`msg-${msg.id}`} className={`message ${isMine ? 'mine' : 'theirs'}`}
@@ -564,6 +586,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               {selectedRoom.name} <span style={{ fontSize:12, color:'var(--text2)' }}>⚙️</span>
             </div>
             <button className="icon-btn" onClick={() => { setShowSearch(!showSearch); setSearchQuery(''); setSearchResults([]); }}>🔍</button>
+            <button className="icon-btn" title="チャット統計" onClick={() => setShowStats(true)}>📊</button>
             <button className="icon-btn" title="ブックマーク" onClick={() => {
               axios.get('/api/bookmarks').then(r => { setBookmarkedMsgs(r.data); setShowBookmarks(true); }).catch(() => {});
             }}>🔖</button>
@@ -700,8 +723,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               </div>
             </div>
           )}
-          {showEventCal && <EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} />}
-          {showMiniGame && <MiniGame onSendResult={text => { socket.emit('message:send', { roomId: selectedRoom.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} />}
+          {showEventCal && <React.Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></React.Suspense>}
+          {showMiniGame && <React.Suspense fallback={null}><MiniGame onSendResult={text => { socket.emit('message:send', { roomId: selectedRoom.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></React.Suspense>}
           {showFavorites && (
             <div className="modal-overlay" onClick={() => setShowFavorites(false)}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
@@ -768,7 +791,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             />
           )}
           {showTaskPanel && (
-            <TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} />
+            <React.Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} /></React.Suspense>
           )}
           {showSchedule && (
             <div className="modal-overlay" onClick={() => setShowSchedule(false)}>
@@ -1169,17 +1192,37 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 }
               </div>
             )}
+            {/* 音声メッセージ */}
+            {showVoice && <VoiceMessage roomId={selectedRoom.id} currentUser={currentUser} socket={socket} onSent={() => setShowVoice(false)} onCancel={() => setShowVoice(false)} />}
+            {/* 位置情報 */}
+            {showLocation && <LocationShare socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowLocation(false)} onCancel={() => setShowLocation(false)} />}
+            {/* 秘密メッセージ */}
+            {showSecret && <React.Suspense fallback={null}><SecretMessage socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowSecret(false)} onCancel={() => setShowSecret(false)} /></React.Suspense>}
+            {/* 文字スタイルパネル */}
+            {showStylePicker && (
+              <div style={{ padding:'10px 12px', background:'var(--surface2)', borderTop:'1px solid var(--border)', display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
+                <span style={{ fontSize:12, color:'var(--text2)', fontWeight:600 }}>フォント:</span>
+                {[['default','デフォルト'],['serif','明朝体'],['monospace','等幅'],['cursive','手書き']].map(([f,label]) => (
+                  <button key={f} onClick={() => { const s={...msgStyle,font:f}; setMsgStyle(s); localStorage.setItem('msgStyle',JSON.stringify(s)); }}
+                    style={{ padding:'4px 10px', borderRadius:10, border:'1.5px solid', borderColor: msgStyle.font===f?'var(--primary)':'var(--border)', background: msgStyle.font===f?'var(--primary)':'transparent', color: msgStyle.font===f?'white':'var(--text)', fontSize:13, cursor:'pointer', fontFamily:f==='default'?undefined:f }}>{label}</button>
+                ))}
+                <span style={{ fontSize:12, color:'var(--text2)', fontWeight:600, marginLeft:8 }}>言語:</span>
+                {[['ja','🇯🇵'],['en','🇺🇸'],['zh','🇨🇳'],['ko','🇰🇷']].map(([l,flag]) => (
+                  <button key={l} onClick={() => { setLang(l); localStorage.setItem('lang',l); }}
+                    style={{ padding:'4px 10px', borderRadius:10, border:'1.5px solid', borderColor: lang===l?'var(--primary)':'var(--border)', background: lang===l?'var(--primary)':'transparent', color: lang===l?'white':'var(--text)', fontSize:14, cursor:'pointer' }}>{flag}</button>
+                ))}
+              </div>
+            )}
             <div className="input-row">
               <button className="icon-btn" onClick={() => setShowStampPanel(!showStampPanel)}>🎫</button>
               <button className="icon-btn" onClick={() => fileInputRef.current?.click()}>📎</button>
               <button className="icon-btn" title="投票作成" onClick={() => setShowPollCreator(true)}>📊</button>
               <button className="icon-btn" title="スケジュール送信" onClick={() => { setScheduleText(inputText); setShowSchedule(true); }}>⏰</button>
-              <button className="icon-btn" title="期限付きメッセージ" onClick={() => {
-                if (!inputText.trim()) return;
-                const ttl = parseInt(prompt('何秒後に消す？（例: 30）') || '0');
-                if (ttl > 0) { axios.post('/api/rooms/' + selectedRoom.id + '/ephemeral', { content: inputText.trim(), ttlSeconds: ttl }); setInputText(''); }
-              }}>💨</button>
-              <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
+              <button className="icon-btn" title="音声メッセージ" onClick={() => setShowVoice(v=>!v)}>🎤</button>
+              <button className="icon-btn" title="位置情報を送る" onClick={() => setShowLocation(v=>!v)}>📍</button>
+              <button className="icon-btn" title="秘密メッセージ" onClick={() => setShowSecret(v=>!v)}>🔐</button>
+              <button className="icon-btn" title="文字スタイル" onClick={() => setShowStylePicker(v=>!v)}>🎨</button>
+              <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,video/*,audio/*,.pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onChange={handleFileUpload} />
               <textarea className="message-input" value={inputText} onChange={handleTyping}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
                 placeholder="メッセージを入力..." rows={1} />
@@ -1190,6 +1233,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         {!selectedRoom && <div className="no-room-selected"><div>💬</div><p>トークを選択してください</p></div>}
       </div>
 
+      {showStats && selectedRoom && (
+        <React.Suspense fallback={null}>
+          <ChatStats roomId={selectedRoom.id} roomName={selectedRoom.name} onClose={() => setShowStats(false)} />
+        </React.Suspense>
+      )}
       {showCreateRoom && (
         <CreateRoom currentUser={currentUser} friendsList={friendsList} onClose={() => setShowCreateRoom(false)}
           onCreated={(room) => { setRooms((prev) => [room, ...prev]); setSelectedRoom(room); setShowCreateRoom(false); }} />

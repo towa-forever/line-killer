@@ -757,3 +757,31 @@ body.dark .messages-container {
   text-align: center;
   font-weight: 600;
 }
+
+/* ===== 新機能スタイル ===== */
+
+/* ストーリーバー */
+.story-bar { display:flex; gap:12px; padding:10px 12px; overflow-x:auto; scrollbar-width:none; border-bottom:1px solid var(--border); flex-shrink:0; }
+.story-bar::-webkit-scrollbar { display:none; }
+
+/* 音声バブル */
+audio { max-width:100%; accent-color:var(--primary); }
+.voice-bubble { display:flex; align-items:center; gap:8px; min-width:180px; }
+
+/* 位置情報バブル */
+.location-bubble img { max-width:240px; border-radius:12px; display:block; }
+
+/* 秘密メッセージ */
+.secret-reveal-btn { background:rgba(199,125,255,0.15); border:1.5px solid #c77dff; border-radius:12px; padding:8px 14px; cursor:pointer; color:#c77dff; font-weight:700; font-size:13px; }
+
+/* ファイルアイコン強化 */
+.chat-file-link { display:flex; align-items:center; gap:6px; padding:8px 12px; background:rgba(255,255,255,0.1); border-radius:12px; color:inherit; text-decoration:none; font-size:13px; }
+.mine .chat-file-link { background:rgba(255,255,255,0.2); }
+
+/* 入力ボタンが多くなったので横スクロール対応 */
+.input-row { display:flex; align-items:flex-end; gap:4px; padding:6px 8px; overflow-x:auto; scrollbar-width:none; }
+.input-row::-webkit-scrollbar { display:none; }
+.icon-btn { flex-shrink:0; }
+
+/* フォント適用 */
+.message-bubble span { font-family:inherit; }
