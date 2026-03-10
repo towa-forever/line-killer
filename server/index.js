@@ -66,7 +66,7 @@ const storage = cloudStorage || diskStorage;
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 const getFileUrl = (req) => {
   if (useCloudinary && req.file?.path) return req.file.path; // Cloudinaryは絶対URL
-  return req.file ? \`/uploads/\${req.file.filename}\` : null;
+  return req.file ? `/uploads/${req.file.filename}` : null;
 };
 const JWT_SECRET = 'super-secret-key';
 

@@ -334,6 +334,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   };
 
   const renderMessage = (msg) => {
+    const isMine = msg.senderId === currentUser.id;
     // 投票メッセージ
     if (msg.type === 'poll') {
       const pollId = msg.fileData?.pollId || msg.file_data?.pollId;
@@ -374,7 +375,6 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         </div>
       );
     }
-    const isMine = msg.senderId === currentUser.id;
     const time = new Date(msg.createdAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
     const readByOthers = msg.read_by?.some(id => id !== currentUser.id);
     let content;
@@ -808,7 +808,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <div className="modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-title">📤 転送先を選択</div>
                 <div style={{ fontSize:13, color:'var(--text2)', marginBottom:8, padding:'0 4px',
-                  background:'var(--surface2)', borderRadius:8, padding:'8px 10px' }}>
+                  background:'var(--surface2)', borderRadius:8 }}>
                   {forwardMsg.type === 'stamp' ? '[スタンプ]' : forwardMsg.content?.slice(0, 60)}
                 </div>
                 <div style={{ maxHeight:300, overflowY:'auto' }}>
@@ -1035,7 +1035,6 @@ export default function App() {
   const [activeCall, setActiveCall] = useState(null); // { roomId, targetUserId, isCaller, offer }
   const [callMinimized, setCallMinimized] = useState(false);
   const [groupCall, setGroupCall] = useState(null); // { roomId, members, roomName }
-  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [darkAutoMode, setDarkAutoMode] = useState(() => localStorage.getItem('darkAutoMode') === 'true');
 
   const showToast = useCallback((message, type = 'info') => {
@@ -1094,7 +1093,7 @@ export default function App() {
   // システムダークモード連動
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = e => { setSystemDark(e.matches); if (darkAutoMode) { document.body.classList.toggle('dark', e.matches); } };
+    const handler = e => { if (darkAutoMode) { document.body.classList.toggle('dark', e.matches); } };
     mq.addEventListener('change', handler);
     if (darkAutoMode) document.body.classList.toggle('dark', mq.matches);
     return () => mq.removeEventListener('change', handler);

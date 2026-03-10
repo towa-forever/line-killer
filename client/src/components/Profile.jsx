@@ -9,7 +9,6 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
   const [displayName, setDisplayName] = useState(currentUser.displayName || '');
   const [bio, setBio] = useState(currentUser.bio || '');
   const [saving, setSaving] = useState(false);
-  const [showFramePicker, setShowFramePicker] = useState(false);
   const [selectedFrame, setSelectedFrame] = useState(currentUser.avatarFrame || 'none');
   const [selectedSound, setSelectedSound] = useState(currentUser.soundTheme || 'default');
   const [statusText, setStatusText] = useState(currentUser.status || '');
