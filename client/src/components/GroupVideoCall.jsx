@@ -20,10 +20,18 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-      { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      { urls: 'turn:openrelay.metered.ca:80',            username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443',           username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turns:openrelay.metered.ca:443',          username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:freestun.net:3479',  username: 'free', credential: 'free' },
+      { urls: 'turns:freestun.net:5350', username: 'free', credential: 'free' },
     ],
     iceCandidatePoolSize: 10,
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require',
   };
 
   const addRemoteStream = useCallback((userId, userName, stream) => {
@@ -53,8 +61,13 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
     };
 
     pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-        removeRemoteStream(targetId);
+      if (pc.iceConnectionState === 'failed') {
+        try { pc.restartIce(); } catch (_) {}
+      }
+      if (pc.iceConnectionState === 'disconnected') {
+        setTimeout(() => {
+          if (pc.iceConnectionState === 'disconnected') removeRemoteStream(targetId);
+        }, 5000);
       }
     };
 

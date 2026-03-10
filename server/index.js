@@ -291,6 +291,24 @@ app.get('/api/stamps/mysets', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
+// ICEサーバー情報を提供（将来的に動的TURN認証に差し替え可能）
+app.get('/api/ice-servers', (req, res) => {
+  // METERED_API_KEY環境変数があれば動的取得、なければ静的リストを返す
+  const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'turn:openrelay.metered.ca:80',            username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443',           username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turns:openrelay.metered.ca:443',          username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:freestun.net:3479',  username: 'free', credential: 'free' },
+    { urls: 'turns:freestun.net:5350', username: 'free', credential: 'free' },
+  ];
+  res.json({ iceServers });
+});
+
 // 認証
 app.post('/api/auth/register', async (req, res) => {
   const { username, password } = req.body;
