@@ -168,6 +168,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [globalSearching, setGlobalSearching] = useState(false);
   const [showTaskPanel, setShowTaskPanel] = useState(false);
   const [showVoice, setShowVoice] = useState(false);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [showInputMenu, setShowInputMenu] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
   const [showStats, setShowStats] = useState(false);
@@ -199,6 +201,18 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, []);
 
   useEffect(() => { fetchRooms(); }, [fetchRooms]);
+
+  // ヘッダーメニュー・入力メニューを画面外タップで閉じる
+  useEffect(() => {
+    if (!showHeaderMenu && !showInputMenu) return;
+    const close = (e) => {
+      if (!e.target.closest('.header-menu-dropdown') && !e.target.closest('.header-menu-btn')) setShowHeaderMenu(false);
+      if (!e.target.closest('.input-menu-grid') && !e.target.closest('.plus-btn')) setShowInputMenu(false);
+    };
+    document.addEventListener('touchstart', close, { passive: true });
+    document.addEventListener('mousedown', close);
+    return () => { document.removeEventListener('touchstart', close); document.removeEventListener('mousedown', close); };
+  }, [showHeaderMenu, showInputMenu]);
 
   // タブの未読バッジ
   useEffect(() => {
@@ -587,37 +601,40 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               {selectedRoom.name} <span style={{ fontSize:12, color:'var(--text2)' }}>⚙️</span>
             </div>
             <button className="icon-btn" onClick={() => { setShowSearch(!showSearch); setSearchQuery(''); setSearchResults([]); }}>🔍</button>
-            <button className="icon-btn" title="チャット統計" onClick={() => setShowStats(true)}>📊</button>
-            <button className="icon-btn" title="ブックマーク" onClick={() => {
-              axios.get('/api/bookmarks').then(r => { setBookmarkedMsgs(r.data); setShowBookmarks(true); }).catch(() => {});
-            }}>🔖</button>
-            <button className="icon-btn" title={mutedRooms.has(selectedRoom.id) ? 'ミュート中' : 'ミュート'} onClick={() => {
-              const isMuted = mutedRooms.has(selectedRoom.id);
-              if (isMuted) {
-                axios.delete('/api/rooms/' + selectedRoom.id + '/mute');
-                setMutedRooms(prev => { const n = new Set(prev); n.delete(selectedRoom.id); return n; });
-              } else {
-                axios.post('/api/rooms/' + selectedRoom.id + '/mute');
-                setMutedRooms(prev => new Set([...prev, selectedRoom.id]));
-              }
-            }}>{mutedRooms.has(selectedRoom.id) ? '🔕' : '🔔'}</button>
-            <button className="icon-btn" onClick={() => setShowNote(true)}>📝</button>
-            <button className="icon-btn" title="画像・動画" onClick={() => setShowMediaList(true)}>🖼️</button>
-            <button className="icon-btn" title="カレンダー" onClick={() => setShowEventCal(true)}>📅</button>
-            <button className="icon-btn" title="ゲーム" onClick={() => setShowMiniGame(true)}>🎮</button>
-            <button className="icon-btn" title="AIアシスタント" onClick={() => setShowAI(true)}>🤖</button>
-            <button className="icon-btn" title="タスク" onClick={() => setShowTaskPanel(true)}>✅</button>
-            <button className="icon-btn" onClick={() => setShowBgPicker(true)}>🎨</button>
             <button className="call-icon-btn" onClick={() => {
               if (selectedRoom.members?.length > 2) {
-                // グループ通話
                 setGroupCall && setGroupCall({ roomId: selectedRoom.id, members: selectedRoom.members, roomName: selectedRoom.name });
               } else {
-                // 1対1通話
                 const other = selectedRoom.members?.find(m => m !== currentUser.id);
                 if(other) onCall({ roomId: selectedRoom.id, targetUserId: other, isCaller: true, offer: null });
               }
             }}>📞</button>
+            <button className="icon-btn header-menu-btn" onClick={() => setShowHeaderMenu(v=>!v)} title="メニュー">⋯</button>
+            {showHeaderMenu && (
+              <div className="header-menu-dropdown" onClick={() => setShowHeaderMenu(false)}>
+                {[
+                  { icon:'📊', label:'チャット統計', action: () => setShowStats(true) },
+                  { icon:'🔖', label:'ブックマーク', action: () => { axios.get('/api/bookmarks').then(r => { setBookmarkedMsgs(r.data); setShowBookmarks(true); }).catch(() => {}); } },
+                  { icon: mutedRooms.has(selectedRoom.id)?'🔕':'🔔', label: mutedRooms.has(selectedRoom.id)?'ミュート解除':'ミュート', action: () => {
+                    const isMuted = mutedRooms.has(selectedRoom.id);
+                    if (isMuted) { axios.delete('/api/rooms/'+selectedRoom.id+'/mute'); setMutedRooms(prev=>{const n=new Set(prev);n.delete(selectedRoom.id);return n;}); }
+                    else { axios.post('/api/rooms/'+selectedRoom.id+'/mute'); setMutedRooms(prev=>new Set([...prev,selectedRoom.id])); }
+                  }},
+                  { icon:'📝', label:'ノート', action: () => setShowNote(true) },
+                  { icon:'🖼️', label:'画像・動画', action: () => setShowMediaList(true) },
+                  { icon:'📅', label:'カレンダー', action: () => setShowEventCal(true) },
+                  { icon:'✅', label:'タスク', action: () => setShowTaskPanel(true) },
+                  { icon:'🎮', label:'ゲーム', action: () => setShowMiniGame(true) },
+                  { icon:'🤖', label:'AIアシスタント', action: () => setShowAI(true) },
+                  { icon:'🎨', label:'背景を変える', action: () => setShowBgPicker(true) },
+                ].map(item => (
+                  <button key={item.label} className="header-menu-item" onClick={item.action}>
+                    <span className="header-menu-icon">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {showNote && <Suspense fallback={null}><Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} /></Suspense>}
           {showRoomSettings && (
@@ -1215,20 +1232,34 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               </div>
             )}
             <div className="input-row">
-              <button className="icon-btn" onClick={() => setShowStampPanel(!showStampPanel)}>🎫</button>
-              <button className="icon-btn" onClick={() => fileInputRef.current?.click()}>📎</button>
-              <button className="icon-btn" title="投票作成" onClick={() => setShowPollCreator(true)}>📊</button>
-              <button className="icon-btn" title="スケジュール送信" onClick={() => { setScheduleText(inputText); setShowSchedule(true); }}>⏰</button>
-              <button className="icon-btn" title="音声メッセージ" onClick={() => setShowVoice(v=>!v)}>🎤</button>
-              <button className="icon-btn" title="位置情報を送る" onClick={() => setShowLocation(v=>!v)}>📍</button>
-              <button className="icon-btn" title="秘密メッセージ" onClick={() => setShowSecret(v=>!v)}>🔐</button>
-              <button className="icon-btn" title="文字スタイル" onClick={() => setShowStylePicker(v=>!v)}>🎨</button>
+              <button className="plus-btn icon-btn" onClick={() => setShowInputMenu(v=>!v)} title="その他">
+                {showInputMenu ? '✕' : '➕'}
+              </button>
+              <button className="icon-btn" onClick={() => setShowStampPanel(!showStampPanel)} title="スタンプ">🎫</button>
               <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,video/*,audio/*,.pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onChange={handleFileUpload} />
               <textarea className="message-input" value={inputText} onChange={handleTyping}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
                 placeholder={lang === "en" ? "Type a message..." : lang === "zh" ? "输入消息..." : lang === "ko" ? "메시지 입력..." : "メッセージを入力..."} rows={1} />
               <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>➤</button>
             </div>
+            {showInputMenu && (
+              <div className="input-menu-grid">
+                {[
+                  { icon:'📎', label:'ファイル', action: () => { fileInputRef.current?.click(); setShowInputMenu(false); } },
+                  { icon:'🎤', label:'音声', action: () => { setShowVoice(v=>!v); setShowInputMenu(false); } },
+                  { icon:'📍', label:'位置情報', action: () => { setShowLocation(v=>!v); setShowInputMenu(false); } },
+                  { icon:'🔐', label:'秘密', action: () => { setShowSecret(v=>!v); setShowInputMenu(false); } },
+                  { icon:'📊', label:'投票', action: () => { setShowPollCreator(true); setShowInputMenu(false); } },
+                  { icon:'⏰', label:'予約送信', action: () => { setScheduleText(inputText); setShowSchedule(true); setShowInputMenu(false); } },
+                  { icon:'🎨', label:'文字スタイル', action: () => { setShowStylePicker(v=>!v); setShowInputMenu(false); } },
+                ].map(item => (
+                  <button key={item.label} className="input-menu-item" onClick={item.action}>
+                    <span className="input-menu-icon">{item.icon}</span>
+                    <span className="input-menu-label">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </>}
         {!selectedRoom && <div className="no-room-selected"><div>💬</div><p>トークを選択してください</p></div>}
@@ -1249,12 +1280,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
 function TabBar({ activeTab, setActiveTab, notifications }) {
   const tabs = [
-    { id: 'dashboard', label: 'ホーム', icon: '🏠' },
     { id: 'chat', label: 'トーク', icon: '💬' },
     { id: 'friends', label: '友達', icon: '👥' },
     { id: 'timeline', label: 'タイムライン', icon: '📰' },
     { id: 'stampshop', label: 'ショップ', icon: '🎫' },
-    { id: 'album', label: 'アルバム', icon: '📷' },
     { id: 'profile', label: 'プロフィール', icon: '👤' },
   ];
   return (
