@@ -17,13 +17,13 @@ export default function PollCard({ pollId, initialPoll, currentUser }) {
 
   const vote = async (optId) => {
     if (poll.closed) return;
-    const res = await axios.post('/api/polls/' + poll.id + '/vote', { optionId: optId });
-    setPoll(res.data);
+    try { const res = await axios.post('/api/polls/' + poll.id + '/vote', { optionId: optId });
+    setPoll(res.data); } catch { /* 無視 */ }
   };
 
   const close = async () => {
-    const res = await axios.post('/api/polls/' + poll.id + '/close');
-    setPoll(res.data);
+    try { const res = await axios.post('/api/polls/' + poll.id + '/close');
+    setPoll(res.data); } catch { /* 無視 */ }
   };
 
   return (

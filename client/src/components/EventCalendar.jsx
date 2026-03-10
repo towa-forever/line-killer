@@ -22,12 +22,13 @@ export default function EventCalendar({ room, currentUser, socket, onClose }) {
 
   const create = async () => {
     if (!title.trim() || !startAt) return;
-    await axios.post('/api/rooms/' + room.id + '/events', { title: title.trim(), description: desc, startAt, endAt });
+    try { await axios.post('/api/rooms/' + room.id + '/events', { title: title.trim(), description: desc, startAt, endAt }); }
+    catch { alert('イベントの保存に失敗しました'); return; }
     setTitle(''); setDesc(''); setStartAt(''); setEndAt(''); setView('list');
   };
 
   const attend = async (eventId, status) => {
-    await axios.patch('/api/events/' + eventId + '/attend', { status });
+    try { await axios.patch('/api/events/' + eventId + '/attend', { status }); } catch { /* 無視 */ }
   };
 
   const STATUS_COLOR = { going: '#06c755', maybe: '#ff9500', notgoing: '#ff3b30', pending: 'var(--text2)' };

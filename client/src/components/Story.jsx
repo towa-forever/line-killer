@@ -23,15 +23,22 @@ export function StoryBar({ currentUser, friendsList, socket }) { // eslint-disab
 
   const openStory = (userId, items) => setViewing({ userId, items, idx: 0 });
 
+  const [posting, setPosting] = useState(false);
   const postStory = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const form = new FormData();
-    form.append('file', file);
-    const res = await axios.post('/api/upload', form);
-    await axios.post('/api/stories', { type: file.type.startsWith('video') ? 'video' : 'image', url: res.data.url });
-    load();
-    if (fileRef.current) fileRef.current.value = '';
+    if (!file || posting) return;
+    setPosting(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await axios.post('/api/upload', form);
+      await axios.post('/api/stories', { type: file.type.startsWith('video') ? 'video' : 'image', url: res.data.url });
+      load();
+    } catch { /* アップロード失敗は無視 */ }
+    finally {
+      setPosting(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
   };
 
   return (

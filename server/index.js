@@ -313,29 +313,34 @@ app.get('/api/ice-servers', (req, res) => {
 
 // 認証
 app.post('/api/auth/register', async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
-  const uname = username.trim();
-  if (uname.length < 2 || uname.length > 20) return res.status(400).json({ error: 'ユーザー名は2〜20文字にしてください' });
-  if (!/^[a-zA-Z0-9_　-鿿＀-￯一-鿿぀-ゟ゠-ヿ]+$/.test(uname)) return res.status(400).json({ error: 'ユーザー名に使えない文字が含まれています' });
-  if (password.length < 6) return res.status(400).json({ error: 'パスワードは6文字以上にしてください' });
-  const exists = await User.findOne({ username: uname });
-  if (exists) return res.status(400).json({ error: 'このユーザー名は既に使われてます' });
-  const hashed = await bcrypt.hash(password, 10);
-  const id = uuidv4();
-  await User.create({ id, username: uname, password: hashed });
-  const token = jwt.sign({ id, username: uname }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id, username: uname, avatar: null, displayName: uname, bio: '', status: '' } });
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
+    const uname = username.trim();
+    if (uname.length < 2 || uname.length > 20) return res.status(400).json({ error: 'ユーザー名は2〜20文字にしてください' });
+    if (!/^[a-zA-Z0-9_　-鿿＀-￯一-鿿぀-ゟ゠-ヿ]+$/.test(uname)) return res.status(400).json({ error: 'ユーザー名に使えない文字が含まれています' });
+    if (password.length < 6) return res.status(400).json({ error: 'パスワードは6文字以上にしてください' });
+    const exists = await User.findOne({ username: uname });
+    if (exists) return res.status(400).json({ error: 'このユーザー名は既に使われてます' });
+    const hashed = await bcrypt.hash(password, 10);
+    const id = uuidv4();
+    await User.create({ id, username: uname, password: hashed });
+    const token = jwt.sign({ id, username: uname }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id, username: uname, avatar: null, displayName: uname, bio: '', status: '' } });
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const { username, password } = req.body;
-  const user = await User.findOne({ username });
-  if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
-  const ok = await bcrypt.compare(password, user.password);
-  if (!ok) return res.status(401).json({ error: 'パスワードが違います' });
-  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '' } });
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
+    const user = await User.findOne({ username: username.trim() });
+    if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.status(401).json({ error: 'パスワードが違います' });
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '' } });
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
 app.get('/api/auth/me', async (req, res) => {
@@ -533,8 +538,9 @@ app.post('/api/rooms/:roomId/announcement', async (req, res) => {
     const room = await Room.findOne({ id: req.params.roomId });
     if (!room) return res.status(404).json({ error: 'ルームが見つかりません' });
     // 作成者またはメンバーなら設定可能
-    await Room.findOneAndUpdate({ id: req.params.roomId }, { announcement: req.body.text });
-    io.to(req.params.roomId).emit('room:announcement', { roomId: req.params.roomId, text: req.body.text, by: decoded.id });
+    const annText = (req.body.text || '').slice(0, 200); // 200文字まで
+    await Room.findOneAndUpdate({ id: req.params.roomId }, { announcement: annText });
+    io.to(req.params.roomId).emit('room:announcement', { roomId: req.params.roomId, text: annText, by: decoded.id });
     res.json({ ok: true });
   } catch { res.status(400).json({ error: 'エラー' }); }
 });
@@ -1331,8 +1337,13 @@ app.post('/api/game/score', async (req, res) => {
   try {
     const decoded = auth(req);
     const { game, score } = req.body;
+    if (!game || typeof score !== 'number' || score < 0 || score > 999999) {
+      return res.status(400).json({ error: 'スコアが不正です' });
+    }
+    const VALID_GAMES = ['puzzle', 'memory', 'quiz', 'runner', 'match'];
+    if (!VALID_GAMES.includes(game)) return res.status(400).json({ error: '不正なゲーム名' });
     const user = await User.findOne({ id: decoded.id });
-    const coinsEarned = Math.floor(score / 100);  // 100点ごとに1コイン
+    const coinsEarned = Math.min(Math.floor(score / 100), 100); // 1回最大100コインまで  // 100点ごとに1コイン
     const id = 'gs_' + require('uuid').v4();
     await GameScore.create({
       id, user_id: decoded.id,
