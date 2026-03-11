@@ -521,6 +521,8 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
     if (linked) return res.redirect(`${CLIENT_URL}/oauth-callback?linked=github`);
     res.redirect(`${CLIENT_URL}/oauth-callback?token=${token}`);
   });
+} else {
+  app.get('/api/auth/github', (req, res) => res.redirect(`${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/oauth-callback?error=github_not_configured`));
 }
 
 // Microsoft (express-session不要のシンプル実装)

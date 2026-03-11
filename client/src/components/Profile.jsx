@@ -319,18 +319,21 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
           </div>
         )}
         {[
-          { provider:'google',    label:'Google',    icon:'🔴', bg:'#fff', color:'#333', border:'1px solid #ddd' },
+          { provider:'google',    label:'Google',    icon:'🔴', bg:'#ea4335', color:'#fff', border:'none' },
           { provider:'github',    label:'GitHub',    icon:'⚫', bg:'#24292e', color:'#fff', border:'none' },
           { provider:'microsoft', label:'Microsoft', icon:'🔷', bg:'#0078d4', color:'#fff', border:'none' },
         ].map(({ provider, label, icon, bg, color, border }) => {
           const linked = oauthAccounts.some(a => a.provider === provider);
+          const available = availableProviders.includes(provider);
           return (
-            <div key={provider} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+            <div key={provider} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid var(--border)', opacity: (!linked && !available) ? 0.45 : 1 }}>
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                 <span style={{ fontSize:20 }}>{icon}</span>
                 <div>
                   <div style={{ fontSize:14, fontWeight:600 }}>{label}</div>
-                  <div style={{ fontSize:11, color:'var(--text2)' }}>{linked ? '✅ 連携済み' : '未連携'}</div>
+                  <div style={{ fontSize:11, color:'var(--text2)' }}>
+                    {linked ? '✅ 連携済み' : available ? '未連携' : '⚙️ サーバー未設定'}
+                  </div>
                 </div>
               </div>
               {linked ? (
@@ -338,11 +341,13 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
                   style={{ padding:'6px 14px', borderRadius:20, fontSize:12, fontWeight:600, background:'none', border:'1px solid var(--danger)', color:'var(--danger)', cursor:'pointer' }}>
                   連携解除
                 </button>
-              ) : (
+              ) : available ? (
                 <button onClick={() => handleOAuthLink(provider)}
                   style={{ padding:'6px 14px', borderRadius:20, fontSize:12, fontWeight:700, background:bg, color, border, cursor:'pointer' }}>
                   連携する
                 </button>
+              ) : (
+                <span style={{ fontSize:11, color:'var(--text2)', padding:'4px 10px', background:'var(--surface2)', borderRadius:20 }}>未設定</span>
               )}
             </div>
           );
