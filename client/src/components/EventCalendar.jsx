@@ -10,6 +10,7 @@ export default function EventCalendar({ room, currentUser, socket, onClose }) {
   const [endAt, setEndAt] = useState('');
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(new Date());
+  const [createError, setCreateError] = useState('');
 
   useEffect(() => {
     axios.get('/api/rooms/' + room.id + '/events').then(r => { setEvents(r.data); setLoading(false); }).catch(() => setLoading(false));
@@ -23,8 +24,8 @@ export default function EventCalendar({ room, currentUser, socket, onClose }) {
   const create = async () => {
     if (!title.trim() || !startAt) return;
     try { await axios.post('/api/rooms/' + room.id + '/events', { title: title.trim(), description: desc, startAt, endAt }); }
-    catch { alert('イベントの保存に失敗しました'); return; }
-    setTitle(''); setDesc(''); setStartAt(''); setEndAt(''); setView('list');
+    catch { setCreateError('イベントの保存に失敗しました'); return; }
+    setTitle(''); setDesc(''); setStartAt(''); setEndAt(''); setView('list'); setCreateError('');
   };
 
   const attend = async (eventId, status) => {
@@ -97,6 +98,7 @@ export default function EventCalendar({ room, currentUser, socket, onClose }) {
               <input type="datetime-local" className="form-input" value={startAt} onChange={e => setStartAt(e.target.value)} style={{ marginBottom:8 }} />
               <label style={{ fontSize:12, color:'var(--text2)', display:'block', marginBottom:4 }}>終了日時（任意）</label>
               <input type="datetime-local" className="form-input" value={endAt} onChange={e => setEndAt(e.target.value)} style={{ marginBottom:12 }} />
+              {createError && <div style={{ color:'var(--danger)', fontSize:13, marginBottom:8, textAlign:'center' }}>{createError}</div>}
               <button onClick={create} style={{ width:'100%', padding:12, borderRadius:12, background:'var(--primary)', color:'white', border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>作成</button>
             </div>
           ) : loading ? (

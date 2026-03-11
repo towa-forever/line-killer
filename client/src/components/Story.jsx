@@ -67,12 +67,12 @@ export function StoryBar({ currentUser, friendsList, socket }) { // eslint-disab
       </div>
 
       {/* ストーリービューワー */}
-      {viewing && <StoryViewer data={viewing} onClose={() => setViewing(null)} />}
+      {viewing && <StoryViewer data={viewing} onClose={() => setViewing(null)} currentUserId={currentUser.id} onDeleted={() => { load(); setViewing(null); }} />}
     </>
   );
 }
 
-function StoryViewer({ data, onClose }) {
+function StoryViewer({ data, onClose, currentUserId, onDeleted }) {
   const [idx, setIdx] = useState(data.idx || 0);
   const [progress, setProgress] = useState(0);
   const story = data.items[idx];
@@ -114,6 +114,10 @@ function StoryViewer({ data, onClose }) {
         }
         {/* 閉じるボタン */}
         <button onClick={onClose} style={{ position:'absolute', top:10, right:10, background:'rgba(0,0,0,0.5)', border:'none', color:'white', fontSize:22, cursor:'pointer', borderRadius:'50%', width:36, height:36 }}>×</button>
+        {story.user_id === currentUserId && (
+          <button onClick={async (e) => { e.stopPropagation(); try { await require('axios').default.delete('/api/stories/' + story.id); onDeleted?.(); } catch {} }}
+            style={{ position:'absolute', top:10, left:10, background:'rgba(231,76,60,0.8)', border:'none', color:'white', fontSize:12, cursor:'pointer', borderRadius:20, padding:'5px 10px', fontWeight:700 }}>🗑️ 削除</button>
+        )}
         {/* 投稿時刻 */}
         <div style={{ position:'absolute', bottom:16, left:16, color:'white', fontSize:12, opacity:0.8 }}>
           {new Date(story.created_at).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}

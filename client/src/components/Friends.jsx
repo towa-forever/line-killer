@@ -10,6 +10,7 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState(null); // {text, onOk}
 
   const fetchFriends = useCallback(async () => {
     try { const res = await axios.get('/api/friends'); setFriends(res.data); } catch (err) {}
@@ -63,23 +64,34 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
     } catch (err) {}
   };
 
-  const blockUser = async (userId) => {
-    if (!window.confirm('このユーザーをブロックしますか？')) return;
-    try {
-      await axios.post(`/api/users/${userId}/block`);
-      setMessage('ブロックしました'); fetchFriends();
-    } catch (err) {}
+  const blockUser = (userId) => {
+    setConfirmDialog({ text: 'このユーザーをブロックしますか？', onOk: async () => {
+      try { await axios.post(`/api/users/${userId}/block`); setMessage('ブロックしました'); fetchFriends(); } catch {}
+    }});
   };
 
-  const removeFriend = async (friendId) => {
-    if (!window.confirm('友達を削除しますか？')) return;
-    try { await axios.delete(`/api/friends/${friendId}`); fetchFriends(); } catch (err) {}
+  const removeFriend = (friendId) => {
+    setConfirmDialog({ text: '友達を削除しますか？', onOk: async () => {
+      try { await axios.delete(`/api/friends/${friendId}`); fetchFriends(); } catch {}
+    }});
   };
 
   const isFriend = (userId) => friends.some((f) => f._id === userId || f.id === userId);
 
   return (
     <div className="page">
+      {confirmDialog && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={() => setConfirmDialog(null)}>
+          <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:320 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:15, fontWeight:500, color:'var(--text)', marginBottom:20, textAlign:'center' }}>{confirmDialog.text}</div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setConfirmDialog(null)} style={{ flex:1, padding:12, borderRadius:12, background:'var(--surface2)', color:'var(--text)', border:'none', fontSize:15, fontWeight:600, cursor:'pointer' }}>キャンセル</button>
+              <button onClick={() => { confirmDialog.onOk(); setConfirmDialog(null); }} style={{ flex:1, padding:12, borderRadius:12, background:'var(--danger)', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer' }}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="page-header">友達管理</div>
       <div className="friends-tabs">
         {[

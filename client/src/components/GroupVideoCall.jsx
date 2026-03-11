@@ -234,10 +234,10 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
   const count = allStreams.length;
   const cols = count <= 1 ? 1 : count <= 4 ? 2 : 3;
 
-  const miniBtn = (bg, offset, side) => ({
-    position: 'absolute', [side]: offset, top: '50%', transform: 'translateY(-50%)',
+  const miniBtn = (bg) => ({
     width: 32, height: 32, borderRadius: '50%', background: bg,
-    border: 'none', color: 'white', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    border: 'none', color: 'white', fontSize: 14, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   });
 
   const Btn = ({ onClick, bg, size = 48, children, active }) => (
@@ -259,8 +259,8 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
         <div style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>{roomName}</div>
         <div style={{ color: '#aaa', fontSize: 11 }}>{count}人通話中</div>
       </div>
-      <button onClick={onToggleMinimize} style={miniBtn('#444', 'auto', 'auto')} >⤢</button>
-      <button onClick={leaveCall} style={{ ...miniBtn('#e74c3c', 6, 'right'), position: 'relative' }}>✕</button>
+      <button onClick={onToggleMinimize} style={miniBtn('#444')}>⤢</button>
+      <button onClick={leaveCall} style={miniBtn('#e74c3c')}>✕</button>
     </div>
   );
 

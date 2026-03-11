@@ -42,7 +42,7 @@ export default function TaskPanel({ room, currentUser, socket, onClose }) {
       <div style={{ background:'var(--surface)', borderRadius:'20px 20px 0 0', padding:20, width:'100%', maxWidth:480, paddingBottom:'calc(20px + env(safe-area-inset-bottom))', maxHeight:'80dvh', overflow:'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <div style={{ fontWeight:700, fontSize:17 }}>✅ タスク管理</div>
-          <button onClick={onClose} style={{ fontSize:20, color:'var(--text2)' }}>✕</button>
+          <button onClick={onClose} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer', padding:4 }}>✕</button>
         </div>
 
         {/* 追加フォーム */}
@@ -85,7 +85,7 @@ function TaskItem({ task, onToggle, onDelete, currentUser }) {
         </div>
       </div>
       {(task.creator_id === currentUser.id) && (
-        <button onClick={() => onDelete(task)} style={{ color:'var(--text2)', fontSize:16, padding:4, cursor:'pointer' }}>🗑️</button>
+        <button onClick={() => onDelete(task)} style={{ color:'var(--danger)', fontSize:16, padding:4, cursor:'pointer', background:'none', border:'none' }}>🗑️</button>
       )}
     </div>
   );

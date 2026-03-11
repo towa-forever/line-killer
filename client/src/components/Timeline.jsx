@@ -12,6 +12,7 @@ export default function Timeline({ currentUser }) {
   const [commentInputs, setCommentInputs] = useState({});
   const [expandedComments, setExpandedComments] = useState({});
   const [loading, setLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   const fetchPosts = useCallback(async () => {
     try { const res = await axios.get('/api/posts'); setPosts(res.data); }
@@ -64,7 +65,10 @@ export default function Timeline({ currentUser }) {
   };
 
   const handleDeletePost = async (postId) => {
-    if (!window.confirm('投稿を削除しますか？')) return;
+    setConfirmDialog({ text: '投稿を削除しますか？', onOk: async () => {
+      try { await axios.delete('/api/posts/' + postId); } catch (err) {}
+    }});
+    return;
     try { await axios.delete(`/api/posts/${postId}`); setPosts((prev) => prev.filter((p) => p.id !== postId)); }
     catch (err) {}
   };
@@ -86,6 +90,18 @@ export default function Timeline({ currentUser }) {
 
   return (
     <div className="page">
+      {confirmDialog && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={() => setConfirmDialog(null)}>
+          <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:320 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:15, color:'var(--text)', marginBottom:20, textAlign:'center' }}>{confirmDialog.text}</div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setConfirmDialog(null)} style={{ flex:1, padding:12, borderRadius:12, background:'var(--surface2)', color:'var(--text)', border:'none', fontSize:15, cursor:'pointer' }}>キャンセル</button>
+              <button onClick={() => { confirmDialog.onOk(); setConfirmDialog(null); }} style={{ flex:1, padding:12, borderRadius:12, background:'var(--danger)', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer' }}>削除</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="page-header">タイムライン</div>
       <div className="card" style={{ margin: '10px' }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -130,7 +146,7 @@ export default function Timeline({ currentUser }) {
                   <span className="tl-author">{authorName}</span>
                   <span className="tl-time">{timeAgo(post.created_at)}</span>
                 </div>
-                {isOwn && <button className="icon-btn" onClick={() => handleDeletePost(post.id)} style={{ fontSize: 14 }}>🗑️</button>}
+                {isOwn && <button onClick={() => handleDeletePost(post.id)} style={{ fontSize: 16, background:'none', border:'none', cursor:'pointer', color:'var(--text2)', padding:4, borderRadius:8 }}>🗑️</button>}
               </div>
               {post.content && <p className="tl-content">{post.content}</p>}
               {post.image && <img src={`${SERVER_URL}${post.image}`} alt="post" className="tl-image" />}
