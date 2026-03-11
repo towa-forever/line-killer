@@ -45,6 +45,13 @@ function AuthScreen({ onLogin }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [oauthProviders, setOauthProviders] = useState([]);
+
+  useEffect(() => {
+    axios.get('/api/auth/providers')
+      .then(res => setOauthProviders(res.data.providers || []))
+      .catch(() => {});
+  }, []);
   const [availableProviders, setAvailableProviders] = useState(null); // null=未確認
 
   // どのOAuthプロバイダーが使えるか確認
