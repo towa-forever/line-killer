@@ -853,6 +853,19 @@ app.put('/api/rooms/:roomId/note/mine', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
+// 全ルームの画像一括取得（アルバム用）
+app.get('/api/album', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const rooms = await Room.find({ members: decoded.id });
+    const roomIds = rooms.map(r => r.id);
+    const roomMap = Object.fromEntries(rooms.map(r => [r.id, r.name || 'ルーム']));
+    const imgs = await Message.find({ room_id: { $in: roomIds }, type: { $in: ['image', 'file'] }, deleted: false })
+      .sort({ created_at: -1 }).limit(500);
+    res.json(imgs.map(img => ({ ...img.toObject(), roomName: roomMap[img.room_id] || 'ルーム' })));
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
 app.get('/api/rooms/:roomId/album', async (req, res) => {
   try {
     const decoded = auth(req);

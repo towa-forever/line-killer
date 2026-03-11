@@ -889,7 +889,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   <button className="btn btn-secondary" onClick={() => setShowSchedule(false)}>キャンセル</button>
                   <button className="btn btn-primary" onClick={() => {
                     if (!scheduleText.trim() || !scheduleAt) return;
-                    axios.post('/api/rooms/' + selectedRoom.id + '/schedule', { content: scheduleText.trim(), sendAt: scheduleAt });
+                    axios.post('/api/rooms/' + selectedRoom.id + '/schedule', { content: scheduleText.trim(), sendAt: scheduleAt })
+                      .catch(e => console.error(e));
                     setShowSchedule(false); setScheduleText(''); setScheduleAt('');
                   }}>予約する</button>
                 </div>
@@ -924,7 +925,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   <button className="btn btn-primary" onClick={() => {
                     const opts = pollOptions.filter(o => o.trim());
                     if (!pollQuestion.trim() || opts.length < 2) return;
-                    axios.post('/api/rooms/' + selectedRoom.id + '/polls', { question: pollQuestion.trim(), options: opts, multi: pollMulti });
+                    axios.post('/api/rooms/' + selectedRoom.id + '/polls', { question: pollQuestion.trim(), options: opts, multi: pollMulti })
+                      .catch(e => console.error(e));
                     setShowPollCreator(false); setPollQuestion(''); setPollOptions(['', '']); setPollMulti(false);
                   }}>作成</button>
                 </div>
@@ -1048,9 +1050,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   placeholder="グループ全員に伝えたいことを書いてな" style={{ minHeight:100, resize:'vertical' }} autoFocus />
                 <div className="modal-actions">
                   <button className="btn btn-secondary" onClick={() => setShowAnnounce(false)}>キャンセル</button>
-                  <button className="btn btn-primary" onClick={() => {
-                    axios.post('/api/rooms/' + selectedRoom.id + '/announcement', { text: announceText });
-                    setShowAnnounce(false);
+                  <button className="btn btn-primary" onClick={async () => {
+                    if (!announceText.trim()) return;
+                    try { await axios.post('/api/rooms/' + selectedRoom.id + '/announcement', { text: announceText }); }
+                    catch (e) { console.error(e); }
+                    setShowAnnounce(false); setAnnounceText('');
                   }}>送信</button>
                 </div>
               </div>

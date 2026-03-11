@@ -12,16 +12,16 @@ export default function Album({ currentUser }) {
 
   const fetchData = useCallback(async () => {
     try {
-      const roomRes = await axios.get('/api/rooms');
+      const [roomRes, photoRes] = await Promise.all([
+        axios.get('/api/rooms'),
+        axios.get('/api/album'),
+      ]);
       setRooms(roomRes.data);
-      // 全ルームの写真を取得
-      const allPhotos = [];
-      for (const room of roomRes.data) {
-        try {
-          const photoRes = await axios.get(`/api/rooms/${room._id || room.id}/album`);
-          photoRes.data.forEach(p => allPhotos.push({ ...p, roomId: room._id || room.id, roomName: room.name }));
-        } catch (e) {}
-      }
+      const allPhotos = photoRes.data.map(p => ({
+        ...p,
+        roomId: p.room_id,
+        roomName: p.roomName || roomRes.data.find(r => (r._id || r.id) === p.room_id)?.name || 'ルーム'
+      }));
       setPhotos(allPhotos);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
