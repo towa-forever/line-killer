@@ -64,13 +64,13 @@ export default function Timeline({ currentUser }) {
     } catch (err) {}
   };
 
-  const handleDeletePost = async (postId) => {
+  const handleDeletePost = (postId) => {
     setConfirmDialog({ text: '投稿を削除しますか？', onOk: async () => {
-      try { await axios.delete('/api/posts/' + postId); } catch (err) {}
+      try {
+        await axios.delete('/api/posts/' + postId);
+        setPosts((prev) => prev.filter((p) => p.id !== postId));
+      } catch (err) { console.error(err); }
     }});
-    return;
-    try { await axios.delete(`/api/posts/${postId}`); setPosts((prev) => prev.filter((p) => p.id !== postId)); }
-    catch (err) {}
   };
 
   const isLiked = (post) => post.likes?.some((l) => l === currentUser._id || l === currentUser.id);
