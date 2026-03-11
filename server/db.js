@@ -19,6 +19,12 @@ const UserSchema = new mongoose.Schema({
   blocked_users: { type: [String], default: [] },
   muted_rooms: { type: [String], default: [] },
   bookmarked_messages: { type: [String], default: [] },
+  oauth_accounts: { type: [{
+    provider: String,   // 'google' | 'github' | 'microsoft'
+    provider_id: String,
+    email: String,
+    connected_at: { type: Date, default: Date.now }
+  }], default: [] },
   created_at: { type: Date, default: Date.now },
 });
 

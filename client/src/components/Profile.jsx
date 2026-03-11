@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 
@@ -18,11 +18,83 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const fileInputRef = useRef(null);
 
+  // パスワード変更
+  const [showPwChange, setShowPwChange] = useState(false);
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [pwMessage, setPwMessage] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+
+  // OAuth連携
+  const [oauthAccounts, setOauthAccounts] = useState([]);
+  const [oauthMessage, setOauthMessage] = useState('');
+
+  useEffect(() => {
+    axios.get('/api/auth/oauth-accounts')
+      .then(res => setOauthAccounts(res.data))
+      .catch(() => {});
+  }, []);
+
+  // OAuth連携状況取得
+  React.useEffect(() => {
+    axios.get('/api/auth/oauth-accounts')
+      .then(r => setOauthAccounts(r.data))
+      .catch(() => {});
+  }, []);
+
+  const handleChangePassword = async () => {
+    if (!newPw || !confirmPw) { setPwMessage('新しいパスワードを入力してください'); return; }
+    if (newPw !== confirmPw) { setPwMessage('新しいパスワードが一致しません'); return; }
+    if (newPw.length < 6) { setPwMessage('6文字以上にしてください'); return; }
+    setPwSaving(true); setPwMessage('');
+    try {
+      await axios.post('/api/auth/change-password', { currentPassword: currentPw, newPassword: newPw });
+      setPwMessage('✅ パスワードを変更しました！');
+      setCurrentPw(''); setNewPw(''); setConfirmPw('');
+      setTimeout(() => { setShowPwChange(false); setPwMessage(''); }, 2000);
+    } catch (err) {
+      setPwMessage('❌ ' + (err.response?.data?.error || '変更に失敗しました'));
+    } finally { setPwSaving(false); }
+  };
+
+  const handleOAuthLink = (provider) => {
+    const token = localStorage.getItem('token') || '';
+    const serverUrl = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+    window.location.href = `${serverUrl}/api/auth/${provider}?link_token=${encodeURIComponent(token)}`;
+  };
+
+  const handleOAuthUnlink = async (provider) => {
+    try {
+      await axios.delete(`/api/auth/oauth-accounts/${provider}`);
+      setOauthAccounts(prev => prev.filter(a => a.provider !== provider));
+      setOauthMessage(`${provider}の連携を解除しました`);
+      setTimeout(() => setOauthMessage(''), 3000);
+    } catch (err) {
+      setOauthMessage('❌ ' + (err.response?.data?.error || '解除に失敗しました'));
+    }
+  };
+
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const handlePasswordChange = async () => {
+    if (!newPw || !confirmPw) { setPwMessage('新しいパスワードを入力してください'); return; }
+    if (newPw !== confirmPw) { setPwMessage('新しいパスワードが一致しません'); return; }
+    if (newPw.length < 6) { setPwMessage('6文字以上にしてください'); return; }
+    setPwSaving(true); setPwMessage('');
+    try {
+      await axios.post('/api/auth/change-password', { currentPassword: currentPw, newPassword: newPw });
+      setPwMessage('✅ パスワードを変更しました！');
+      setCurrentPw(''); setNewPw(''); setConfirmPw('');
+      setTimeout(() => { setShowPwChange(false); setPwMessage(''); }, 2000);
+    } catch(e) {
+      setPwMessage('❌ ' + (e.response?.data?.error || '変更に失敗しました'));
+    } finally { setPwSaving(false); }
   };
 
   const saveSettings = async (updates) => {
@@ -184,6 +256,79 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
                 }}>{s.label}</button>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* パスワード変更 */}
+      <div className="card" style={{ margin: 10 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: showPwChange ? 14 : 0 }}>
+          <div style={{ fontSize:14, fontWeight:700 }}>🔑 パスワード変更</div>
+          <button onClick={() => { setShowPwChange(f => !f); setPwMessage(''); }}
+            style={{ fontSize:13, color:'var(--primary)', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>
+            {showPwChange ? '閉じる' : '変更する'}
+          </button>
+        </div>
+        {showPwChange && (
+          <div>
+            <input type="password" className="form-input" value={currentPw} onChange={e => setCurrentPw(e.target.value)}
+              placeholder="現在のパスワード（OAuth専用の場合は空白でOK）" style={{ marginBottom:8 }} />
+            <input type="password" className="form-input" value={newPw} onChange={e => setNewPw(e.target.value)}
+              placeholder="新しいパスワード（6文字以上）" style={{ marginBottom:8 }} />
+            <input type="password" className="form-input" value={confirmPw} onChange={e => setConfirmPw(e.target.value)}
+              placeholder="新しいパスワード（確認）" style={{ marginBottom:10 }} />
+            {pwMessage && (
+              <div style={{ fontSize:13, color: pwMessage.startsWith('✅') ? 'var(--primary)' : 'var(--danger)', marginBottom:10, textAlign:'center' }}>
+                {pwMessage}
+              </div>
+            )}
+            <button onClick={handleChangePassword} disabled={pwSaving}
+              style={{ width:'100%', padding:11, borderRadius:12, background:'var(--primary)', color:'white', border:'none', fontWeight:700, fontSize:14, cursor:pwSaving ? 'not-allowed' : 'pointer' }}>
+              {pwSaving ? '変更中...' : 'パスワードを変更'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 外部アカウント連携 */}
+      <div className="card" style={{ margin: 10 }}>
+        <div className="profile-section-title">🔗 外部アカウント連携</div>
+        {oauthMessage && (
+          <div style={{ fontSize:13, color: oauthMessage.startsWith('❌') ? 'var(--danger)' : 'var(--primary)', marginBottom:12, textAlign:'center' }}>
+            {oauthMessage}
+          </div>
+        )}
+        {[
+          { provider:'google',    label:'Google',    icon:'🔴', bg:'#fff', color:'#333', border:'1px solid #ddd' },
+          { provider:'github',    label:'GitHub',    icon:'⚫', bg:'#24292e', color:'#fff', border:'none' },
+          { provider:'microsoft', label:'Microsoft', icon:'🔷', bg:'#0078d4', color:'#fff', border:'none' },
+        ].map(({ provider, label, icon, bg, color, border }) => {
+          const linked = oauthAccounts.some(a => a.provider === provider);
+          return (
+            <div key={provider} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ fontSize:20 }}>{icon}</span>
+                <div>
+                  <div style={{ fontSize:14, fontWeight:600 }}>{label}</div>
+                  <div style={{ fontSize:11, color:'var(--text2)' }}>{linked ? '✅ 連携済み' : '未連携'}</div>
+                </div>
+              </div>
+              {linked ? (
+                <button onClick={() => handleOAuthUnlink(provider)}
+                  style={{ padding:'6px 14px', borderRadius:20, fontSize:12, fontWeight:600, background:'none', border:'1px solid var(--danger)', color:'var(--danger)', cursor:'pointer' }}>
+                  連携解除
+                </button>
+              ) : (
+                <button onClick={() => handleOAuthLink(provider)}
+                  style={{ padding:'6px 14px', borderRadius:20, fontSize:12, fontWeight:700, background:bg, color, border, cursor:'pointer' }}>
+                  連携する
+                </button>
+              )}
+            </div>
+          );
+        })}
+        <div style={{ fontSize:11, color:'var(--text2)', marginTop:10, lineHeight:1.6 }}>
+          連携するとそのアカウントでもログインできます。<br/>
+          ※ パスワードなし・連携1つの場合は解除できません。
         </div>
       </div>
 

@@ -33,6 +33,9 @@ const Note = lazy(() => import('./components/Note'));
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 axios.defaults.baseURL = SERVER_URL;
 // アプリ起動時に即座にトークンをセット
+// OAuthコールバックからのトークンをチェック
+const _oauthToken = localStorage.getItem('lk_token');
+if (_oauthToken) { localStorage.setItem('token', _oauthToken); localStorage.removeItem('lk_token'); }
 const _token = localStorage.getItem('token');
 if (_token) axios.defaults.headers.common['Authorization'] = `Bearer ${_token}`;
 
@@ -76,6 +79,25 @@ function AuthScreen({ onLogin }) {
         <button className="auth-toggle" onClick={() => setIsLogin(!isLogin)}>
           {isLogin ? 'アカウント作成' : 'ログインへ戻る'}
         </button>
+
+        {/* OAuthログイン */}
+        <div style={{ margin:'16px 0 0', borderTop:'1px solid rgba(255,255,255,0.15)', paddingTop:16 }}>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', textAlign:'center', marginBottom:12 }}>または外部アカウントでログイン</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {[
+              { provider:'google',    label:'Googleでログイン',    icon:'🔴', bg:'#fff', color:'#333', border:'1px solid #ddd' },
+              { provider:'github',    label:'GitHubでログイン',    icon:'⚫', bg:'#24292e', color:'#fff', border:'none' },
+              { provider:'microsoft', label:'Microsoftでログイン', icon:'🔷', bg:'#0078d4', color:'#fff', border:'none' },
+            ].map(({ provider, label, icon, bg, color, border }) => (
+              <button key={provider} onClick={() => {
+                const serverUrl = (window.REACT_APP_SERVER_URL || process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com');
+                window.location.href = `${serverUrl}/api/auth/${provider}`;
+              }} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', borderRadius:10, background:bg, color, border, fontSize:14, cursor:'pointer', fontWeight:600 }}>
+                <span style={{ fontSize:18 }}>{icon}</span>{label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

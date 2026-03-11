@@ -343,6 +343,194 @@ app.post('/api/auth/login', async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
+
+// ===== パスワード変更 =====
+app.post('/api/auth/change-password', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: '現在のパスワードと新しいパスワードを入力してください' });
+    if (newPassword.length < 6) return res.status(400).json({ error: '新しいパスワードは6文字以上にしてください' });
+    const user = await User.findOne({ id: decoded.id });
+    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    // パスワードなし（OAuth専用アカウント）の場合は currentPassword チェックをスキップ
+    if (user.password && user.password !== 'oauth_only') {
+      const ok = await bcrypt.compare(currentPassword, user.password);
+      if (!ok) return res.status(401).json({ error: '現在のパスワードが違います' });
+    }
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await User.findOneAndUpdate({ id: decoded.id }, { password: hashed });
+    res.json({ message: 'パスワードを変更しました' });
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+// ===== OAuth連携状況取得 =====
+app.get('/api/auth/oauth-accounts', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id });
+    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    res.json(user.oauth_accounts || []);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// ===== OAuth連携解除 =====
+app.delete('/api/auth/oauth-accounts/:provider', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { provider } = req.params;
+    const user = await User.findOne({ id: decoded.id });
+    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    // パスワードなしかつこのプロバイダーが最後の場合は削除不可
+    const hasPassword = user.password && user.password !== 'oauth_only';
+    const remainingOauth = (user.oauth_accounts || []).filter(a => a.provider !== provider);
+    if (!hasPassword && remainingOauth.length === 0) {
+      return res.status(400).json({ error: 'パスワードを設定するか、他の連携を残してから削除してください' });
+    }
+    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { oauth_accounts: { provider } } });
+    res.json({ message: `${provider}の連携を解除しました` });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// ===== OAuth: Google =====
+const SESSION_SECRET = process.env.SESSION_SECRET || 'lk_session_secret_2024';
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const GitHubStrategy = require('passport-github2').Strategy;
+const session = require('express-session');
+
+app.use(session({ secret: SESSION_SECRET, resave: false, saveUninitialized: false, cookie: { secure: false, maxAge: 10 * 60 * 1000 } }));
+app.use(passport.initialize());
+app.use(passport.session());
+passport.serializeUser((u, done) => done(null, u));
+passport.deserializeUser((u, done) => done(null, u));
+
+const CLIENT_URL = process.env.CLIENT_URL || 'https://line-killer.onrender.com';
+const SERVER_URL = process.env.SERVER_URL || 'https://line-killer-server.onrender.com';
+
+// OAuth共通ハンドラ
+async function handleOAuthCallback(provider, profileId, email, displayName, avatarUrl, oauthToken, done) {
+  try {
+    // 既存の連携アカウントを探す
+    let user = await User.findOne({ 'oauth_accounts.provider': provider, 'oauth_accounts.provider_id': profileId });
+    if (user) {
+      const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+      return done(null, { token, userId: user.id, isNew: false });
+    }
+    // JWTトークン（連携モード）がある場合は既存アカウントに連携
+    if (oauthToken) {
+      try {
+        const decoded = jwt.verify(oauthToken, JWT_SECRET);
+        await User.findOneAndUpdate({ id: decoded.id }, {
+          $addToSet: { oauth_accounts: { provider, provider_id: profileId, email: email || '' } }
+        });
+        const token = jwt.sign({ id: decoded.id, username: decoded.username }, JWT_SECRET, { expiresIn: '30d' });
+        return done(null, { token, userId: decoded.id, isNew: false, linked: true });
+      } catch {}
+    }
+    // メールで既存ユーザー検索
+    if (email) {
+      user = await User.findOne({ username: email.split('@')[0] });
+    }
+    if (!user) {
+      // 新規アカウント作成
+      const { v4: uuidv4 } = require('uuid');
+      const baseUsername = (email ? email.split('@')[0] : displayName || 'user').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20) || 'user';
+      let username = baseUsername;
+      let counter = 1;
+      while (await User.findOne({ username })) { username = baseUsername + counter++; }
+      const id = uuidv4();
+      user = await User.create({
+        id, username,
+        password: 'oauth_only',
+        avatar: avatarUrl || '',
+        display_name: displayName || username,
+        oauth_accounts: [{ provider, provider_id: profileId, email: email || '' }]
+      });
+    } else {
+      await User.findOneAndUpdate({ id: user.id }, {
+        $addToSet: { oauth_accounts: { provider, provider_id: profileId, email: email || '' } }
+      });
+    }
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+    done(null, { token, userId: user.id, isNew: true });
+  } catch(e) { done(e); }
+}
+
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: `${SERVER_URL}/api/auth/google/callback`,
+    passReqToCallback: true,
+  }, async (req, accessToken, refreshToken, profile, done) => {
+    const email = profile.emails?.[0]?.value;
+    const avatar = profile.photos?.[0]?.value;
+    const oauthToken = req.query.state ? Buffer.from(req.query.state, 'base64').toString() : null;
+    await handleOAuthCallback('google', profile.id, email, profile.displayName, avatar, oauthToken, done);
+  }));
+
+  app.get('/api/auth/google', (req, res, next) => {
+    const state = req.query.link_token ? Buffer.from(req.query.link_token).toString('base64') : undefined;
+    passport.authenticate('google', { scope: ['profile', 'email'], state })(req, res, next);
+  });
+  app.get('/api/auth/google/callback', passport.authenticate('google', { failureRedirect: `${CLIENT_URL}/login?error=google` }), (req, res) => {
+    const { token, linked } = req.user;
+    if (linked) return res.redirect(`${CLIENT_URL}/oauth-callback?linked=google`);
+    res.redirect(`${CLIENT_URL}/oauth-callback?token=${token}`);
+  });
+}
+
+if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+  passport.use(new GitHubStrategy({
+    clientID: process.env.GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    callbackURL: `${SERVER_URL}/api/auth/github/callback`,
+    passReqToCallback: true,
+  }, async (req, accessToken, refreshToken, profile, done) => {
+    const email = profile.emails?.[0]?.value;
+    const avatar = profile.photos?.[0]?.value;
+    const oauthToken = req.query.state ? Buffer.from(req.query.state, 'base64').toString() : null;
+    await handleOAuthCallback('github', profile.id, email, profile.displayName || profile.username, avatar, oauthToken, done);
+  }));
+
+  app.get('/api/auth/github', (req, res, next) => {
+    const state = req.query.link_token ? Buffer.from(req.query.link_token).toString('base64') : undefined;
+    passport.authenticate('github', { scope: ['user:email'], state })(req, res, next);
+  });
+  app.get('/api/auth/github/callback', passport.authenticate('github', { failureRedirect: `${CLIENT_URL}/login?error=github` }), (req, res) => {
+    const { token, linked } = req.user;
+    if (linked) return res.redirect(`${CLIENT_URL}/oauth-callback?linked=github`);
+    res.redirect(`${CLIENT_URL}/oauth-callback?token=${token}`);
+  });
+}
+
+// Microsoft (express-session不要のシンプル実装)
+if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
+  const MicrosoftStrategy = require('passport-microsoft').Strategy;
+  passport.use(new MicrosoftStrategy({
+    clientID: process.env.MICROSOFT_CLIENT_ID,
+    clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
+    callbackURL: `${SERVER_URL}/api/auth/microsoft/callback`,
+    scope: ['user.read'],
+    passReqToCallback: true,
+  }, async (req, accessToken, refreshToken, profile, done) => {
+    const email = profile.emails?.[0]?.value;
+    const oauthToken = req.query.state ? Buffer.from(req.query.state, 'base64').toString() : null;
+    await handleOAuthCallback('microsoft', profile.id, email, profile.displayName, null, oauthToken, done);
+  }));
+
+  app.get('/api/auth/microsoft', (req, res, next) => {
+    const state = req.query.link_token ? Buffer.from(req.query.link_token).toString('base64') : undefined;
+    passport.authenticate('microsoft', { state })(req, res, next);
+  });
+  app.get('/api/auth/microsoft/callback', passport.authenticate('microsoft', { failureRedirect: `${CLIENT_URL}/login?error=microsoft` }), (req, res) => {
+    const { token, linked } = req.user;
+    if (linked) return res.redirect(`${CLIENT_URL}/oauth-callback?linked=microsoft`);
+    res.redirect(`${CLIENT_URL}/oauth-callback?token=${token}`);
+  });
+}
+
 app.get('/api/auth/me', async (req, res) => {
   try {
     const decoded = auth(req);
