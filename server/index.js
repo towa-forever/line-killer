@@ -457,6 +457,22 @@ async function handleOAuthCallback(provider, profileId, email, displayName, avat
   } catch(e) { done(e); }
 }
 
+// 利用可能なOAuthプロバイダーをクライアントに伝えるエンドポイント
+app.get('/api/auth/providers', (req, res) => {
+  const providers = [];
+  if (process.env.GOOGLE_CLIENT_ID)    providers.push('google');
+  if (process.env.GITHUB_CLIENT_ID)    providers.push('github');
+  if (process.env.MICROSOFT_CLIENT_ID) providers.push('microsoft');
+  res.json({ providers });
+});
+
+// 未設定プロバイダーへのフォールバック（404の代わりにわかりやすいエラー）
+['google', 'github', 'microsoft'].forEach(p => {
+  app.get(`/api/auth/${p}/unavailable`, (req, res) => {
+    res.redirect(`${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/oauth-callback?error=${p}_not_configured`);
+  });
+});
+
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
@@ -479,6 +495,8 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     if (linked) return res.redirect(`${CLIENT_URL}/oauth-callback?linked=google`);
     res.redirect(`${CLIENT_URL}/oauth-callback?token=${token}`);
   });
+} else {
+  app.get('/api/auth/google', (req, res) => res.redirect(`${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/oauth-callback?error=google_not_configured`));
 }
 
 if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
@@ -529,6 +547,8 @@ if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
     if (linked) return res.redirect(`${CLIENT_URL}/oauth-callback?linked=microsoft`);
     res.redirect(`${CLIENT_URL}/oauth-callback?token=${token}`);
   });
+} else {
+  app.get('/api/auth/microsoft', (req, res) => res.redirect(`${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/oauth-callback?error=microsoft_not_configured`));
 }
 
 app.get('/api/auth/me', async (req, res) => {

@@ -45,6 +45,24 @@ function AuthScreen({ onLogin }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [availableProviders, setAvailableProviders] = useState(null); // null=未確認
+
+  // どのOAuthプロバイダーが使えるか確認
+  useEffect(() => {
+    axios.get('/api/auth/providers')
+      .then(res => setAvailableProviders(res.data.providers || []))
+      .catch(() => setAvailableProviders([]));
+  }, []);
+
+  // OAuthコールバックのエラー処理（?error=xxx）
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get('error');
+    if (err === 'google_not_configured') setError('Googleログインはまだ設定されていません。管理者にお問い合わせください。');
+    else if (err === 'github_not_configured') setError('GitHubログインはまだ設定されていません。');
+    else if (err === 'microsoft_not_configured') setError('Microsoftログインはまだ設定されていません。');
+    else if (err) setError(`${err}でのログインに失敗しました`);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -80,24 +98,26 @@ function AuthScreen({ onLogin }) {
           {isLogin ? 'アカウント作成' : 'ログインへ戻る'}
         </button>
 
-        {/* OAuthログイン */}
-        <div style={{ margin:'16px 0 0', borderTop:'1px solid rgba(255,255,255,0.15)', paddingTop:16 }}>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', textAlign:'center', marginBottom:12 }}>または外部アカウントでログイン</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {[
-              { provider:'google',    label:'Googleでログイン',    icon:'🔴', bg:'#fff', color:'#333', border:'1px solid #ddd' },
-              { provider:'github',    label:'GitHubでログイン',    icon:'⚫', bg:'#24292e', color:'#fff', border:'none' },
-              { provider:'microsoft', label:'Microsoftでログイン', icon:'🔷', bg:'#0078d4', color:'#fff', border:'none' },
-            ].map(({ provider, label, icon, bg, color, border }) => (
-              <button key={provider} onClick={() => {
-                const serverUrl = (window.REACT_APP_SERVER_URL || process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com');
-                window.location.href = `${serverUrl}/api/auth/${provider}`;
-              }} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', borderRadius:10, background:bg, color, border, fontSize:14, cursor:'pointer', fontWeight:600 }}>
-                <span style={{ fontSize:18 }}>{icon}</span>{label}
-              </button>
-            ))}
+        {/* OAuthログイン - 使えるプロバイダーだけ表示 */}
+        {availableProviders !== null && availableProviders.length > 0 && (
+          <div style={{ margin:'16px 0 0', borderTop:'1px solid rgba(255,255,255,0.15)', paddingTop:16 }}>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', textAlign:'center', marginBottom:12 }}>または外部アカウントでログイン</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {[
+                { provider:'google',    label:'Googleでログイン',    icon:'🔴', bg:'#fff', color:'#333', border:'1px solid #ddd' },
+                { provider:'github',    label:'GitHubでログイン',    icon:'⚫', bg:'#24292e', color:'#fff', border:'none' },
+                { provider:'microsoft', label:'Microsoftでログイン', icon:'🔷', bg:'#0078d4', color:'#fff', border:'none' },
+              ].filter(p => availableProviders.includes(p.provider)).map(({ provider, label, icon, bg, color, border }) => (
+                <button key={provider} onClick={() => {
+                  const serverUrl = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+                  window.location.href = `${serverUrl}/api/auth/${provider}`;
+                }} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', borderRadius:10, background:bg, color, border, fontSize:14, cursor:'pointer', fontWeight:600 }}>
+                  <span style={{ fontSize:18 }}>{icon}</span>{label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

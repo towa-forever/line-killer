@@ -30,10 +30,15 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
   const [oauthAccounts, setOauthAccounts] = useState([]);
   const [oauthMessage, setOauthMessage] = useState('');
 
+  const [availableProviders, setAvailableProviders] = useState([]);
+
   useEffect(() => {
     axios.get('/api/auth/oauth-accounts')
       .then(res => setOauthAccounts(res.data))
       .catch(() => {});
+    axios.get('/api/auth/providers')
+      .then(res => setAvailableProviders(res.data.providers || []))
+      .catch(() => setAvailableProviders([]));
   }, []);
 
   // OAuth連携状況取得
@@ -81,6 +86,22 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
   };
+
+  // OAuthコールバック後（linked=xxx）のメッセージ処理
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const linked = params.get('linked');
+    const oauthErr = params.get('error');
+    if (linked) {
+      setOauthMessage(`✅ ${linked}との連携が完了しました！`);
+      // URLパラメータを消す
+      window.history.replaceState({}, '', '/');
+      axios.get('/api/auth/oauth-accounts').then(res => setOauthAccounts(res.data)).catch(() => {});
+    } else if (oauthErr?.endsWith('_not_configured')) {
+      const p = oauthErr.replace('_not_configured', '');
+      setOauthMessage(`❌ ${p}はまだ設定されていません`);
+    }
+  }, []);
 
   const handlePasswordChange = async () => {
     if (!newPw || !confirmPw) { setPwMessage('新しいパスワードを入力してください'); return; }
