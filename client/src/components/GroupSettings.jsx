@@ -5,6 +5,7 @@ export default function GroupSettings({ room, currentUser, onClose, onUpdate }) 
   const [name, setName] = useState(room?.name || '');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   // GroupSettings.jsx は現在 App.js から呼ばれていないが、
   // 将来的に使う可能性があるので正しいAPIエンドポイントに修正
@@ -21,25 +22,40 @@ export default function GroupSettings({ room, currentUser, onClose, onUpdate }) 
     } finally { setSaving(false); }
   };
 
-  const handleKick = async (userId) => {
-    if (!window.confirm('このメンバーを退出させますか？')) return;
-    try {
-      await axios.delete(`/api/rooms/${roomId}/members/${userId}`);
-      onUpdate?.({ ...room, members: room.members.filter(m => (m._id || m) !== userId) });
-    } catch (err) { console.error(err); }
+  const handleKick = (userId) => {
+    setConfirmDialog({ text: 'このメンバーを退出させますか？', onOk: async () => {
+      try {
+        await axios.delete(`/api/rooms/${roomId}/members/${userId}`);
+        onUpdate?.({ ...room, members: room.members.filter(m => (m._id || m) !== userId) });
+      } catch (err) { console.error(err); }
+    }});
   };
 
-  const handleLeave = async () => {
-    if (!window.confirm('このグループを退出しますか？')) return;
-    try {
-      await axios.delete(`/api/rooms/${roomId}/members/${currentUser.id}`);
-      onClose?.();
-    } catch (err) { console.error(err); }
+  const handleLeave = () => {
+    setConfirmDialog({ text: 'このグループを退出しますか？', onOk: async () => {
+      try {
+        await axios.delete(`/api/rooms/${roomId}/members/${currentUser.id}`);
+        onClose?.();
+      } catch (err) { console.error(err); }
+    }});
   };
 
   const isAdmin = room?.creator_id === currentUser.id;
 
   return (
+    <>
+      {confirmDialog && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={() => setConfirmDialog(null)}>
+          <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:320 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:15, fontWeight:500, color:'var(--text)', marginBottom:20, textAlign:'center' }}>{confirmDialog.text}</div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setConfirmDialog(null)} style={{ flex:1, padding:12, borderRadius:12, background:'var(--surface2)', color:'var(--text)', border:'none', fontSize:15, cursor:'pointer' }}>キャンセル</button>
+              <button onClick={() => { confirmDialog.onOk(); setConfirmDialog(null); }} style={{ flex:1, padding:12, borderRadius:12, background:'var(--danger)', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer' }}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-title">⚙️ グループ設定</div>
@@ -95,5 +111,6 @@ export default function GroupSettings({ room, currentUser, onClose, onUpdate }) 
         .btn-danger-s { background: #e74c3c; color: white; border-color: #e74c3c; }
       `}</style>
     </div>
+    </>
   );
 }

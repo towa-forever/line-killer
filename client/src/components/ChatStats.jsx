@@ -15,7 +15,7 @@ export default function ChatStats({ roomId, roomName, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-sheet" onClick={e => e.stopPropagation()} style={{ maxHeight:'85vh', overflow:'auto' }}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'85dvh', overflow:'auto', borderRadius:'20px 20px 0 0' }}>
         <div style={{ display:'flex', alignItems:'center', padding:'14px 16px 0', gap:10 }}>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:'var(--text)' }}>←</button>
           <h2 style={{ fontSize:17, fontWeight:700, margin:0 }}>📊 {roomName}の統計</h2>

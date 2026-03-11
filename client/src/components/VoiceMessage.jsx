@@ -7,6 +7,7 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
   const [duration, setDuration] = useState(0);
   const [audioUrl, setAudioUrl] = useState(null);
   const [audioBlob, setAudioBlob] = useState(null);
+  const [error, setError] = useState('');
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
@@ -55,7 +56,7 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
         return d + 1;
       }), 1000);
       drawWave();
-    } catch(e) { alert('マイクのアクセスが必要やで'); }
+    } catch(e) { setError('マイクのアクセスが必要やで'); }
   };
 
   const drawWave = () => {
@@ -96,13 +97,14 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
         type: 'voice', fileData: { url: res.data.url, name: 'voice', duration },
       });
       onSent?.();
-    } catch(e) { setState('preview'); alert('送信に失敗したで'); }
+    } catch(e) { setState('preview'); setError('送信に失敗したで'); }
   };
 
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 
   return (
     <div style={{ background:'var(--surface)', border:'1.5px solid var(--primary)', borderRadius:20, padding:'12px 16px', margin:'4px 0', display:'flex', flexDirection:'column', gap:10 }}>
+      {error && <div style={{ color:'var(--danger)', fontSize:12, textAlign:'center' }} onClick={() => setError('')}>{error} ✕</div>}
       {state === 'idle' && (
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <span style={{ fontSize:13, color:'var(--text2)' }}>🎤 音声メッセージを録音</span>

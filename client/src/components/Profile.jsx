@@ -15,6 +15,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
   const [message, setMessage] = useState('');
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [avatarFile, setAvatarFile] = useState(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleAvatarChange = (e) => {
@@ -55,6 +56,19 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
 
   return (
     <div className="page">
+      {showLogoutConfirm && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={() => setShowLogoutConfirm(false)}>
+          <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:300 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:16, fontWeight:700, textAlign:'center', marginBottom:8 }}>ログアウト</div>
+            <div style={{ fontSize:14, color:'var(--text2)', textAlign:'center', marginBottom:20 }}>ログアウトしますか？</div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setShowLogoutConfirm(false)} style={{ flex:1, padding:12, borderRadius:12, background:'var(--surface2)', color:'var(--text)', border:'none', fontSize:15, cursor:'pointer' }}>キャンセル</button>
+              <button onClick={onLogout} style={{ flex:1, padding:12, borderRadius:12, background:'var(--danger)', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer' }}>ログアウト</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="page-header">プロフィール</div>
 
       <div className="card" style={{ margin: 10, textAlign: 'center' }}>
@@ -175,7 +189,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
 
       <div style={{ padding: '0 10px 20px' }}>
         <button className="btn btn-danger" style={{ width: '100%', padding: 12 }}
-          onClick={() => { if (window.confirm('ログアウトしますか？')) onLogout(); }}>
+          onClick={() => setShowLogoutConfirm(true)}>
           ログアウト
         </button>
       </div>

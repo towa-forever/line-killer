@@ -41,7 +41,7 @@ export default function AIAssistant({ messages, currentRoom, onInsert, onClose }
       }} onClick={e => e.stopPropagation()}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <div style={{ fontWeight:700, fontSize:17 }}>🤖 AIアシスタント</div>
-          <button onClick={onClose} style={{ fontSize:20, color:'var(--text2)' }}>✕</button>
+          <button onClick={onClose} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer', padding:4 }}>✕</button>
         </div>
 
         {/* モード選択 */}

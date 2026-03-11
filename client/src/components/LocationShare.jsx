@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 export default function LocationShare({ socket, roomId, currentUser, onSent, onCancel }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const send = () => {
     setLoading(true);
@@ -18,14 +19,17 @@ export default function LocationShare({ socket, roomId, currentUser, onSent, onC
         setLoading(false);
         onSent?.();
       },
-      (err) => { alert('位置情報の取得に失敗したで: ' + err.message); setLoading(false); },
+      (err) => { setError('位置情報の取得に失敗したで'); setLoading(false); },
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
 
   return (
     <div style={{ background:'var(--surface)', border:'1.5px solid #4d96ff', borderRadius:20, padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-      <span style={{ fontSize:13, color:'var(--text2)' }}>📍 現在地を送る</span>
+      <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+        <span style={{ fontSize:13, color:'var(--text2)' }}>📍 現在地を送る</span>
+        {error && <span style={{ fontSize:11, color:'var(--danger)' }}>{error}</span>}
+      </div>
       <div style={{ display:'flex', gap:8 }}>
         <button onClick={onCancel} style={{ padding:'6px 12px', borderRadius:12, border:'none', background:'var(--surface2)', color:'var(--text)', cursor:'pointer', fontSize:13 }}>キャンセル</button>
         <button onClick={send} disabled={loading} style={{ padding:'6px 14px', borderRadius:12, border:'none', background:'#4d96ff', color:'white', cursor:'pointer', fontSize:13, fontWeight:700 }}>

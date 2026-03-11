@@ -67,7 +67,7 @@ export default function Album({ currentUser }) {
         <div className="album-grid">
           {filteredPhotos.map((photo, i) => (
             <div key={photo._id || photo.id || i} className="album-item" onClick={() => setLightbox(photo)}>
-              <img src={`${SERVER_URL}${photo.file_data?.url || photo.fileData?.url || photo.url}`} alt=""
+              <img src={((u => u?.startsWith('http') ? u : SERVER_URL + u)(photo.file_data?.url || photo.fileData?.url || photo.url))} alt=""
                 className="album-thumb" loading="lazy" />
             </div>
           ))}
@@ -78,7 +78,7 @@ export default function Album({ currentUser }) {
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
             <button className="lightbox-close" onClick={() => setLightbox(null)}>✕</button>
-            <img src={`${SERVER_URL}${lightbox.file_data?.url || lightbox.fileData?.url || lightbox.url}`} alt="" className="lightbox-img" />
+            <img src={((u => u?.startsWith('http') ? u : SERVER_URL + u)(lightbox.file_data?.url || lightbox.fileData?.url || lightbox.url))} alt="" className="lightbox-img" />
             <div className="lightbox-info">
               <span>{lightbox.sender_name || '不明'}</span>
               <span>{new Date(lightbox.created_at || lightbox.createdAt).toLocaleDateString('ja-JP')}</span>
@@ -97,7 +97,7 @@ export default function Album({ currentUser }) {
         .album-thumb:hover { transform: scale(1.05); }
         .lightbox-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
         .lightbox-content { background: var(--surface); border-radius: 16px; padding: 16px; max-width: 500px; width: 100%; position: relative; }
-        .lightbox-close { position: absolute; top: 10px; right: 12px; font-size: 20px; color: var(--text2); }
+        .lightbox-close { position: absolute; top: 10px; right: 12px; font-size: 20px; color: var(--text2); background: none; border: none; cursor: pointer; padding: 4px; line-height: 1; }
         .lightbox-img { width: 100%; max-height: 60vh; object-fit: contain; border-radius: 8px; }
         .lightbox-info { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); margin-top: 8px; }
         .empty-state { text-align: center; padding: 60px 20px; color: var(--text2); font-size: 14px; }
