@@ -9,7 +9,6 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const nodemailer = require('nodemailer');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
@@ -511,20 +510,6 @@ app.get('/api/auth/me', async (req, res) => {
 
 
 
-// ===== メール送信ユーティリティ =====
-function createMailTransporter() {
-  if (process.env.MAIL_USER && process.env.MAIL_PASS) {
-    return nodemailer.createTransport({
-      host: 'smtp.gmail.com', // serviceではなくhostを直接指定
-      port: 465,
-      secure: true,           // SSL（IPv6を使わない）
-      family: 4,              // IPv4強制
-      auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
-    });
-  }
-  return null;
-}
-
 async function sendAdminMail({ subject, html }) {
   const to = 'towa08062026@outlook.jp';
   const transporter = createMailTransporter();
@@ -562,46 +547,19 @@ app.get('/api/official-accounts', async (req, res) => {
   } catch { res.status(500).json({ error: 'エラー' }); }
 });
 
-// 公式アカウント申請（メール通知あり）
+// 公式アカウント申請
 app.post('/api/official-accounts/apply', async (req, res) => {
   try {
     const decoded = auth(req);
-    const { category, email, description, officialName } = req.body;
-    if (!email || !email.includes('@')) return res.status(400).json({ error: '有効なメールアドレスを入力してください' });
+    const { category, description, officialName } = req.body;
     if (!category) return res.status(400).json({ error: 'カテゴリを選択してください' });
     if (!officialName || !officialName.trim()) return res.status(400).json({ error: '公式アカウント名を入力してください' });
-
-    // 申請内容をDBに保存
     await User.findOneAndUpdate({ id: decoded.id }, {
-      official_email: email,
       official_category: category,
-      display_name: officialName.trim(), // 公式アカウント名を表示名として保存
+      display_name: officialName.trim(),
       bio: description || '',
     });
-
-    // 管理者へメール通知（awaitしない → メール失敗でもレスポンスが止まらない）
-    const categoryLabels = { news:'ニュース', shop:'ショップ', service:'サービス', creator:'クリエイター', school:'学校・教育', other:'その他' };
-    sendAdminMail({
-      subject: `【LINE Killer】公式アカウント申請: ${officialName.trim()}`,
-      html: `
-        <h2>公式アカウント申請が届きました</h2>
-        <table style="border-collapse:collapse; width:100%">
-          <tr><th style="border:1px solid #ddd;padding:8px;background:#f5f5f5;text-align:left">項目</th><th style="border:1px solid #ddd;padding:8px;background:#f5f5f5;text-align:left">内容</th></tr>
-          <tr><td style="border:1px solid #ddd;padding:8px">公式アカウント名</td><td style="border:1px solid #ddd;padding:8px"><strong>${officialName.trim()}</strong></td></tr>
-          <tr><td style="border:1px solid #ddd;padding:8px">ユーザー名</td><td style="border:1px solid #ddd;padding:8px">@${decoded.username}</td></tr>
-          <tr><td style="border:1px solid #ddd;padding:8px">ユーザーID</td><td style="border:1px solid #ddd;padding:8px">${decoded.id}</td></tr>
-          <tr><td style="border:1px solid #ddd;padding:8px">カテゴリ</td><td style="border:1px solid #ddd;padding:8px">${categoryLabels[category] || category}</td></tr>
-          <tr><td style="border:1px solid #ddd;padding:8px">連絡先メール</td><td style="border:1px solid #ddd;padding:8px">${email}</td></tr>
-          <tr><td style="border:1px solid #ddd;padding:8px">説明</td><td style="border:1px solid #ddd;padding:8px">${description || '(なし)'}</td></tr>
-          <tr><td style="border:1px solid #ddd;padding:8px">申請日時</td><td style="border:1px solid #ddd;padding:8px">${new Date().toLocaleString('ja-JP')}</td></tr>
-        </table>
-        <br>
-        <p>承認する場合は以下のAPIを叩いてください：</p>
-        <code>POST /api/official-accounts/${decoded.id}/approve</code>
-        <p>（adminアカウントでログイン済みのトークンが必要です）</p>
-      `,
-    });
-
+    console.log(`[公式申請] user:${decoded.username} name:${officialName} category:${category}`);
     res.json({ ok: true, message: '申請を受け付けました。審査後にご連絡します（1〜3営業日）。' });
   } catch (e) { res.status(401).json({ error: '認証エラー' }); }
 });

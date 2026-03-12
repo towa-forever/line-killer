@@ -17,7 +17,6 @@ export default function OfficialAccounts({ currentUser }) {
   const [following, setFollowing] = useState({});
   const [message, setMessage] = useState('');
   // 申請フォーム
-  const [applyEmail, setApplyEmail] = useState('');
   const [applyCategory, setApplyCategory] = useState('');
   const [applyDesc, setApplyDesc] = useState('');
   const [applyName, setApplyName] = useState('');
@@ -44,11 +43,11 @@ export default function OfficialAccounts({ currentUser }) {
 
   const applyOfficial = async () => {
     if (!applyName.trim()) { setMessage('公式アカウント名を入力してください'); return; }
-    if (!applyEmail || !applyCategory) { setMessage('メールとカテゴリは必須です'); return; }
+    if (!applyCategory) { setMessage('カテゴリを選択してください'); return; }
     setApplying(true);
     try {
       const r = await axios.post('/api/official-accounts/apply', {
-        email: applyEmail, category: applyCategory, description: applyDesc,
+        category: applyCategory, description: applyDesc,
         officialName: applyName.trim(),
       });
       setMessage(r.data.message);
@@ -68,7 +67,7 @@ export default function OfficialAccounts({ currentUser }) {
       <div style={{ display:'flex', background:'var(--surface)', borderBottom:'1px solid var(--border)' }}>
         {[
           { id:'list',   label:'📋 一覧' },
-          { id:'apply',  label:'✍️ 申請' },
+          { id:'apply',  label:'📝 申請' },
           ...(isOfficialUser ? [{ id:'mypage', label:'⭐ 管理' }] : []),
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -177,12 +176,6 @@ export default function OfficialAccounts({ currentUser }) {
             </div>
           </div>
 
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>連絡先メールアドレス <span style={{ color:'red' }}>*</span></div>
-            <input className="form-input" type="email" placeholder="example@email.com"
-              value={applyEmail} onChange={e => setApplyEmail(e.target.value)} style={{ marginBottom:0 }} />
-          </div>
-
           <div style={{ marginBottom:20 }}>
             <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>アカウント説明（任意）</div>
             <textarea className="form-input" rows={4} placeholder="どんなアカウントか説明してください..."
@@ -190,10 +183,10 @@ export default function OfficialAccounts({ currentUser }) {
           </div>
 
           <button className="btn btn-primary" style={{ width:'100%' }} onClick={applyOfficial} disabled={applying}>
-            {applying ? '申請中...' : '✍️ 申請する'}
+            {applying ? '申請中...' : '📝 申請する'}
           </button>
           <div style={{ fontSize:11, color:'var(--text2)', textAlign:'center', marginTop:8 }}>
-            審査結果はメールでお知らせします
+            審査後にアカウントにバッジが付与されます
           </div>
         </div>
       )}
