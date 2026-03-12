@@ -26,7 +26,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { User, PasswordResetToken, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription } = require('./db');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription } = require('./db');
 
 const app = express();
 
@@ -345,121 +345,50 @@ app.post('/api/auth/login', async (req, res) => {
 
 
 
-// ===== メール送信（nodemailer）=====
-const nodemailer = require('nodemailer');
-
-function createMailTransport() {
-  if (!process.env.MAIL_USER || !process.env.MAIL_PASS) return null;
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
-  });
-}
-
-// パスワードリセット申請
-app.post('/api/auth/forgot-password', async (req, res) => {
+// ===== Supabase OAuth連携エンドポイント =====
+// Supabaseでログイン後、フロントからこのエンドポイントを叩いてMongoユーザーと紐付け
+app.post('/api/auth/supabase-login', async (req, res) => {
   try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'メールアドレスを入力してください' });
+    const { supabase_id, email, provider, username: reqUsername, avatar_url } = req.body;
+    if (!supabase_id) return res.status(400).json({ error: 'supabase_idが必要です' });
 
-    // メールアドレスでユーザー検索（oauth_accountsのemailも含む）
-    const user = await User.findOne({
-      $or: [
-        { 'oauth_accounts.email': email },
-        { username: email }, // usernameがメールの場合
-      ]
-    });
+    // 既存のSupabase連携ユーザーを探す
+    let user = await User.findOne({ 'oauth_accounts.provider_id': supabase_id });
 
-    // セキュリティ上、ユーザーが見つからなくても同じレスポンスを返す
-    if (!user) return res.json({ message: 'メールを送信しました（アドレスが登録済みの場合）' });
-
-    const transport = createMailTransport();
-    if (!transport) return res.status(503).json({ error: 'メール機能が設定されていません。管理者にお問い合わせください。' });
-
-    // トークン生成（1時間有効）
-    const crypto = require('crypto');
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-    await PasswordResetToken.deleteMany({ user_id: user.id }); // 古いトークン削除
-    await PasswordResetToken.create({ user_id: user.id, token, expires_at: expiresAt });
-
-    const CLIENT = process.env.CLIENT_URL || 'https://line-killer.onrender.com';
-    const resetUrl = `${CLIENT}/reset-password?token=${token}`;
-
-    await transport.sendMail({
-      from: `"LINE Killer" <${process.env.MAIL_USER}>`,
-      to: email,
-      subject: '【LINE Killer】パスワードリセット',
-      html: `
-        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-          <h2 style="color:#06c755">🔑 パスワードリセット</h2>
-          <p>以下のボタンをクリックして新しいパスワードを設定してください。</p>
-          <p>このリンクは<strong>1時間</strong>有効です。</p>
-          <a href="${resetUrl}" style="display:inline-block;margin:16px 0;padding:12px 28px;background:#06c755;color:white;border-radius:10px;text-decoration:none;font-weight:bold;font-size:16px">
-            パスワードをリセット
-          </a>
-          <p style="color:#888;font-size:12px">心当たりがない場合は無視してください。</p>
-          <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
-          <p style="color:#aaa;font-size:11px">LINE Killer</p>
-        </div>
-      `,
-    });
-
-    res.json({ message: 'メールを送信しました（アドレスが登録済みの場合）' });
-  } catch(e) {
-    console.error('forgot-password error:', e);
-    res.status(500).json({ error: 'メール送信に失敗しました' });
-  }
-});
-
-// パスワードリセット実行
-app.post('/api/auth/reset-password', async (req, res) => {
-  try {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword) return res.status(400).json({ error: 'トークンと新しいパスワードが必要です' });
-    if (newPassword.length < 6) return res.status(400).json({ error: 'パスワードは6文字以上にしてください' });
-
-    const record = await PasswordResetToken.findOne({ token, used: false, expires_at: { $gt: new Date() } });
-    if (!record) return res.status(400).json({ error: 'リンクが無効または期限切れです。再度申請してください。' });
-
-    const hashed = await bcrypt.hash(newPassword, 10);
-    await User.findOneAndUpdate({ id: record.user_id }, { password: hashed });
-    await PasswordResetToken.findByIdAndUpdate(record._id, { used: true });
-
-    res.json({ message: 'パスワードを変更しました。ログインしてください。' });
-  } catch(e) {
-    console.error('reset-password error:', e);
-    res.status(500).json({ error: 'パスワードリセットに失敗しました' });
-  }
-});
-
-// リセットトークン有効性確認
-app.get('/api/auth/reset-password/:token', async (req, res) => {
-  try {
-    const record = await PasswordResetToken.findOne({ token: req.params.token, used: false, expires_at: { $gt: new Date() } });
-    if (!record) return res.status(400).json({ error: 'リンクが無効または期限切れです' });
-    res.json({ valid: true });
-  } catch { res.status(500).json({ error: 'エラー' }); }
-});
-
-// ===== パスワード変更 =====
-app.post('/api/auth/change-password', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const { currentPassword, newPassword } = req.body;
-    if (!currentPassword || !newPassword) return res.status(400).json({ error: '現在のパスワードと新しいパスワードを入力してください' });
-    if (newPassword.length < 6) return res.status(400).json({ error: '新しいパスワードは6文字以上にしてください' });
-    const user = await User.findOne({ id: decoded.id });
-    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
-    // パスワードなし（OAuth専用アカウント）の場合は currentPassword チェックをスキップ
-    if (user.password && user.password !== 'oauth_only') {
-      const ok = await bcrypt.compare(currentPassword, user.password);
-      if (!ok) return res.status(401).json({ error: '現在のパスワードが違います' });
+    if (!user && email) {
+      // メールで既存ユーザーを探す
+      user = await User.findOne({ 'oauth_accounts.email': email });
     }
-    const hashed = await bcrypt.hash(newPassword, 10);
-    await User.findOneAndUpdate({ id: decoded.id }, { password: hashed });
-    res.json({ message: 'パスワードを変更しました' });
-  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+
+    if (!user) {
+      // 新規作成
+      const { v4: uuidv4 } = require('uuid');
+      let baseUsername = reqUsername || (email ? email.split('@')[0] : 'user');
+      baseUsername = baseUsername.replace(/[^a-zA-Z0-9_぀-鿿]/g, '').slice(0, 20) || 'user';
+      let username = baseUsername;
+      let counter = 1;
+      while (await User.findOne({ username })) { username = baseUsername + counter++; }
+      const id = uuidv4();
+      user = await User.create({
+        id, username,
+        password: 'supabase_auth',
+        avatar: avatar_url || '',
+        display_name: reqUsername || username,
+        oauth_accounts: [{ provider: provider || 'supabase', provider_id: supabase_id, email: email || '' }]
+      });
+    } else if (!user.oauth_accounts?.some(a => a.provider_id === supabase_id)) {
+      // 既存ユーザーにSupabase IDを追加
+      await User.findOneAndUpdate({ id: user.id }, {
+        $addToSet: { oauth_accounts: { provider: provider || 'supabase', provider_id: supabase_id, email: email || '' } }
+      });
+    }
+
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '' } });
+  } catch(e) {
+    console.error('supabase-login error:', e);
+    res.status(500).json({ error: 'サーバーエラー' });
+  }
 });
 
 // ===== OAuth連携状況取得 =====
@@ -472,184 +401,30 @@ app.get('/api/auth/oauth-accounts', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-// ===== OAuth連携解除 =====
-app.delete('/api/auth/oauth-accounts/:provider', async (req, res) => {
+// ===== パスワード変更 =====
+app.post('/api/auth/change-password', async (req, res) => {
   try {
     const decoded = auth(req);
-    const { provider } = req.params;
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword) return res.status(400).json({ error: '新しいパスワードを入力してください' });
+    if (newPassword.length < 6) return res.status(400).json({ error: '新しいパスワードは6文字以上にしてください' });
     const user = await User.findOne({ id: decoded.id });
     if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
-    // パスワードなしかつこのプロバイダーが最後の場合は削除不可
-    const hasPassword = user.password && user.password !== 'oauth_only';
-    const remainingOauth = (user.oauth_accounts || []).filter(a => a.provider !== provider);
-    if (!hasPassword && remainingOauth.length === 0) {
-      return res.status(400).json({ error: 'パスワードを設定するか、他の連携を残してから削除してください' });
+    const isOauthOnly = !user.password || user.password === 'supabase_auth' || user.password === 'oauth_only';
+    if (!isOauthOnly) {
+      const ok = await bcrypt.compare(currentPassword, user.password);
+      if (!ok) return res.status(401).json({ error: '現在のパスワードが違います' });
     }
-    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { oauth_accounts: { provider } } });
-    res.json({ message: `${provider}の連携を解除しました` });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await User.findOneAndUpdate({ id: decoded.id }, { password: hashed });
+    res.json({ message: 'パスワードを変更しました' });
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
-// ===== OAuth: Google =====
-const SESSION_SECRET = process.env.SESSION_SECRET || 'lk_session_secret_2024';
-const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const GitHubStrategy = require('passport-github2').Strategy;
-const session = require('express-session');
-
-app.use(session({ secret: SESSION_SECRET, resave: false, saveUninitialized: false, cookie: { secure: false, maxAge: 10 * 60 * 1000 } }));
-app.use(passport.initialize());
-app.use(passport.session());
-passport.serializeUser((u, done) => done(null, u));
-passport.deserializeUser((u, done) => done(null, u));
-
-const CLIENT_URL = process.env.CLIENT_URL || 'https://line-killer.onrender.com';
-const SERVER_URL = process.env.SERVER_URL || 'https://line-killer-server.onrender.com';
-
-// OAuth共通ハンドラ
-async function handleOAuthCallback(provider, profileId, email, displayName, avatarUrl, oauthToken, done) {
-  try {
-    // 既存の連携アカウントを探す
-    let user = await User.findOne({ 'oauth_accounts.provider': provider, 'oauth_accounts.provider_id': profileId });
-    if (user) {
-      const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
-      return done(null, { token, userId: user.id, isNew: false });
-    }
-    // JWTトークン（連携モード）がある場合は既存アカウントに連携
-    if (oauthToken) {
-      try {
-        const decoded = jwt.verify(oauthToken, JWT_SECRET);
-        await User.findOneAndUpdate({ id: decoded.id }, {
-          $addToSet: { oauth_accounts: { provider, provider_id: profileId, email: email || '' } }
-        });
-        const token = jwt.sign({ id: decoded.id, username: decoded.username }, JWT_SECRET, { expiresIn: '30d' });
-        return done(null, { token, userId: decoded.id, isNew: false, linked: true });
-      } catch {}
-    }
-    // メールで既存ユーザー検索
-    if (email) {
-      user = await User.findOne({ username: email.split('@')[0] });
-    }
-    if (!user) {
-      // 新規アカウント作成
-      const { v4: uuidv4 } = require('uuid');
-      const baseUsername = (email ? email.split('@')[0] : displayName || 'user').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20) || 'user';
-      let username = baseUsername;
-      let counter = 1;
-      while (await User.findOne({ username })) { username = baseUsername + counter++; }
-      const id = uuidv4();
-      user = await User.create({
-        id, username,
-        password: 'oauth_only',
-        avatar: avatarUrl || '',
-        display_name: displayName || username,
-        oauth_accounts: [{ provider, provider_id: profileId, email: email || '' }]
-      });
-    } else {
-      await User.findOneAndUpdate({ id: user.id }, {
-        $addToSet: { oauth_accounts: { provider, provider_id: profileId, email: email || '' } }
-      });
-    }
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
-    done(null, { token, userId: user.id, isNew: true });
-  } catch(e) { done(e); }
-}
-
-// 利用可能なOAuthプロバイダーをクライアントに伝えるエンドポイント
+// 利用可能なOAuthプロバイダー（Supabaseで管理するので常に全部返す）
 app.get('/api/auth/providers', (req, res) => {
-  const providers = [];
-  if (process.env.GOOGLE_CLIENT_ID)    providers.push('google');
-  if (process.env.GITHUB_CLIENT_ID)    providers.push('github');
-  if (process.env.MICROSOFT_CLIENT_ID) providers.push('microsoft');
-  res.json({ providers });
+  res.json({ providers: ['google', 'github', 'microsoft'] });
 });
-
-// 未設定プロバイダーへのフォールバック（404の代わりにわかりやすいエラー）
-['google', 'github', 'microsoft'].forEach(p => {
-  app.get(`/api/auth/${p}/unavailable`, (req, res) => {
-    res.redirect(`${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/oauth-callback?error=${p}_not_configured`);
-  });
-});
-
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${SERVER_URL}/api/auth/google/callback`,
-    passReqToCallback: true,
-  }, async (req, accessToken, refreshToken, profile, done) => {
-    const email = profile.emails?.[0]?.value;
-    const avatar = profile.photos?.[0]?.value;
-    const oauthToken = req.query.state ? Buffer.from(req.query.state, 'base64').toString() : null;
-    await handleOAuthCallback('google', profile.id, email, profile.displayName, avatar, oauthToken, done);
-  }));
-
-  app.get('/api/auth/google', (req, res, next) => {
-    const state = req.query.link_token ? Buffer.from(req.query.link_token).toString('base64') : undefined;
-    passport.authenticate('google', { scope: ['profile', 'email'], state })(req, res, next);
-  });
-  app.get('/api/auth/google/callback', passport.authenticate('google', { failureRedirect: `${CLIENT_URL}/login?error=google` }), (req, res) => {
-    const { token, linked } = req.user;
-    if (linked) return res.redirect(`${CLIENT_URL}/oauth-callback?linked=google`);
-    res.redirect(`${CLIENT_URL}/oauth-callback?token=${token}`);
-  });
-} else {
-  app.get('/api/auth/google', (req, res) => res.redirect(`${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/oauth-callback?error=google_not_configured`));
-}
-
-if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-  passport.use(new GitHubStrategy({
-    clientID: process.env.GITHUB_CLIENT_ID,
-    clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    callbackURL: `${SERVER_URL}/api/auth/github/callback`,
-    passReqToCallback: true,
-  }, async (req, accessToken, refreshToken, profile, done) => {
-    const email = profile.emails?.[0]?.value;
-    const avatar = profile.photos?.[0]?.value;
-    const oauthToken = req.query.state ? Buffer.from(req.query.state, 'base64').toString() : null;
-    await handleOAuthCallback('github', profile.id, email, profile.displayName || profile.username, avatar, oauthToken, done);
-  }));
-
-  app.get('/api/auth/github', (req, res, next) => {
-    const state = req.query.link_token ? Buffer.from(req.query.link_token).toString('base64') : undefined;
-    passport.authenticate('github', { scope: ['user:email'], state })(req, res, next);
-  });
-  app.get('/api/auth/github/callback', passport.authenticate('github', { failureRedirect: `${CLIENT_URL}/login?error=github` }), (req, res) => {
-    const { token, linked } = req.user;
-    if (linked) return res.redirect(`${CLIENT_URL}/oauth-callback?linked=github`);
-    res.redirect(`${CLIENT_URL}/oauth-callback?token=${token}`);
-  });
-} else {
-  app.get('/api/auth/github', (req, res) => res.redirect(`${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/oauth-callback?error=github_not_configured`));
-}
-
-// Microsoft (express-session不要のシンプル実装)
-if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
-  const MicrosoftStrategy = require('passport-microsoft').Strategy;
-  passport.use(new MicrosoftStrategy({
-    clientID: process.env.MICROSOFT_CLIENT_ID,
-    clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
-    callbackURL: `${SERVER_URL}/api/auth/microsoft/callback`,
-    scope: ['user.read'],
-    passReqToCallback: true,
-  }, async (req, accessToken, refreshToken, profile, done) => {
-    const email = profile.emails?.[0]?.value;
-    const oauthToken = req.query.state ? Buffer.from(req.query.state, 'base64').toString() : null;
-    await handleOAuthCallback('microsoft', profile.id, email, profile.displayName, null, oauthToken, done);
-  }));
-
-  app.get('/api/auth/microsoft', (req, res, next) => {
-    const state = req.query.link_token ? Buffer.from(req.query.link_token).toString('base64') : undefined;
-    passport.authenticate('microsoft', { state })(req, res, next);
-  });
-  app.get('/api/auth/microsoft/callback', passport.authenticate('microsoft', { failureRedirect: `${CLIENT_URL}/login?error=microsoft` }), (req, res) => {
-    const { token, linked } = req.user;
-    if (linked) return res.redirect(`${CLIENT_URL}/oauth-callback?linked=microsoft`);
-    res.redirect(`${CLIENT_URL}/oauth-callback?token=${token}`);
-  });
-} else {
-  app.get('/api/auth/microsoft', (req, res) => res.redirect(`${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/oauth-callback?error=microsoft_not_configured`));
-}
 
 app.get('/api/auth/me', async (req, res) => {
   try {

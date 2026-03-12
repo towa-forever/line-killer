@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
+import { supabase, isSupabaseEnabled } from './supabase';
 import ErrorBoundary from "./components/ErrorBoundary";
 import VideoCall from "./components/VideoCall";
 import { sounds } from "./utils/sounds";
@@ -42,35 +43,43 @@ if (_token) axios.defaults.headers.common['Authorization'] = `Bearer ${_token}`;
 function AuthScreen({ onLogin }) {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [oauthProviders, setOauthProviders] = useState([]);
+  const [supabaseReady] = useState(isSupabaseEnabled());
 
+  // Supabaseセッション監視（OAuthコールバック後に自動処理）
   useEffect(() => {
-    axios.get('/api/auth/providers')
-      .then(res => setOauthProviders(res.data.providers || []))
-      .catch(() => {});
-  }, []);
-  const [availableProviders, setAvailableProviders] = useState(null); // null=未確認
-
-  // どのOAuthプロバイダーが使えるか確認
-  useEffect(() => {
-    axios.get('/api/auth/providers')
-      .then(res => setAvailableProviders(res.data.providers || []))
-      .catch(() => setAvailableProviders([]));
+    if (!supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+        await handleSupabaseSession(session);
+      }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
-  // OAuthコールバックのエラー処理（?error=xxx）
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const err = params.get('error');
-    if (err === 'google_not_configured') setError('Googleログインはまだ設定されていません。管理者にお問い合わせください。');
-    else if (err === 'github_not_configured') setError('GitHubログインはまだ設定されていません。');
-    else if (err === 'microsoft_not_configured') setError('Microsoftログインはまだ設定されていません。');
-    else if (err) setError(`${err}でのログインに失敗しました`);
-  }, []);
+  const handleSupabaseSession = async (session) => {
+    try {
+      const { user } = session;
+      const provider = user.app_metadata?.provider || 'email';
+      const res = await axios.post('/api/auth/supabase-login', {
+        supabase_id: user.id,
+        email: user.email,
+        provider,
+        username: user.user_metadata?.full_name || user.user_metadata?.user_name || user.email?.split('@')[0],
+        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+      });
+      localStorage.setItem('token', res.data.token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+      onLogin(res.data.user);
+    } catch(e) {
+      setError('サーバーとの連携に失敗しました: ' + (e.response?.data?.error || e.message));
+    }
+  };
 
+  // 通常ログイン/登録（既存のMongoDB認証）
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true); setError('');
@@ -83,6 +92,49 @@ function AuthScreen({ onLogin }) {
     finally { setLoading(false); }
   };
 
+  // Supabase メール認証
+  const handleEmailAuth = async (e) => {
+    e.preventDefault();
+    if (!supabase) return;
+    setLoading(true); setError('');
+    try {
+      if (isLogin) {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        await handleSupabaseSession(data.session);
+      } else {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        setError('✅ 確認メールを送りました！メールのリンクをクリックしてね。');
+      }
+    } catch(e) { setError(e.message || '認証エラー'); }
+    finally { setLoading(false); }
+  };
+
+  // OAuth ログイン
+  const handleOAuth = async (provider) => {
+    if (!supabase) return;
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin + '/oauth-callback' },
+    });
+    if (error) { setError(error.message); setLoading(false); }
+  };
+
+  // パスワードリセット
+  const handleForgotPassword = async () => {
+    if (!supabase) return;
+    const addr = email || prompt('登録済みのメールアドレスを入力してください');
+    if (!addr) return;
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(addr, {
+      redirectTo: window.location.origin + '/reset-password',
+    });
+    setLoading(false);
+    setError(error ? '❌ ' + error.message : '✅ リセットメールを送りました！');
+  };
+
   return (
     <div className="auth-screen">
       <div className="auth-card">
@@ -91,40 +143,46 @@ function AuthScreen({ onLogin }) {
           <h1>LINE Killer</h1>
           <p>LINEを超えるチャットアプリ</p>
         </div>
-        <form onSubmit={handleSubmit}>
-          <input type="text" placeholder="ユーザーID" value={username}
-            onChange={(e) => setUsername(e.target.value)} required className="auth-input" />
+
+        {/* Supabaseメール認証（有効時） or 通常認証 */}
+        <form onSubmit={supabaseReady ? handleEmailAuth : handleSubmit}>
+          {!supabaseReady && (
+            <input type="text" placeholder="ユーザーID" value={username}
+              onChange={(e) => setUsername(e.target.value)} required className="auth-input" />
+          )}
+          {supabaseReady && (
+            <input type="email" placeholder="メールアドレス" value={email}
+              onChange={(e) => setEmail(e.target.value)} required className="auth-input" />
+          )}
           <input type="password" placeholder="パスワード" value={password}
             onChange={(e) => setPassword(e.target.value)} required className="auth-input" />
-          {error && <div className="auth-error">{error}</div>}
+          {error && <div className="auth-error" style={{ color: error.startsWith('✅') ? '#06c755' : undefined }}>{error}</div>}
           <button type="submit" disabled={loading} className="auth-btn">
             {loading ? '...' : isLogin ? 'ログイン' : '登録'}
           </button>
-          {isLogin && (
-            <button type="button" onClick={() => window.location.href = '/forgot-password'}
-              style={{ display:'block', width:'100%', marginTop:8, background:'none', border:'none', color:'rgba(255,255,255,0.55)', fontSize:12, cursor:'pointer', textAlign:'center' }}>
+          {isLogin && supabaseReady && (
+            <button type="button" onClick={handleForgotPassword}
+              style={{ display:'block', width:'100%', marginTop:8, background:'none', border:'none', color:'rgba(255,255,255,0.55)', fontSize:12, cursor:'pointer' }}>
               パスワードを忘れた方はこちら
             </button>
           )}
         </form>
-        <button className="auth-toggle" onClick={() => setIsLogin(!isLogin)}>
+        <button className="auth-toggle" onClick={() => { setIsLogin(!isLogin); setError(''); }}>
           {isLogin ? 'アカウント作成' : 'ログインへ戻る'}
         </button>
 
-        {/* OAuthログイン - 使えるプロバイダーだけ表示 */}
-        {availableProviders !== null && availableProviders.length > 0 && (
+        {/* OAuth（Supabase有効時のみ） */}
+        {supabaseReady && (
           <div style={{ margin:'16px 0 0', borderTop:'1px solid rgba(255,255,255,0.15)', paddingTop:16 }}>
             <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', textAlign:'center', marginBottom:12 }}>または外部アカウントでログイン</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {[
-                { provider:'google',    label:'Googleでログイン',    icon:'🔴', bg:'#fff', color:'#333', border:'1px solid #ddd' },
-                { provider:'github',    label:'GitHubでログイン',    icon:'⚫', bg:'#24292e', color:'#fff', border:'none' },
-                { provider:'microsoft', label:'Microsoftでログイン', icon:'🔷', bg:'#0078d4', color:'#fff', border:'none' },
-              ].filter(p => availableProviders.includes(p.provider)).map(({ provider, label, icon, bg, color, border }) => (
-                <button key={provider} onClick={() => {
-                  const serverUrl = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
-                  window.location.href = `${serverUrl}/api/auth/${provider}`;
-                }} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', borderRadius:10, background:bg, color, border, fontSize:14, cursor:'pointer', fontWeight:600 }}>
+                { provider:'google',    label:'Googleでログイン',    icon:'🔴', bg:'#ea4335', color:'#fff' },
+                { provider:'github',    label:'GitHubでログイン',    icon:'⚫', bg:'#24292e', color:'#fff' },
+                { provider:'azure',     label:'Microsoftでログイン', icon:'🔷', bg:'#0078d4', color:'#fff' },
+              ].map(({ provider, label, icon, bg, color }) => (
+                <button key={provider} disabled={loading} onClick={() => handleOAuth(provider)}
+                  style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', borderRadius:10, background:bg, color, border:'none', fontSize:14, cursor:'pointer', fontWeight:600, opacity: loading ? 0.6 : 1 }}>
                   <span style={{ fontSize:18 }}>{icon}</span>{label}
                 </button>
               ))}
@@ -135,6 +193,7 @@ function AuthScreen({ onLogin }) {
     </div>
   );
 }
+
 
 function RoomNameEditor({ room, onClose }) {
   const [name, setName] = React.useState(room.name || '');
@@ -1433,6 +1492,66 @@ function TabBar({ activeTab, setActiveTab, notifications }) {
   );
 }
 
+// OAuthコールバックページ
+function OAuthCallbackPage({ onLogin }) {
+  const [status, setStatus] = React.useState('ログイン処理中...');
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const error = params.get('error_description') || params.get('error');
+    if (error) {
+      setStatus('❌ ログインに失敗しました');
+      setTimeout(() => { window.location.href = '/'; }, 3000);
+      return;
+    }
+    // SupabaseはonAuthStateChangeで自動処理されるので待つだけ
+    const timer = setTimeout(() => { window.location.href = '/'; }, 8000);
+    return () => clearTimeout(timer);
+  }, [onLogin]);
+  return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', flexDirection:'column', gap:16, background:'var(--bg)' }}>
+      <div style={{ fontSize:48 }}>🔗</div>
+      <div style={{ fontSize:16, color:'var(--text)', fontWeight:600 }}>{status}</div>
+    </div>
+  );
+}
+
+// パスワードリセットページ
+function ResetPasswordPage() {
+  const [newPw, setNewPw] = React.useState('');
+  const [confirmPw, setConfirmPw] = React.useState('');
+  const [status, setStatus] = React.useState('');
+  const [done, setDone] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const submit = async () => {
+    if (newPw !== confirmPw) { setStatus('❌ パスワードが一致しません'); return; }
+    if (newPw.length < 6) { setStatus('❌ 6文字以上にしてください'); return; }
+    setLoading(true);
+    try {
+      if (supabase) {
+        const { error } = await supabase.auth.updateUser({ password: newPw });
+        if (error) throw error;
+      }
+      setDone(true);
+      setTimeout(() => { window.location.href = '/'; }, 2000);
+    } catch(e) { setStatus('❌ ' + (e.message || 'リセットに失敗しました')); }
+    finally { setLoading(false); }
+  };
+  return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'var(--bg)', padding:24 }}>
+      <div style={{ background:'var(--surface)', borderRadius:20, padding:28, width:'100%', maxWidth:360, boxShadow:'0 8px 32px rgba(0,0,0,0.15)' }}>
+        <div style={{ fontSize:36, textAlign:'center', marginBottom:8 }}>🔒</div>
+        <h2 style={{ textAlign:'center', marginBottom:20, fontSize:18 }}>新しいパスワードを設定</h2>
+        {!done ? (<>
+          <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="新しいパスワード（6文字以上）" className="auth-input" style={{ display:'block', width:'100%', boxSizing:'border-box', marginBottom:10 }} />
+          <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="もう一度入力" className="auth-input" onKeyDown={e => e.key === 'Enter' && submit()} style={{ display:'block', width:'100%', boxSizing:'border-box', marginBottom:12 }} />
+          {status && <div style={{ fontSize:13, color:'var(--danger)', marginBottom:12, textAlign:'center' }}>{status}</div>}
+          <button onClick={submit} disabled={loading} className="auth-btn" style={{ width:'100%' }}>{loading ? '変更中...' : 'パスワードを変更'}</button>
+        </>) : <div style={{ textAlign:'center', color:'var(--primary)', fontSize:15 }}>✅ 変更しました！ログイン画面に戻ります...</div>}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [socket, setSocket] = useState(null);
@@ -1635,6 +1754,8 @@ export default function App() {
         <main className="app-main">
           <Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',fontSize:24}}>⏳</div>}>
             <Routes>
+              <Route path="/oauth-callback" element={<OAuthCallbackPage onLogin={handleLogin} />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/videocall/:roomId/:targetUserId" element={<VideoCall currentUser={currentUser} socket={socket} />} />
               <Route path="*" element={renderTabs()} />
             </Routes>
