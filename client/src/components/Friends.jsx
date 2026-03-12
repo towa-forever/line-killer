@@ -76,7 +76,13 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
     }});
   };
 
-  const isFriend = (userId) => friends.some((f) => f._id === userId || f.id === userId);
+  const isFriend = (userId) => {
+    if (!userId) return false;
+    return friends.some((f) => {
+      const fid = f.id || f._id || '';
+      return fid === userId || fid === String(userId);
+    });
+  };
 
   return (
     <div className="page">
@@ -114,9 +120,13 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
           {friends.length === 0 ? <div className="empty-state">友達がいません。検索で追加しよう！</div> : (
             friends.map((friend) => (
               <div key={friend._id || friend.id} className="user-item">
-                <div className="user-avatar-circle">{friend.username?.[0] || '?'}</div>
+                <div className="user-avatar-circle" style={{ overflow:'hidden', padding:0 }}>
+                  {friend.avatar
+                    ? <img src={friend.avatar} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
+                    : <span style={{ lineHeight:'44px' }}>{friend.username?.[0]?.toUpperCase() || '?'}</span>}
+                </div>
                 <div className="user-info">
-                  <div className="user-name">{friend.username}</div>
+                  <div className="user-name">{friend.display_name || friend.username}</div>
                   <div className="user-id">@{friend.username}</div>
                 </div>
                 <div className="user-actions">
@@ -134,7 +144,9 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
           {requests.length === 0 ? <div className="empty-state">申請はありません</div> : (
             requests.map((req) => (
               <div key={req._id || req.id} className="user-item">
-                <div className="user-avatar-circle">{req.from_name?.[0] || '?'}</div>
+                <div className="user-avatar-circle">
+                  {req.from_name?.[0]?.toUpperCase() || '?'}
+                </div>
                 <div className="user-info">
                   <div className="user-name">{req.from_name}</div>
                   <div className="user-id">@{req.from_name}</div>
@@ -163,9 +175,13 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
           <div style={{ marginTop: 12 }}>
             {searchResults.map((user) => (
               <div key={user._id || user.id} className="user-item">
-                <div className="user-avatar-circle">{user.username?.[0] || '?'}</div>
+                <div className="user-avatar-circle" style={{ overflow:'hidden', padding:0 }}>
+                  {user.avatar
+                    ? <img src={user.avatar} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
+                    : <span style={{ lineHeight:'44px' }}>{user.username?.[0]?.toUpperCase() || '?'}</span>}
+                </div>
                 <div className="user-info">
-                  <div className="user-name">{user.username}</div>
+                  <div className="user-name">{user.display_name || user.username}</div>
                   <div className="user-id">@{user.username}</div>
                 </div>
                 <div className="user-actions">
@@ -191,7 +207,7 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
 
       <style>{`
         .friends-tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); }
-        .friends-tab { flex: 1; padding: 10px; font-size: 13px; color: var(--text2); position: relative; border-bottom: 2px solid transparent; transition: color 0.2s; }
+        .friends-tab { flex: 1; padding: 10px; font-size: 13px; color: var(--text2); position: relative; border-bottom: 2px solid transparent; transition: color 0.2s; cursor: pointer; background: none; border-top: none; border-left: none; border-right: none; }
         .friends-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
         .friends-tab-badge { position: absolute; top: 6px; right: 8px; background: #e74c3c; color: white; border-radius: 10px; padding: 1px 5px; font-size: 9px; }
         .friends-message { background: #e8f5e9; color: #2e7d32; padding: 10px 16px; font-size: 13px; cursor: pointer; }
