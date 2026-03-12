@@ -19,12 +19,6 @@ const UserSchema = new mongoose.Schema({
   blocked_users: { type: [String], default: [] },
   muted_rooms: { type: [String], default: [] },
   bookmarked_messages: { type: [String], default: [] },
-  oauth_accounts: { type: [{
-    provider: String,   // 'google' | 'github' | 'microsoft'
-    provider_id: String,
-    email: String,
-    connected_at: { type: Date, default: Date.now }
-  }], default: [] },
   created_at: { type: Date, default: Date.now },
 });
 
@@ -186,15 +180,6 @@ const StorySchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now },
 });
 
-const PasswordResetTokenSchema = new mongoose.Schema({
-  user_id:    { type: String, required: true },
-  token:      { type: String, required: true, unique: true },
-  expires_at: { type: Date, required: true },
-  used:       { type: Boolean, default: false },
-  created_at: { type: Date, default: Date.now },
-});
-PasswordResetTokenSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
-
 // ===== パフォーマンス向上のためのインデックス =====
 MessageSchema.index({ room_id: 1, created_at: -1 }); // ルームのメッセージ取得（最多クエリ）
 MessageSchema.index({ sender_id: 1 });                // 統計・検索
@@ -216,7 +201,6 @@ const PushSubscriptionSchema = new mongoose.Schema({
 });
 
 module.exports = {
-  PasswordResetToken: mongoose.model('PasswordResetToken', PasswordResetTokenSchema),
   User: mongoose.model('User', UserSchema),
   PushSubscription: mongoose.model('PushSubscription', PushSubscriptionSchema),
   Note: mongoose.model('Note', NoteSchema),
