@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 
@@ -11,6 +11,7 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState('');
   const [confirmDialog, setConfirmDialog] = useState(null); // {text, onOk}
+  const qrInputRef = useRef(null);
 
   const fetchFriends = useCallback(async () => {
     try {
@@ -80,6 +81,26 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
     setConfirmDialog({ text: '友達を削除しますか？', onOk: async () => {
       try { await axios.delete(`/api/friends/${friendId}`); fetchFriends(); } catch {}
     }});
+  };
+
+  const handleQrScan = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const imgUrl = URL.createObjectURL(file);
+    // QR読み取り（簡易: URLからユーザー名を抽出、または画像送信）
+    // linekiller://add/USERNAMEのQRを想定
+    try {
+      // JSQRやzxingがなくてもURLとして読み取れる場合があるためinput valueを確認
+      setMessage('QRコードを処理中...');
+      // ユーザーに手動入力フォームを表示（カメラAPIが使えない場合の代替）
+      const username = window.prompt('QRコードに記載されているユーザー名を入力してください:');
+      if (!username) { setMessage(''); return; }
+      const res = await axios.post('/api/friends/by-qr', { username: username.trim() });
+      setMessage(res.data.message || '友達申請を送りました！');
+    } catch (err) {
+      setMessage(err.response?.data?.error || '読み取りに失敗しました');
+    }
+    e.target.value = '';
   };
 
   const isFriend = (userId) => {
@@ -210,7 +231,14 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
           <div style={{ display: 'inline-block', padding: 16, background: 'white', borderRadius: 12 }}>
             <QRCode value={`linekiller://add/${currentUser.username}`} size={200} level="H" />
           </div>
-          <p style={{ marginTop: 16, color: 'var(--text2)', fontSize: 13 }}>@{currentUser.username}</p>
+          <p style={{ marginTop: 8, color: 'var(--text2)', fontSize: 13 }}>@{currentUser.username}</p>
+          <div style={{ marginTop: 16 }}>
+            <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 8 }}>友達のQRコードを読み取る</p>
+            <button className="btn btn-primary" onClick={() => qrInputRef.current?.click()}>
+              📷 QRを読み取る
+            </button>
+            <input ref={qrInputRef} type="file" accept="image/*" capture="environment" style={{ display:'none' }} onChange={handleQrScan} />
+          </div>
         </div>
       )}
 

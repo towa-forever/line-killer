@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 
@@ -15,14 +15,29 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
   const [message, setMessage] = useState('');
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [avatarFile, setAvatarFile] = useState(null);
+  const [coverPreview, setCoverPreview] = useState(null);
+  const [coverFile, setCoverFile] = useState(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  // QRスキャン
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [qrResult, setQrResult] = useState('');
+  const [qrSending, setQrSending] = useState(false);
   const fileInputRef = useRef(null);
+  const coverInputRef = useRef(null);
+  const qrInputRef = useRef(null);
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const handleCoverChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
   };
 
   const saveSettings = async (updates) => {
@@ -39,23 +54,77 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
       formData.append('displayName', displayName);
       formData.append('bio', bio);
       if (avatarFile) formData.append('avatar', avatarFile);
+      if (coverFile)  formData.append('cover', coverFile);
       const res = await axios.patch('/api/users/me', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       onUpdate(res.data);
       setMessage('プロフィールを更新しました！');
       setEditing(false);
-      setAvatarFile(null);
-      setAvatarPreview(null);
+      setAvatarFile(null); setAvatarPreview(null);
+      setCoverFile(null);  setCoverPreview(null);
     } catch (err) {
       setMessage('更新に失敗しました');
     } finally { setSaving(false); }
   };
 
-  const avatarSrc = avatarPreview || (currentUser.avatar ? `${SERVER_URL}${currentUser.avatar}` : null);
+  // QRコード画像からユーザー名を読み取り
+  const handleQrImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    // QRコードの画像をcanvasで読み取る
+    try {
+      const { BrowserQRCodeReader } = await import('@zxing/browser').catch(() => null);
+      if (BrowserQRCodeReader) {
+        const reader = new BrowserQRCodeReader();
+        const imgUrl = URL.createObjectURL(file);
+        const result = await reader.decodeFromImageUrl(imgUrl);
+        const text = result.getText();
+        handleQrValue(text);
+        return;
+      }
+    } catch (_) {}
+    // zxingが使えない場合はファイルをFormDataで送る
+    setMessage('QRコードの読み取りには別の方法をお試しください');
+  };
+
+  const handleQrValue = async (text) => {
+    // linekiller://add/USERNAME or just USERNAME
+    const match = text.match(/linekiller:\/\/add\/(.+)/) || text.match(/^([a-zA-Z0-9_]+)$/);
+    const username = match?.[1]?.trim();
+    if (!username) { setMessage('有効なQRコードではありません'); return; }
+    setQrResult(username);
+    setQrSending(true);
+    try {
+      const res = await axios.post('/api/friends/by-qr', { username });
+      setMessage(res.data.message || '友達申請を送りました！');
+    } catch (e) {
+      setMessage(e.response?.data?.error || '申請に失敗しました');
+    } finally { setQrSending(false); setShowQrScanner(false); }
+  };
+
+  // カメラQRスキャン（スマホ向け）
+  const handleCameraQr = () => {
+    // input type=file でカメラを使う（モバイル向け）
+    qrInputRef.current?.click();
+  };
+
+  const avatarSrc  = avatarPreview  || (currentUser.avatar     ? (currentUser.avatar.startsWith('http') ? currentUser.avatar : `${SERVER_URL}${currentUser.avatar}`) : null);
+  const coverSrc   = coverPreview   || (currentUser.coverImage ? (currentUser.coverImage.startsWith('http') ? currentUser.coverImage : `${SERVER_URL}${currentUser.coverImage}`) : null);
+
+  const FRAMES = [{id:'none',label:'なし'},{id:'gold',label:'✨ ゴールド'},{id:'rainbow',label:'🌈 レインボー'},{id:'heart',label:'💗 ハート'},{id:'blue',label:'💙 ブルー'},{id:'glow',label:'💚 グロー'}];
+  const SOUNDS = [
+    {id:'default', label:'🎵 デフォルト'},
+    {id:'pop',     label:'🎈 ポップ'},
+    {id:'soft',    label:'🎶 ソフト'},
+    {id:'chime',   label:'🔔 チャイム'},
+    {id:'nature',  label:'🌿 ナチュラル'},
+    {id:'mute',    label:'🔇 ミュート'},
+  ];
 
   return (
-    <div className="page">
+    <div className="page" style={{ overflowY: 'auto', paddingBottom: 80 }}>
+      {/* ログアウト確認 */}
       {showLogoutConfirm && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={() => setShowLogoutConfirm(false)}>
@@ -69,72 +138,83 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
           </div>
         </div>
       )}
+
       <div className="page-header">プロフィール</div>
 
-      <div className="card" style={{ margin: 10, textAlign: 'center' }}>
-        {/* アバター */}
-        <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
-          {avatarSrc ? (
-            <img src={avatarSrc} alt="avatar" style={{
-              width: 80, height: 80, borderRadius: '50%', objectFit: 'cover',
-              border: '3px solid var(--primary)'
-            }} />
-          ) : (
-            <div className="profile-avatar">{currentUser.displayName?.[0] || currentUser.username?.[0] || '?'}</div>
-          )}
+      {/* プロフィールカード */}
+      <div className="card" style={{ margin:10, padding:0, overflow:'hidden' }}>
+        {/* 背景画像エリア */}
+        <div style={{ position:'relative', height:120, background: coverSrc ? 'transparent' : 'linear-gradient(135deg, var(--primary), #6c3483)', overflow:'hidden' }}>
+          {coverSrc && <img src={coverSrc} alt="cover" style={{ width:'100%', height:'100%', objectFit:'cover' }} />}
           {editing && (
-            <button onClick={() => fileInputRef.current?.click()} style={{
-              position: 'absolute', bottom: 0, right: 0,
-              width: 26, height: 26, borderRadius: '50%',
-              background: 'var(--primary)', color: 'white',
-              fontSize: 14, border: 'none', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}>📷</button>
+            <button onClick={() => coverInputRef.current?.click()} style={{
+              position:'absolute', bottom:8, right:8, background:'rgba(0,0,0,0.6)', color:'white',
+              border:'none', borderRadius:20, padding:'5px 12px', fontSize:12, cursor:'pointer'
+            }}>🖼️ 背景を変更</button>
           )}
-          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
-            onChange={handleAvatarChange} />
+          <input ref={coverInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleCoverChange} />
         </div>
 
-        {editing ? (
-          <>
-            <input className="form-input" value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="表示名" style={{ marginTop: 4 }} />
-            <textarea className="form-input" value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="自己紹介..." rows={3} style={{ resize: 'none' }} />
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-              <button className="btn btn-secondary" onClick={() => {
-                setEditing(false); setAvatarPreview(null); setAvatarFile(null);
-              }}>キャンセル</button>
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                {saving ? '保存中...' : '保存'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="profile-name">{currentUser.displayName || currentUser.username}</div>
-            <div className="profile-username">@{currentUser.username}</div>
-            {currentUser.bio && <div className="profile-bio">{currentUser.bio}</div>}
-            <button className="btn btn-secondary" style={{ marginTop: 12 }} onClick={() => setEditing(true)}>
-              ✏️ 編集
-            </button>
-          </>
-        )}
-        {message && <div style={{ marginTop: 10, fontSize: 13, color: 'var(--primary)' }}>{message}</div>}
+        {/* アバター + 名前 */}
+        <div style={{ padding:'0 16px 16px', textAlign:'center' }}>
+          <div style={{ position:'relative', display:'inline-block', marginTop:-40, marginBottom:8 }}>
+            {avatarSrc ? (
+              <img src={avatarSrc} alt="avatar" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'3px solid var(--surface)' }} />
+            ) : (
+              <div className="profile-avatar">{currentUser.displayName?.[0] || currentUser.username?.[0] || '?'}</div>
+            )}
+            {editing && (
+              <button onClick={() => fileInputRef.current?.click()} style={{
+                position:'absolute', bottom:0, right:0, width:26, height:26, borderRadius:'50%',
+                background:'var(--primary)', color:'white', fontSize:14, border:'2px solid var(--surface)', cursor:'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center'
+              }}>📷</button>
+            )}
+            <input ref={fileInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleAvatarChange} />
+          </div>
+
+          {editing ? (
+            <>
+              <input className="form-input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="表示名" style={{ marginTop:4 }} />
+              <textarea className="form-input" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="自己紹介..." rows={3} style={{ resize:'none' }} />
+              <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
+                <button className="btn btn-secondary" onClick={() => { setEditing(false); setAvatarPreview(null); setAvatarFile(null); setCoverPreview(null); setCoverFile(null); }}>キャンセル</button>
+                <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="profile-name">{currentUser.displayName || currentUser.username}</div>
+              <div className="profile-username">@{currentUser.username}</div>
+              {currentUser.bio && <div className="profile-bio">{currentUser.bio}</div>}
+              <button className="btn btn-secondary" style={{ marginTop:12 }} onClick={() => setEditing(true)}>✏️ 編集</button>
+            </>
+          )}
+          {message && <div style={{ marginTop:10, fontSize:13, color:'var(--primary)' }}>{message}</div>}
+        </div>
       </div>
 
-      <div className="card" style={{ margin: 10, textAlign: 'center' }}>
+      {/* QRコード */}
+      <div className="card" style={{ margin:10, textAlign:'center' }}>
         <div className="profile-section-title">マイQRコード</div>
-        <div style={{ display: 'inline-block', padding: 12, background: 'white', borderRadius: 8, marginTop: 8 }}>
+        <div style={{ display:'inline-block', padding:12, background:'white', borderRadius:8, marginTop:8 }}>
           <QRCode value={`linekiller://add/${currentUser.username}`} size={150} level="H" />
         </div>
-        <p style={{ marginTop: 8, fontSize: 12, color: 'var(--text2)' }}>QRコードを読み取って友達追加</p>
+        <p style={{ marginTop:8, fontSize:12, color:'var(--text2)' }}>QRを読み取って友達追加</p>
+        <div style={{ display:'flex', gap:8, justifyContent:'center', marginTop:8 }}>
+          <button className="btn btn-primary" onClick={handleCameraQr} disabled={qrSending}>
+            {qrSending ? '送信中...' : '📷 QRを読み取る'}
+          </button>
+        </div>
+        {/* QR画像アップロード用（カメラまたはファイル） */}
+        <input ref={qrInputRef} type="file" accept="image/*" capture="environment" style={{ display:'none' }} onChange={handleQrImageUpload} />
+        {qrResult && <div style={{ marginTop:8, fontSize:13, color:'var(--text2)' }}>読み取り: @{qrResult}</div>}
       </div>
 
-      <div className="card" style={{ margin: 10 }}>
+      {/* 設定 */}
+      <div className="card" style={{ margin:10 }}>
         <div className="profile-section-title">設定</div>
+
         <div className="setting-row" onClick={onToggleDark}>
           <span>🌙 ダークモード</span>
           <div className={`toggle ${darkMode ? 'on' : ''}`}><div className="toggle-knob" /></div>
@@ -147,7 +227,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
           <div className={`toggle ${darkAutoMode ? 'on' : ''}`}><div className="toggle-knob" /></div>
         </div>
 
-        {/* ステータスメッセージ */}
+        {/* ステータス */}
         <div style={{ padding:'12px 0', borderBottom:'1px solid var(--border)' }}>
           <div style={{ fontSize:13, marginBottom:6 }}>💬 ステータスメッセージ</div>
           <div style={{ display:'flex', gap:8 }}>
@@ -160,51 +240,48 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
         <div style={{ padding:'12px 0', borderBottom:'1px solid var(--border)' }}>
           <div style={{ fontSize:13, marginBottom:8 }}>🖼️ アバターフレーム</div>
           <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-            {[{id:'none',label:'なし'},{id:'gold',label:'✨'},{id:'rainbow',label:'🌈'},{id:'heart',label:'💗'},{id:'blue',label:'💙'},{id:'glow',label:'💚'}].map(f => (
+            {FRAMES.map(f => (
               <button key={f.id} onClick={() => { setSelectedFrame(f.id); saveSettings({ avatarFrame: f.id }); }}
-                style={{ padding:'6px 12px', borderRadius:20, fontSize:13, border:'2px solid', cursor:'pointer',
+                style={{ padding:'6px 12px', borderRadius:20, fontSize:12, border:'2px solid', cursor:'pointer',
                   borderColor: selectedFrame === f.id ? 'var(--primary)' : 'var(--border)',
                   background: selectedFrame === f.id ? 'var(--primary)' : 'var(--surface2)',
-                  color: selectedFrame === f.id ? 'white' : 'var(--text)', fontWeight: selectedFrame === f.id ? 700 : 400
-                }}>{f.label} {f.id === 'none' ? 'なし' : f.id}</button>
+                  color: selectedFrame === f.id ? 'white' : 'var(--text)' }}>{f.label}</button>
             ))}
           </div>
         </div>
 
-        {/* サウンドテーマ */}
+        {/* 通知音 */}
         <div style={{ padding:'12px 0' }}>
-          <div style={{ fontSize:13, marginBottom:8 }}>🔊 サウンドテーマ</div>
+          <div style={{ fontSize:13, marginBottom:8 }}>🔊 通知音テーマ</div>
           <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-            {[{id:'default',label:'🎵 デフォルト'},{id:'pop',label:'🎈 ポップ'},{id:'soft',label:'🎶 ソフト'},{id:'mute',label:'🔇 ミュート'}].map(s => (
+            {SOUNDS.map(s => (
               <button key={s.id} onClick={() => { setSelectedSound(s.id); saveSettings({ soundTheme: s.id }); }}
-                style={{ padding:'6px 12px', borderRadius:20, fontSize:13, border:'2px solid', cursor:'pointer',
+                style={{ padding:'6px 12px', borderRadius:20, fontSize:12, border:'2px solid', cursor:'pointer',
                   borderColor: selectedSound === s.id ? 'var(--primary)' : 'var(--border)',
                   background: selectedSound === s.id ? 'var(--primary)' : 'var(--surface2)',
-                  color: selectedSound === s.id ? 'white' : 'var(--text)', fontWeight: selectedSound === s.id ? 700 : 400
-                }}>{s.label}</button>
+                  color: selectedSound === s.id ? 'white' : 'var(--text)' }}>{s.label}</button>
             ))}
           </div>
         </div>
       </div>
 
-      <div style={{ padding: '0 10px 20px' }}>
-        <button className="btn btn-danger" style={{ width: '100%', padding: 12 }}
-          onClick={() => setShowLogoutConfirm(true)}>
+      <div style={{ padding:'0 10px 20px' }}>
+        <button className="btn btn-danger" style={{ width:'100%', padding:12 }} onClick={() => setShowLogoutConfirm(true)}>
           ログアウト
         </button>
       </div>
 
       <style>{`
-        .profile-avatar { width: 80px; height: 80px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 700; margin: 0 auto; }
-        .profile-name { font-size: 22px; font-weight: 700; }
-        .profile-username { font-size: 14px; color: var(--text2); margin-top: 4px; }
-        .profile-bio { font-size: 13px; color: var(--text2); margin-top: 8px; line-height: 1.5; }
-        .profile-section-title { font-size: 14px; font-weight: 700; color: var(--text2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .setting-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; cursor: pointer; font-size: 15px; }
-        .toggle { width: 44px; height: 24px; border-radius: 12px; background: var(--border); position: relative; transition: background 0.3s; }
-        .toggle.on { background: var(--primary); }
-        .toggle-knob { width: 20px; height: 20px; border-radius: 50%; background: white; position: absolute; top: 2px; left: 2px; transition: left 0.3s; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
-        .toggle.on .toggle-knob { left: 22px; }
+        .profile-avatar { width:80px; height:80px; border-radius:50%; background:var(--primary); color:white; display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:700; margin:0 auto; border:3px solid var(--surface); }
+        .profile-name { font-size:22px; font-weight:700; }
+        .profile-username { font-size:14px; color:var(--text2); margin-top:4px; }
+        .profile-bio { font-size:13px; color:var(--text2); margin-top:8px; line-height:1.5; }
+        .profile-section-title { font-size:13px; font-weight:700; color:var(--text2); margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px; }
+        .setting-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; cursor:pointer; font-size:15px; border-bottom:1px solid var(--border); }
+        .toggle { width:44px; height:24px; border-radius:12px; background:var(--border); position:relative; transition:background 0.3s; flex-shrink:0; }
+        .toggle.on { background:var(--primary); }
+        .toggle-knob { width:20px; height:20px; border-radius:50%; background:white; position:absolute; top:2px; left:2px; transition:left 0.3s; box-shadow:0 1px 4px rgba(0,0,0,0.2); }
+        .toggle.on .toggle-knob { left:22px; }
       `}</style>
     </div>
   );

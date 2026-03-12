@@ -504,8 +504,27 @@ app.get('/api/auth/me', async (req, res) => {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id }, { password: 0 });
     if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
-    res.json({ user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '', mutedRooms: user.muted_rooms || [], bookmarks: user.bookmarked_messages || [], avatarFrame: user.avatar_frame || 'none', soundTheme: user.sound_theme || 'default' } });
+    res.json({ user: { id: user.id, username: user.username, avatar: user.avatar, coverImage: user.cover_image || '', displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '', mutedRooms: user.muted_rooms || [], bookmarks: user.bookmarked_messages || [], avatarFrame: user.avatar_frame || 'none', soundTheme: user.sound_theme || 'default' } });
   } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// QRコードで友達追加（ユーザー名で検索して申請）
+app.post('/api/friends/by-qr', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ error: 'ユーザー名が必要です' });
+    const target = await User.findOne({ username });
+    if (!target) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    if (target.id === decoded.id) return res.status(400).json({ error: '自分自身には送れません' });
+    const already = await Friend.findOne({ user_id: decoded.id, friend_id: target.id });
+    if (already) return res.json({ ok: true, message: 'すでに友達です' });
+    const { v4: uuidv4 } = require('uuid');
+    const id = uuidv4();
+    await FriendRequest.create({ id, from_id: decoded.id, from_name: decoded.username, to_id: target.id });
+    io.to('user_' + target.id).emit('friend:request', { id, from_id: decoded.id, from_name: decoded.username });
+    res.json({ ok: true, message: '友達申請を送りました' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/users/search', async (req, res) => {
@@ -530,20 +549,22 @@ app.get('/api/users', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
-app.patch('/api/users/me', upload.single('avatar'), async (req, res) => {
+app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
   try {
     const decoded = auth(req);
     const { status, displayName, bio, avatarFrame, soundTheme } = req.body;
     const update = {};
-    if (req.file) update.avatar = getFileUrl(req);
-    if (status !== undefined) update.status = status;
+    if (req.files?.avatar?.[0]) update.avatar = getFileUrl({ file: req.files.avatar[0] });
+    if (req.files?.cover?.[0])  update.cover_image = getFileUrl({ file: req.files.cover[0] });
+    if (status !== undefined)      update.status = status;
     if (displayName !== undefined) update.display_name = displayName;
-    if (bio !== undefined) update.bio = bio;
+    if (bio !== undefined)         update.bio = bio;
     if (avatarFrame !== undefined) update.avatar_frame = avatarFrame;
-    if (soundTheme !== undefined) update.sound_theme = soundTheme;
+    if (soundTheme !== undefined)  update.sound_theme = soundTheme;
     const user = await User.findOneAndUpdate({ id: decoded.id }, update, { new: true, projection: { password: 0 } });
     const userRes = {
       id: user.id, username: user.username, avatar: user.avatar,
+      coverImage: user.cover_image || '',
       displayName: user.display_name || user.username,
       bio: user.bio || '', status: user.status || '',
       avatarFrame: user.avatar_frame || 'none',
@@ -936,8 +957,23 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
     const decoded = auth(req);
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
     if (!room) return res.status(403).json({ error: '権限なし' });
-    const msgs = await Message.find({ room_id: req.params.roomId }).sort({ created_at: -1 }).limit(200).then(r => r.reverse());
-    res.json(msgs);
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const before = req.query.before; // ページネーション用
+    const query = { room_id: req.params.roomId };
+    if (before) query.created_at = { $lt: new Date(before) };
+    const msgs = await Message.find(query).sort({ created_at: -1 }).limit(limit).then(r => r.reverse());
+    // senderId/senderNameに統一して返す（clietとの整合性）
+    res.json(msgs.map(m => ({
+      id: m.id, room_id: m.room_id,
+      senderId: m.sender_id, senderName: m.sender_name,
+      sender_id: m.sender_id, sender_name: m.sender_name, // 後方互換
+      content: m.content, type: m.type || 'text',
+      file_data: m.file_data, fileData: m.file_data,
+      reply_to: m.reply_to, replyTo: m.reply_to,
+      edited: m.edited, deleted: m.deleted,
+      read_by: m.read_by, reactions: m.reactions,
+      created_at: m.created_at, createdAt: m.created_at,
+    })));
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 

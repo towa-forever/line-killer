@@ -343,9 +343,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         }
         // ルームを開いたら未読をリセット
         setUnreadCounts((prev) => ({ ...prev, [selectedRoom.id]: 0 }));
+        // 最下部へ即スクロール（ルーム切替時は必ず最新メッセージから）
+        isAtBottomRef.current = true;
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
         if (socket) {
           socket.emit('room:join', selectedRoom.id);
-          // 未読メッセージを既読にする
           res.data.forEach(msg => {
             if (msg.senderId !== currentUser.id && !msg.read_by?.includes(currentUser.id)) {
               socket.emit('message:read', { messageId: msg.id, roomId: selectedRoom.id });
@@ -356,9 +358,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     })();
   }, [selectedRoom, socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // メッセージが増えた時: 最下部にいれば自動スクロール
   useEffect(() => {
     if (isAtBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }); // 'smooth'より速い
     }
   }, [messages]);
 
@@ -414,7 +417,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   };
 
   const renderMessage = (msg) => {
-    const isMine = msg.senderId === currentUser.id;
+    const isMine = (msg.senderId || msg.sender_id) === currentUser.id;
     // 投票メッセージ
     if (msg.type === 'poll') {
       const pollId = msg.fileData?.pollId || msg.file_data?.pollId;
