@@ -35,6 +35,9 @@ const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BAwzRukb1C_xX8RFR2Luln
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'NYWHWUJij3EUcOYPmq17yMihomww6SmBpvQe4ZTsDI0';
 webpush.setVapidDetails('mailto:admin@line-killer.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
+// 管理者ユーザー名（お知らせ投稿・削除権限）
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'towa';
+
 // push購読をメモリで管理（再起動でリセットされるが無料プランでは許容）
 const pushSubscriptions = new Map(); // userId -> subscription (メモリキャッシュ)
 // 起動時にDBからpush subscriptionsを読み込む
@@ -779,6 +782,8 @@ app.get('/api/posts', async (req, res) => {
 app.post('/api/posts', upload.single('image'), async (req, res) => {
   try {
     const decoded = auth(req);
+    // 管理者のみ投稿可能
+    if (decoded.username !== ADMIN_USERNAME) return res.status(403).json({ error: 'お知らせの投稿は管理者のみです' });
     const user = await User.findOne({ id: decoded.id });
     const { content } = req.body;
     if (!content && !req.file) return res.status(400).json({ error: '内容を入力してください' });

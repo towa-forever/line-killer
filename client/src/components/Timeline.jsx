@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+const ADMIN_USERNAME = 'towa';
 
 export default function Timeline({ currentUser }) {
   const [posts, setPosts] = useState([]);
@@ -13,6 +14,9 @@ export default function Timeline({ currentUser }) {
   const [expandedComments, setExpandedComments] = useState({});
   const [loading, setLoading] = useState(true);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const isAdmin = currentUser?.username === ADMIN_USERNAME;
 
   const fetchPosts = useCallback(async () => {
     try { const res = await axios.get('/api/posts'); setPosts(res.data); }
@@ -65,7 +69,7 @@ export default function Timeline({ currentUser }) {
   };
 
   const handleDeletePost = (postId) => {
-    setConfirmDialog({ text: '投稿を削除しますか？', onOk: async () => {
+    setConfirmDialog({ text: 'お知らせを削除しますか？', onOk: async () => {
       try {
         await axios.delete('/api/posts/' + postId);
         setPosts((prev) => prev.filter((p) => p.id !== postId));
@@ -89,7 +93,7 @@ export default function Timeline({ currentUser }) {
   if (loading) return <div className="page"><div className="empty-state">読み込み中...</div></div>;
 
   return (
-    <div className="page">
+    <div className="page" style={{ overflowY: 'auto', paddingBottom: 80 }}>
       {confirmDialog && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={() => setConfirmDialog(null)}>
@@ -102,78 +106,109 @@ export default function Timeline({ currentUser }) {
           </div>
         </div>
       )}
-      <div className="page-header">タイムライン</div>
-      <div className="card" style={{ margin: '10px' }}>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-          <div className="tl-avatar">{currentUser.displayName?.[0] || '?'}</div>
-          <div style={{ flex: 1 }}>
-            <textarea className="tl-input" placeholder="今何してる？"
-              value={newPostText} onChange={(e) => setNewPostText(e.target.value)} rows={3} />
-            {newPostImagePreview && (
-              <div style={{ position: 'relative', display: 'inline-block', marginTop: 8 }}>
-                <img src={newPostImagePreview} alt="preview" style={{ maxWidth: 200, maxHeight: 200, borderRadius: 8 }} />
-                <button onClick={() => { setNewPostImage(null); setNewPostImagePreview(null); }}
-                  style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.5)', color: 'white', borderRadius: '50%', width: 24, height: 24, fontSize: 12 }}>✕</button>
-              </div>
-            )}
-          </div>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-          <label className="tl-img-btn">
-            📷 画像
-            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelect} />
-          </label>
-          <button className="btn btn-primary" onClick={handlePost}
-            disabled={posting || (!newPostText.trim() && !newPostImage)}>
-            {posting ? '投稿中...' : '投稿'}
-          </button>
-        </div>
+
+      {/* ヘッダー */}
+      <div style={{ background:'linear-gradient(135deg, var(--primary), #6c3483)', padding:'16px 16px 20px', color:'white' }}>
+        <div style={{ fontSize:20, fontWeight:800, marginBottom:2 }}>📢 お知らせ</div>
+        <div style={{ fontSize:12, opacity:0.85 }}>LINE Killerからの最新情報をお届けします</div>
       </div>
 
+      {/* 管理者のみ投稿フォームを表示 */}
+      {isAdmin && (
+        <div className="card" style={{ margin:'12px 12px 0', border:'2px solid var(--primary)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
+            <span style={{ fontSize:14, fontWeight:700, color:'var(--primary)' }}>📝 管理者投稿</span>
+            <span style={{ fontSize:11, background:'var(--primary)', color:'white', borderRadius:10, padding:'1px 8px' }}>ADMIN</span>
+          </div>
+          <textarea className="tl-input" placeholder="お知らせ内容を入力..."
+            value={newPostText} onChange={(e) => setNewPostText(e.target.value)} rows={3} />
+          {newPostImagePreview && (
+            <div style={{ position:'relative', display:'inline-block', marginTop:8 }}>
+              <img src={newPostImagePreview} alt="preview" style={{ maxWidth:200, maxHeight:200, borderRadius:8 }} />
+              <button onClick={() => { setNewPostImage(null); setNewPostImagePreview(null); }}
+                style={{ position:'absolute', top:4, right:4, background:'rgba(0,0,0,0.5)', color:'white', borderRadius:'50%', width:24, height:24, fontSize:12, border:'none', cursor:'pointer' }}>✕</button>
+            </div>
+          )}
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:10 }}>
+            <label className="tl-img-btn" style={{ cursor:'pointer' }}>
+              📷 画像を添付
+              <input ref={fileInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleImageSelect} />
+            </label>
+            <button className="btn btn-primary" onClick={handlePost}
+              disabled={posting || (!newPostText.trim() && !newPostImage)}>
+              {posting ? '投稿中...' : '📢 投稿する'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* お知らせ一覧 */}
       {posts.length === 0 ? (
-        <div className="empty-state">まだ投稿がありません。最初の投稿をしよう！</div>
+        <div className="empty-state" style={{ paddingTop:60 }}>
+          <div style={{ fontSize:48, marginBottom:12 }}>📭</div>
+          <div style={{ fontWeight:600, marginBottom:4 }}>お知らせはまだありません</div>
+          <div style={{ fontSize:12 }}>新しいお知らせが届いたらここに表示されます</div>
+        </div>
       ) : (
         posts.map((post) => {
-          const authorName = post.username || '不明';
-          const isOwn = post.user_id === currentUser.id;
           const liked = isLiked(post);
           const showComments = expandedComments[post.id];
           return (
-            <div key={post.id} className="tl-post">
-              <div className="tl-post-header">
-                <div className="tl-avatar">{authorName[0]}</div>
-                <div className="tl-post-meta">
-                  <span className="tl-author">{authorName}</span>
-                  <span className="tl-time">{timeAgo(post.created_at)}</span>
+            <div key={post.id} style={{ background:'var(--surface)', borderBottom:'1px solid var(--border)', padding:'16px' }}>
+              {/* 投稿ヘッダー */}
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+                <div style={{ width:40, height:40, borderRadius:12, background:'linear-gradient(135deg,var(--primary),#6c3483)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
+                  📢
                 </div>
-                {isOwn && <button onClick={() => handleDeletePost(post.id)} style={{ fontSize: 16, background:'none', border:'none', cursor:'pointer', color:'var(--text2)', padding:4, borderRadius:8 }}>🗑️</button>}
+                <div style={{ flex:1 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <span style={{ fontWeight:700, fontSize:14 }}>LINE Killer</span>
+                    <span style={{ fontSize:11, background:'var(--primary)', color:'white', borderRadius:10, padding:'1px 6px' }}>公式</span>
+                  </div>
+                  <div style={{ fontSize:11, color:'var(--text2)' }}>{timeAgo(post.created_at)}</div>
+                </div>
+                {isAdmin && (
+                  <button onClick={() => handleDeletePost(post.id)}
+                    style={{ fontSize:16, background:'none', border:'none', cursor:'pointer', color:'var(--text2)', padding:4, borderRadius:8 }}>🗑️</button>
+                )}
               </div>
-              {post.content && <p className="tl-content">{post.content}</p>}
-              {post.image && <img src={`${SERVER_URL}${post.image}`} alt="post" className="tl-image" />}
-              <div className="tl-actions">
-                <button className={`tl-action-btn ${liked ? 'liked' : ''}`} onClick={() => handleLike(post.id)}>
+
+              {/* 本文 */}
+              {post.content && <p style={{ fontSize:14, lineHeight:1.7, marginBottom:10, whiteSpace:'pre-wrap' }}>{post.content}</p>}
+              {post.image && (
+                <img src={post.image.startsWith('http') ? post.image : `${SERVER_URL}${post.image}`}
+                  alt="post" style={{ width:'100%', maxHeight:400, objectFit:'cover', borderRadius:12, marginBottom:10, display:'block' }} />
+              )}
+
+              {/* リアクション */}
+              <div style={{ display:'flex', gap:16, paddingTop:8, borderTop:'1px solid var(--border)' }}>
+                <button onClick={() => handleLike(post.id)}
+                  style={{ fontSize:13, color: liked ? '#e74c3c' : 'var(--text2)', padding:'4px 10px', borderRadius:20,
+                    background: liked ? '#fde8e8' : 'var(--surface2)', border:'none', cursor:'pointer', fontWeight: liked ? 700 : 400 }}>
                   {liked ? '❤️' : '🤍'} {post.likes?.length || 0}
                 </button>
-                <button className="tl-action-btn"
-                  onClick={() => setExpandedComments((p) => ({ ...p, [post.id]: !p[post.id] }))}>
-                  💬 {post.comments?.length || 0}
+                <button onClick={() => setExpandedComments((p) => ({ ...p, [post.id]: !p[post.id] }))}
+                  style={{ fontSize:13, color:'var(--text2)', padding:'4px 10px', borderRadius:20, background:'var(--surface2)', border:'none', cursor:'pointer' }}>
+                  💬 {post.comments?.length || 0}件のコメント
                 </button>
               </div>
+
+              {/* コメント欄 */}
               {showComments && (
-                <div className="tl-comments">
+                <div style={{ marginTop:12, paddingTop:12, borderTop:'1px solid var(--border)' }}>
                   {post.comments?.map((c, i) => (
-                    <div key={i} className="tl-comment">
-                      <span className="tl-comment-author">{c.username || '?'}</span>
-                      <span className="tl-comment-text">{c.content}</span>
+                    <div key={i} style={{ fontSize:13, padding:'4px 0', display:'flex', gap:8 }}>
+                      <span style={{ fontWeight:600, flexShrink:0 }}>{c.username || '?'}</span>
+                      <span style={{ color:'var(--text2)' }}>{c.content}</span>
                     </div>
                   ))}
-                  <div className="tl-comment-input-row">
-                    <input className="form-input" style={{ marginBottom: 0, fontSize: 13 }}
+                  <div style={{ display:'flex', gap:8, marginTop:8 }}>
+                    <input className="form-input" style={{ marginBottom:0, fontSize:13, flex:1 }}
                       placeholder="コメントを入力..."
                       value={commentInputs[post.id] || ''}
                       onChange={(e) => setCommentInputs((p) => ({ ...p, [post.id]: e.target.value }))}
                       onKeyDown={(e) => e.key === 'Enter' && handleComment(post.id)} />
-                    <button className="btn btn-primary" style={{ padding: '8px 14px', fontSize: 13 }}
+                    <button className="btn btn-primary" style={{ padding:'8px 14px', fontSize:13 }}
                       onClick={() => handleComment(post.id)}>送信</button>
                   </div>
                 </div>
@@ -184,27 +219,10 @@ export default function Timeline({ currentUser }) {
       )}
 
       <style>{`
-        .tl-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; flex-shrink: 0; }
-        .tl-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 14px; resize: none; outline: none; font-family: inherit; }
-        .tl-input:focus { border-color: var(--primary); }
-        .tl-img-btn { font-size: 13px; color: var(--text2); cursor: pointer; padding: 6px 12px; border-radius: 8px; background: var(--surface2); }
-        .tl-post { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 16px; }
-        .tl-post-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .tl-post-meta { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-        .tl-author { font-weight: 700; font-size: 14px; }
-        .tl-time { font-size: 11px; color: var(--text2); }
-        .tl-content { font-size: 14px; line-height: 1.6; margin-bottom: 10px; white-space: pre-wrap; }
-        .tl-image { width: 100%; max-height: 400px; object-fit: cover; border-radius: 10px; margin-bottom: 10px; display: block; }
-        .tl-actions { display: flex; gap: 16px; padding-top: 8px; border-top: 1px solid var(--border); }
-        .tl-action-btn { font-size: 13px; color: var(--text2); padding: 4px 8px; border-radius: 6px; transition: background 0.15s; }
-        .tl-action-btn:hover { background: var(--surface2); }
-        .tl-action-btn.liked { color: #e74c3c; }
-        .tl-comments { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
-        .tl-comment { font-size: 13px; padding: 4px 0; display: flex; gap: 8px; }
-        .tl-comment-author { font-weight: 600; flex-shrink: 0; }
-        .tl-comment-input-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
-        .tl-comment-input-row .form-input { flex: 1; }
-        .empty-state { text-align: center; padding: 40px 20px; color: var(--text2); font-size: 14px; }
+        .tl-input { width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:14px; resize:none; outline:none; font-family:inherit; box-sizing:border-box; }
+        .tl-input:focus { border-color:var(--primary); }
+        .tl-img-btn { font-size:13px; color:var(--text2); padding:6px 12px; border-radius:8px; background:var(--surface2); }
+        .empty-state { text-align:center; padding:40px 20px; color:var(--text2); font-size:14px; }
       `}</style>
     </div>
   );

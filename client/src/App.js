@@ -1409,7 +1409,7 @@ function TabBar({ activeTab, setActiveTab, notifications }) {
   const tabs = [
     { id: 'chat', label: 'トーク', icon: '💬' },
     { id: 'friends', label: '友達', icon: '👥' },
-    { id: 'timeline', label: 'タイムライン', icon: '📰' },
+    { id: 'timeline', label: 'お知らせ', icon: '📢' },
     { id: 'stampshop', label: 'ショップ', icon: '🎫' },
     { id: 'profile', label: 'プロフィール', icon: '👤' },
   ];
