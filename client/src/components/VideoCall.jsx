@@ -59,7 +59,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     }
   };
 
-  // ---- メディア取得（解像度を低めに → 接続速度優先）----
+  // ---- メディア取得（高画質 + 高音質）----
   const getMedia = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -125,24 +125,28 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       if (s === 'failed') safeEnd();
     };
 
-    // 帯域制限（音声優先・映像は動的に調整）
-    pc.onsignalingstatechange = async () => {
-      if (pc.signalingState !== 'stable') return;
+    // 帯域: 最初は低めにして素早く繋ぎ、安定後に高画質にアップ
+    const applyBitrate = async (videoMax) => {
       try {
         for (const sender of pc.getSenders()) {
           if (!sender.track) continue;
           const params = sender.getParameters();
           if (!params.encodings?.length) params.encodings = [{}];
           if (sender.track.kind === 'video') {
-            params.encodings[0].maxBitrate = 4_000_000; // 映像4Mbps（高画質）
+            params.encodings[0].maxBitrate   = videoMax;
             params.encodings[0].maxFramerate = 60;
           } else {
-            params.encodings[0].maxBitrate = 128_000;   // 音声128kbps（高音質）
-            params.encodings[0].priority = 'high';
+            params.encodings[0].maxBitrate = 128_000; // 音声128kbps（高音質）
+            params.encodings[0].priority   = 'high';  // 音声を映像より優先
           }
           await sender.setParameters(params).catch(() => {});
         }
       } catch (_) {}
+    };
+    pc.onsignalingstatechange = async () => {
+      if (pc.signalingState !== 'stable') return;
+      await applyBitrate(500_000);           // まず500kbpsで素早く繋ぐ
+      setTimeout(() => applyBitrate(4_000_000), 4000); // 4秒後に4Mbps高画質へ
     };
 
     return pc;
