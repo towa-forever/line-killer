@@ -579,9 +579,9 @@ app.post('/api/official-accounts/apply', async (req, res) => {
       bio: description || '',
     });
 
-    // 管理者へメール通知
+    // 管理者へメール通知（awaitしない → メール失敗でもレスポンスが止まらない）
     const categoryLabels = { news:'ニュース', shop:'ショップ', service:'サービス', creator:'クリエイター', school:'学校・教育', other:'その他' };
-    await sendAdminMail({
+    sendAdminMail({
       subject: `【LINE Killer】公式アカウント申請: ${officialName.trim()}`,
       html: `
         <h2>公式アカウント申請が届きました</h2>
