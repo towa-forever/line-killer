@@ -100,6 +100,12 @@ function AuthScreen({ onLogin }) {
           <button type="submit" disabled={loading} className="auth-btn">
             {loading ? '...' : isLogin ? 'ログイン' : '登録'}
           </button>
+          {isLogin && (
+            <button type="button" onClick={() => window.location.href = '/forgot-password'}
+              style={{ display:'block', width:'100%', marginTop:8, background:'none', border:'none', color:'rgba(255,255,255,0.55)', fontSize:12, cursor:'pointer', textAlign:'center' }}>
+              パスワードを忘れた方はこちら
+            </button>
+          )}
         </form>
         <button className="auth-toggle" onClick={() => setIsLogin(!isLogin)}>
           {isLogin ? 'アカウント作成' : 'ログインへ戻る'}

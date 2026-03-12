@@ -26,7 +26,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription } = require('./db');
+const { User, PasswordResetToken, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription } = require('./db');
 
 const app = express();
 
@@ -343,6 +343,104 @@ app.post('/api/auth/login', async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
+
+
+// ===== メール送信（nodemailer）=====
+const nodemailer = require('nodemailer');
+
+function createMailTransport() {
+  if (!process.env.MAIL_USER || !process.env.MAIL_PASS) return null;
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
+  });
+}
+
+// パスワードリセット申請
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'メールアドレスを入力してください' });
+
+    // メールアドレスでユーザー検索（oauth_accountsのemailも含む）
+    const user = await User.findOne({
+      $or: [
+        { 'oauth_accounts.email': email },
+        { username: email }, // usernameがメールの場合
+      ]
+    });
+
+    // セキュリティ上、ユーザーが見つからなくても同じレスポンスを返す
+    if (!user) return res.json({ message: 'メールを送信しました（アドレスが登録済みの場合）' });
+
+    const transport = createMailTransport();
+    if (!transport) return res.status(503).json({ error: 'メール機能が設定されていません。管理者にお問い合わせください。' });
+
+    // トークン生成（1時間有効）
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    await PasswordResetToken.deleteMany({ user_id: user.id }); // 古いトークン削除
+    await PasswordResetToken.create({ user_id: user.id, token, expires_at: expiresAt });
+
+    const CLIENT = process.env.CLIENT_URL || 'https://line-killer.onrender.com';
+    const resetUrl = `${CLIENT}/reset-password?token=${token}`;
+
+    await transport.sendMail({
+      from: `"LINE Killer" <${process.env.MAIL_USER}>`,
+      to: email,
+      subject: '【LINE Killer】パスワードリセット',
+      html: `
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+          <h2 style="color:#06c755">🔑 パスワードリセット</h2>
+          <p>以下のボタンをクリックして新しいパスワードを設定してください。</p>
+          <p>このリンクは<strong>1時間</strong>有効です。</p>
+          <a href="${resetUrl}" style="display:inline-block;margin:16px 0;padding:12px 28px;background:#06c755;color:white;border-radius:10px;text-decoration:none;font-weight:bold;font-size:16px">
+            パスワードをリセット
+          </a>
+          <p style="color:#888;font-size:12px">心当たりがない場合は無視してください。</p>
+          <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+          <p style="color:#aaa;font-size:11px">LINE Killer</p>
+        </div>
+      `,
+    });
+
+    res.json({ message: 'メールを送信しました（アドレスが登録済みの場合）' });
+  } catch(e) {
+    console.error('forgot-password error:', e);
+    res.status(500).json({ error: 'メール送信に失敗しました' });
+  }
+});
+
+// パスワードリセット実行
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ error: 'トークンと新しいパスワードが必要です' });
+    if (newPassword.length < 6) return res.status(400).json({ error: 'パスワードは6文字以上にしてください' });
+
+    const record = await PasswordResetToken.findOne({ token, used: false, expires_at: { $gt: new Date() } });
+    if (!record) return res.status(400).json({ error: 'リンクが無効または期限切れです。再度申請してください。' });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await User.findOneAndUpdate({ id: record.user_id }, { password: hashed });
+    await PasswordResetToken.findByIdAndUpdate(record._id, { used: true });
+
+    res.json({ message: 'パスワードを変更しました。ログインしてください。' });
+  } catch(e) {
+    console.error('reset-password error:', e);
+    res.status(500).json({ error: 'パスワードリセットに失敗しました' });
+  }
+});
+
+// リセットトークン有効性確認
+app.get('/api/auth/reset-password/:token', async (req, res) => {
+  try {
+    const record = await PasswordResetToken.findOne({ token: req.params.token, used: false, expires_at: { $gt: new Date() } });
+    if (!record) return res.status(400).json({ error: 'リンクが無効または期限切れです' });
+    res.json({ valid: true });
+  } catch { res.status(500).json({ error: 'エラー' }); }
+});
 
 // ===== パスワード変更 =====
 app.post('/api/auth/change-password', async (req, res) => {
