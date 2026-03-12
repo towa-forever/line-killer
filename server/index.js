@@ -515,7 +515,10 @@ app.get('/api/auth/me', async (req, res) => {
 function createMailTransporter() {
   if (process.env.MAIL_USER && process.env.MAIL_PASS) {
     return nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com', // serviceではなくhostを直接指定
+      port: 465,
+      secure: true,           // SSL（IPv6を使わない）
+      family: 4,              // IPv4強制
       auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
     });
   }
