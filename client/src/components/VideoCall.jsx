@@ -1,138 +1,163 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
-// ICEサーバー設定（サーバーから動的取得 or フォールバック）
+// ICEサーバー設定
 let ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'turn:openrelay.metered.ca:80',            username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turns:openrelay.metered.ca:443',          username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:80',                username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp',  username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turns:openrelay.metered.ca:443',               username: 'openrelayproject', credential: 'openrelayproject' },
   ],
-  iceCandidatePoolSize: 10,
+  iceCandidatePoolSize: 5,
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
-  iceTransportPolicy: 'all', // STUNで繋がらなければTURNに自動フォールバック
+  iceTransportPolicy: 'all',
 };
-// サーバーからICEサーバー設定を取得（起動時に1回）
-fetch('/api/ice-servers').then(r => r.json()).then(data => {
-  if (data.iceServers) ICE_SERVERS = { ...ICE_SERVERS, iceServers: data.iceServers };
+fetch('/api/ice-servers').then(r => r.json()).then(d => {
+  if (d.iceServers) ICE_SERVERS = { ...ICE_SERVERS, iceServers: d.iceServers };
 }).catch(() => {});
 
 export default function VideoCall({ currentUser, socket, roomId, targetUserId, isCaller, incomingOffer, onEnd, minimized, onToggleMinimize }) {
-  const localVideoRef = useRef(null);
+  // ---- refs（minimized切り替えでもDOMが変わらないように全部ref管理）----
+  const localVideoRef  = useRef(null);
   const remoteVideoRef = useRef(null);
-  const pcRef = useRef(null);
-  const localStreamRef = useRef(null);
-  const iceCandidateBuffer = useRef([]);
-  const remoteDescSet = useRef(false);
-  const [status, setStatus] = useState(isCaller ? 'ringing' : 'connecting');
-  const [isMuted, setIsMuted] = useState(false);
+  const pcRef           = useRef(null);
+  const localStreamRef  = useRef(null);
+  const remoteStreamRef = useRef(null); // ← 相手映像を保持し続ける
+  const iceBuf          = useRef([]);
+  const remoteDescSet   = useRef(false);
+  const endedRef        = useRef(false);
+  const restartTimer    = useRef(null);
+
+  const [status,   setStatus]   = useState(isCaller ? 'ringing' : 'connecting');
+  const [isMuted,  setIsMuted]  = useState(false);
   const [isCamOff, setIsCamOff] = useState(false);
-  const [error, setError] = useState('');
+  const [error,    setError]    = useState('');
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [facingMode, setFacingMode] = useState('user');
   const [iceState, setIceState] = useState('');
   const screenTrackRef = useRef(null);
-  const endedRef = useRef(false);
 
+  // ---- 通話終了 ----
   const safeEnd = useCallback(() => {
     if (endedRef.current) return;
     endedRef.current = true;
+    clearTimeout(restartTimer.current);
     setStatus('ended');
-    setTimeout(onEnd, 1200);
+    localStreamRef.current?.getTracks().forEach(t => t.stop());
+    try { pcRef.current?.close(); } catch (_) {}
+    setTimeout(onEnd, 1000);
   }, [onEnd]);
 
-  const flushBuffer = async (pc) => {
-    const buf = [...iceCandidateBuffer.current];
-    iceCandidateBuffer.current = [];
-    for (const c of buf) {
+  // ---- ICEバッファをフラッシュ ----
+  const flushBuf = async (pc) => {
+    const arr = [...iceBuf.current];
+    iceBuf.current = [];
+    for (const c of arr) {
       try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (_) {}
     }
   };
 
+  // ---- メディア取得（解像度を低めに → 接続速度優先）----
+  const getMedia = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 30 } },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000 },
+      });
+      return stream;
+    } catch {
+      try { return await navigator.mediaDevices.getUserMedia({ audio: true }); } catch {
+        setError('マイク・カメラへのアクセスが拒否されました');
+        return null;
+      }
+    }
+  };
+
+  // ---- PeerConnection初期化 ----
   const initPC = useCallback((stream) => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
     pcRef.current = pc;
-    // トラックを追加
+
     stream.getTracks().forEach(t => pc.addTrack(t, stream));
 
+    // 相手の映像受信 ← ここが一番重要
     pc.ontrack = (e) => {
-      const srcObj = e.streams?.[0] ?? (() => {
-        const ms = new MediaStream();
-        ms.addTrack(e.track);
-        return ms;
+      const ms = e.streams?.[0] || (() => {
+        if (!remoteStreamRef.current) remoteStreamRef.current = new MediaStream();
+        remoteStreamRef.current.addTrack(e.track);
+        return remoteStreamRef.current;
       })();
+      remoteStreamRef.current = ms;
+      // minimized中でもremoteVideoRefにセットし続ける
       if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = srcObj;
+        remoteVideoRef.current.srcObject = ms;
         remoteVideoRef.current.play().catch(() => {});
       }
       setStatus('active');
     };
 
     pc.onicecandidate = (e) => {
-      if (e.candidate) {
-        socket.emit('call:ice', { candidate: e.candidate, to: targetUserId });
-      }
+      if (e.candidate) socket.emit('call:ice', { candidate: e.candidate, to: targetUserId });
     };
 
     pc.oniceconnectionstatechange = () => {
-      setIceState(pc.iceConnectionState);
-      if (['connected', 'completed'].includes(pc.iceConnectionState)) {
-        setStatus('active');
-      }
-      if (pc.iceConnectionState === 'failed') {
-        // ICE再起動を試みる
+      const s = pc.iceConnectionState;
+      setIceState(s);
+      if (['connected', 'completed'].includes(s)) setStatus('active');
+      if (s === 'failed') {
+        // ICE再起動（再接続試行）
         try { pc.restartIce(); } catch (_) {}
       }
-      if (pc.iceConnectionState === 'disconnected') {
-        // 5秒待って回復しなければ終了
-        setTimeout(() => {
-          if (pcRef.current?.iceConnectionState === 'disconnected') safeEnd();
-        }, 5000);
+      if (s === 'disconnected') {
+        restartTimer.current = setTimeout(() => {
+          if (pcRef.current?.iceConnectionState === 'disconnected') {
+            try { pcRef.current.restartIce(); } catch (_) {}
+          }
+        }, 3000);
       }
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'connected') setStatus('active');
-      if (['failed', 'closed'].includes(pc.connectionState)) safeEnd();
+      const s = pc.connectionState;
+      if (s === 'connected') setStatus('active');
+      if (s === 'failed') safeEnd();
+    };
+
+    // 帯域制限（音声優先・映像は動的に調整）
+    pc.onsignalingstatechange = async () => {
+      if (pc.signalingState !== 'stable') return;
+      try {
+        for (const sender of pc.getSenders()) {
+          if (!sender.track) continue;
+          const params = sender.getParameters();
+          if (!params.encodings?.length) params.encodings = [{}];
+          if (sender.track.kind === 'video') {
+            params.encodings[0].maxBitrate = 500_000; // 映像500kbps
+            params.encodings[0].maxFramerate = 24;
+          } else {
+            params.encodings[0].maxBitrate = 64_000;  // 音声64kbps
+            params.encodings[0].priority = 'high';
+          }
+          await sender.setParameters(params).catch(() => {});
+        }
+      } catch (_) {}
     };
 
     return pc;
   }, [socket, targetUserId, safeEnd]);
 
+  // ---- メインuseEffect ----
   useEffect(() => {
     if (!socket) return;
     let mounted = true;
 
-    const getMedia = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        });
-        if (!mounted) { stream.getTracks().forEach(t => t.stop()); return null; }
-        localStreamRef.current = stream;
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-        return stream;
-      } catch {
-        // カメラなしでも音声だけで続行
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          if (!mounted) { stream.getTracks().forEach(t => t.stop()); return null; }
-          localStreamRef.current = stream;
-          if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-          return stream;
-        } catch {
-          if (mounted) setError('マイク・カメラへのアクセスが拒否されました');
-          return null;
-        }
-      }
-    };
-
     const startCall = async () => {
       const stream = await getMedia();
       if (!stream || !mounted) return;
+      localStreamRef.current = stream;
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       const pc = initPC(stream);
       const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
       await pc.setLocalDescription(offer);
@@ -142,22 +167,23 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     const answerCall = async () => {
       const stream = await getMedia();
       if (!stream || !mounted) return;
+      localStreamRef.current = stream;
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       const pc = initPC(stream);
       await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
       remoteDescSet.current = true;
-      await flushBuffer(pc);
+      await flushBuf(pc);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit('call:answer', { answer: pc.localDescription, to: targetUserId });
     };
 
-    // ===== シグナリングイベント =====
     socket.on('call:answered', async ({ answer }) => {
       if (!pcRef.current) return;
       try {
         await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer));
         remoteDescSet.current = true;
-        await flushBuffer(pcRef.current);
+        await flushBuf(pcRef.current);
       } catch (_) {}
     });
 
@@ -166,19 +192,17 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       if (remoteDescSet.current && pcRef.current) {
         try { await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch (_) {}
       } else {
-        iceCandidateBuffer.current.push(candidate);
+        iceBuf.current.push(candidate);
       }
     });
 
-    socket.on('call:ended', safeEnd);
+    socket.on('call:ended',   safeEnd);
     socket.on('call:rejected', () => { setStatus('rejected'); setTimeout(onEnd, 1200); });
 
     if (isCaller) startCall(); else answerCall();
 
     return () => {
       mounted = false;
-      localStreamRef.current?.getTracks().forEach(t => t.stop());
-      if (pcRef.current) { try { pcRef.current.close(); } catch (_) {} }
       socket.off('call:answered');
       socket.off('call:ice');
       socket.off('call:ended');
@@ -186,26 +210,35 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     };
   }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ---- minimized切り替え時にsrcObjectを再セット ----
+  useEffect(() => {
+    // minimizedが変わってもDOMが再マウントされたらstreamを再セットする
+    if (localVideoRef.current  && localStreamRef.current)  localVideoRef.current.srcObject  = localStreamRef.current;
+    if (remoteVideoRef.current && remoteStreamRef.current) {
+      remoteVideoRef.current.srcObject = remoteStreamRef.current;
+      remoteVideoRef.current.play().catch(() => {});
+    }
+  }, [minimized]);
+
+  // ---- カメラ切替 ----
   const switchCamera = async () => {
-    const newFacing = facingMode === 'user' ? 'environment' : 'user';
-    setFacingMode(newFacing);
+    const next = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(next);
     try {
-      const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: newFacing }, audio: false });
-      const newTrack = newStream.getVideoTracks()[0];
+      const ns = await navigator.mediaDevices.getUserMedia({ video: { facingMode: next }, audio: false });
+      const nt = ns.getVideoTracks()[0];
       localStreamRef.current?.getVideoTracks().forEach(t => t.stop());
       const audio = localStreamRef.current?.getAudioTracks() || [];
-      localStreamRef.current = new MediaStream([newTrack, ...audio]);
+      localStreamRef.current = new MediaStream([nt, ...audio]);
       if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
       const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
-      if (sender) await sender.replaceTrack(newTrack);
+      if (sender) await sender.replaceTrack(nt);
     } catch (_) {}
   };
 
   const endCall = () => {
     socket?.emit('call:end', { roomId, to: targetUserId });
-    localStreamRef.current?.getTracks().forEach(t => t.stop());
-    try { pcRef.current?.close(); } catch (_) {}
-    onEnd();
+    safeEnd();
   };
 
   const toggleMute = () => {
@@ -220,28 +253,29 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
 
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
-      if (screenTrackRef.current) { screenTrackRef.current.stop(); screenTrackRef.current = null; }
+      screenTrackRef.current?.stop();
+      screenTrackRef.current = null;
       try {
-        const cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
-        const track = cam.getVideoTracks()[0];
+        const cs = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
+        const ct = cs.getVideoTracks()[0];
         const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
-        if (sender) await sender.replaceTrack(track);
+        if (sender) await sender.replaceTrack(ct);
         localStreamRef.current?.getVideoTracks().forEach(t => t.stop());
         const audio = localStreamRef.current?.getAudioTracks() || [];
-        localStreamRef.current = new MediaStream([track, ...audio]);
+        localStreamRef.current = new MediaStream([ct, ...audio]);
         if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
       } catch (_) {}
       setIsScreenSharing(false);
     } else {
       try {
-        const screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        const track = screen.getVideoTracks()[0];
-        screenTrackRef.current = track;
+        const ss = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const st = ss.getVideoTracks()[0];
+        screenTrackRef.current = st;
         const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
-        if (sender) await sender.replaceTrack(track);
+        if (sender) await sender.replaceTrack(st);
         const audio = localStreamRef.current?.getAudioTracks() || [];
-        if (localVideoRef.current) localVideoRef.current.srcObject = new MediaStream([track, ...audio]);
-        track.onended = () => { setIsScreenSharing(false); };
+        if (localVideoRef.current) localVideoRef.current.srcObject = new MediaStream([st, ...audio]);
+        st.onended = () => setIsScreenSharing(false);
         setIsScreenSharing(true);
       } catch (e) {
         if (e.name !== 'NotAllowedError') setError('画面共有を開始できませんでした');
@@ -249,9 +283,10 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     }
   };
 
-  const statusText = { connecting: '接続中…', ringing: '呼び出し中…', ended: '通話終了', rejected: '拒否されました' };
-  const iceLabel = { checking: '🔄 経路確認中', failed: '⚠️ 経路確立失敗', disconnected: '⚠️ 接続が切れました' };
+  const statusText = { connecting:'接続中…', ringing:'呼び出し中…', ended:'通話終了', rejected:'拒否されました' };
+  const iceLabel   = { checking:'🔄 経路確認中', failed:'⚠️ 再接続中…', disconnected:'⚠️ 接続が不安定です' };
 
+  // ---- 最小化表示 ----
   if (minimized) {
     return (
       <div style={{ position:'fixed', bottom:80, right:12, zIndex:4000, width:160, height:200,
@@ -273,6 +308,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     );
   }
 
+  // ---- フル表示 ----
   return (
     <div style={{ position:'fixed', inset:0, background:'#000', display:'flex', flexDirection:'column', zIndex:5000 }}>
       <div style={{ position:'relative', flex:1, background:'#111' }}>
@@ -291,7 +327,6 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
           </div>
         )}
 
-        {/* ICE接続状態ヒント */}
         {status === 'active' && iceLabel[iceState] && (
           <div style={{ position:'absolute', top:12, left:'50%', transform:'translateX(-50%)',
             background:'rgba(0,0,0,0.65)', color:'white', fontSize:12, padding:'4px 12px',
@@ -309,10 +344,9 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       {status !== 'ended' && status !== 'rejected' && (
         <div style={{ display:'flex', gap:16, padding:'16px 20px',
           paddingBottom:`calc(20px + env(safe-area-inset-bottom))`,
-          justifyContent:'center', alignItems:'center', background:'rgba(0,0,0,0.85)',
-          flexWrap:'wrap' }}>
-          <CallBtn onClick={toggleMute} active={isMuted} activeColor="#c0392b" label={isMuted ? 'ミュート中' : 'マイク'}>{isMuted ? '🔇' : '🎤'}</CallBtn>
-          <CallBtn onClick={toggleCamera} active={isCamOff} activeColor="#c0392b" label={isCamOff ? 'カメラオフ' : 'カメラ'}>{isCamOff ? '📷' : '📹'}</CallBtn>
+          justifyContent:'center', alignItems:'center', background:'rgba(0,0,0,0.85)', flexWrap:'wrap' }}>
+          <CallBtn onClick={toggleMute}   active={isMuted}   activeColor="#c0392b" label={isMuted ? 'ミュート中' : 'マイク'}>{isMuted ? '🔇' : '🎤'}</CallBtn>
+          <CallBtn onClick={toggleCamera} active={isCamOff}  activeColor="#c0392b" label={isCamOff ? 'カメラオフ' : 'カメラ'}>{isCamOff ? '📷' : '📹'}</CallBtn>
           <CallBtn onClick={switchCamera} label="カメラ切替">🔄</CallBtn>
           <CallBtn onClick={toggleScreenShare} active={isScreenSharing} activeColor="#f39c12" label={isScreenSharing ? '共有中' : '画面共有'}>{isScreenSharing ? '🖥️' : '📺'}</CallBtn>
           <CallBtn onClick={onToggleMinimize} label="チャットへ">💬</CallBtn>
