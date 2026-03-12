@@ -537,6 +537,70 @@ Subject: ${subject}`);
   }
 }
 
+
+// ===== グループ招待リンク =====
+app.post('/api/rooms/:roomId/invite', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    if (!room.invite_code) {
+      const { v4: uuidv4 } = require('uuid');
+      room.invite_code = uuidv4().replace(/-/g, '').slice(0, 12);
+      await room.save();
+    }
+    res.json({ inviteCode: room.invite_code, inviteUrl: `${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/invite/${room.invite_code}` });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/api/invite/:code/join', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ invite_code: req.params.code, invite_enabled: true });
+    if (!room) return res.status(404).json({ error: '招待リンクが無効です' });
+    if (room.members.includes(decoded.id)) return res.json({ ok: true, roomId: room.id, message: 'すでに参加しています' });
+    room.members.push(decoded.id);
+    await room.save();
+    io.to('room_' + room.id).emit('room:member_joined', { roomId: room.id, userId: decoded.id, username: decoded.username });
+    res.json({ ok: true, roomId: room.id, roomName: room.name });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// ===== ユーザープロフィール表示 =====
+app.get('/api/users/:username/profile', async (req, res) => {
+  try {
+    auth(req); // 認証必須
+    const user = await User.findOne({ username: req.params.username }, { password: 0 });
+    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    res.json({
+      id: user.id, username: user.username,
+      displayName: user.display_name || user.username,
+      avatar: user.avatar, coverImage: user.cover_image || '',
+      bio: user.bio || '', status: user.status || '',
+      avatarFrame: user.avatar_frame || 'none',
+      isOnline: !!(io.onlineUsers?.has(user.id)),
+      lastSeen: user.last_seen,
+      showOnline: user.show_online !== false,
+    });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// ===== チャットテーマカラー =====
+app.patch('/api/rooms/:roomId/theme', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { themeColor } = req.body;
+    const room = await Room.findOneAndUpdate(
+      { id: req.params.roomId, members: decoded.id },
+      { theme_color: themeColor || '' },
+      { new: true }
+    );
+    if (!room) return res.status(403).json({ error: '権限なし' });
+    io.to('room_' + req.params.roomId).emit('room:theme_changed', { roomId: req.params.roomId, themeColor: themeColor || '' });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
 // QRコードで友達追加（ユーザー名で検索して申請）
 app.post('/api/friends/by-qr', async (req, res) => {
   try {
@@ -1435,6 +1499,8 @@ function formatDuration(seconds) {
     console.log('切断:', socket.user.username);
     if (io.onlineUsers) {
       io.onlineUsers.delete(socket.user.id);
+      // 最終オンライン時刻を更新
+      User.findOneAndUpdate({ id: socket.user.id }, { last_seen: new Date() }).catch(() => {});
       io.emit('user:offline', { userId: socket.user.id, lastSeen: Date.now() });
     }
     // グループ通話から自動退出

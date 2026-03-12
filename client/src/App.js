@@ -19,6 +19,9 @@ const Album = lazy(() => import('./components/Album'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const EventCalendar = lazy(() => import('./components/EventCalendar'));
 const MiniGame = lazy(() => import('./components/MiniGame'));
+const VoiceCall = lazy(() => import('./components/VoiceCall'));
+const StickerMaker = lazy(() => import('./components/StickerMaker'));
+const UserProfile = lazy(() => import('./components/UserProfile'));
 const AIAssistant = lazy(() => import('./components/AIAssistant'));
 const PollCard = lazy(() => import('./components/PollCard'));
 const TaskPanel = lazy(() => import('./components/TaskPanel'));
@@ -169,6 +172,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [globalSearching, setGlobalSearching] = useState(false);
   const [showTaskPanel, setShowTaskPanel] = useState(false);
   const [showVoice, setShowVoice] = useState(false);
+  const [showStickerMaker, setShowStickerMaker] = useState(false);
+  const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId }
+  const [roomTheme, setRoomTheme] = useState({}); // roomId -> themeColor
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null); // { message, onOk }
   const appConfirm = (message, onOk) => setConfirmDialog({ message, onOk });
@@ -590,7 +596,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
           )}
           <div className="message-time">
-            {isMine && readByOthers && <span style={{ fontSize: 11, color: '#06c755', marginRight: 4 }}>既読</span>}
+            {isMine && (() => {
+              const readCount = (msg.read_by || []).filter(id => id !== currentUser.id).length;
+              if (readCount === 0) return null;
+              return (
+                <span style={{ fontSize:11, color:'#06c755', marginRight:4, fontWeight:600 }}>
+                  既読 {readCount > 1 ? readCount : ''}
+                </span>
+              );
+            })()}
             {time}
             <span className="reply-btn" onClick={() => setReplyTo(msg)}>↩</span>
           </div>
@@ -692,6 +706,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   { icon:'📅', label:'カレンダー', action: () => setShowEventCal(true) },
                   { icon:'✅', label:'タスク', action: () => setShowTaskPanel(true) },
                   { icon:'🎮', label:'ゲーム', action: () => setShowMiniGame(true) },
+                  { icon:'🎨', label:'スタンプ自作', action: () => setShowStickerMaker(true) },
+                  { icon:'📞', label:'音声通話', action: () => { setVoiceCall({ targetUser: selectedRoom?.members?.find(m => m !== currentUser.id) ? { id: selectedRoom.members.find(m => m !== currentUser.id), displayName: selectedRoom.name } : null, isIncoming: false }); } },
                   { icon:'🤖', label:'AIアシスタント', action: () => setShowAI(true) },
                   { icon:'🎨', label:'背景を変える', action: () => setShowBgPicker(true) },
                 ].map(item => (

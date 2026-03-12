@@ -6,10 +6,38 @@ export default function GroupSettings({ room, currentUser, onClose, onUpdate }) 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [inviteUrl, setInviteUrl] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [themeColor, setThemeColor] = useState(room?.theme_color || '');
+  const [themeSaving, setThemeSaving] = useState(false);
 
   // GroupSettings.jsx は現在 App.js から呼ばれていないが、
   // 将来的に使う可能性があるので正しいAPIエンドポイントに修正
   const roomId = room?.id || room?._id;
+
+  const generateInvite = async () => {
+    setInviteLoading(true);
+    try {
+      const res = await axios.post(`/api/rooms/${roomId}/invite`);
+      setInviteUrl(res.data.inviteUrl);
+    } catch (e) { setMessage('招待リンクの生成に失敗しました'); }
+    finally { setInviteLoading(false); }
+  };
+
+  const copyInvite = () => {
+    navigator.clipboard.writeText(inviteUrl);
+    setMessage('コピーしました！');
+  };
+
+  const saveTheme = async (color) => {
+    setThemeSaving(true);
+    try {
+      await axios.patch(`/api/rooms/${roomId}/theme`, { themeColor: color });
+      setThemeColor(color);
+      setMessage('テーマを変更しました');
+    } catch (e) { setMessage('失敗しました'); }
+    finally { setThemeSaving(false); }
+  };
 
   const handleSave = async () => {
     setSaving(true);

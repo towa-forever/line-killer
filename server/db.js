@@ -13,6 +13,8 @@ const UserSchema = new mongoose.Schema({
   cover_image: { type: String, default: '' }, // プロフィール背景画像
   display_name: { type: String, default: '' },
   is_official: { type: Boolean, default: false }, // 公式アカウント
+  last_seen: { type: Date, default: Date.now }, // 最終オンライン時刻
+  show_online: { type: Boolean, default: true }, // オンライン状態を表示するか
   official_category: { type: String, default: '' }, // カテゴリ(news/shop/service等)
   official_email: { type: String, default: '' }, // 申請メールアドレス
   official_verified: { type: Boolean, default: false }, // 管理者承認済み
@@ -36,6 +38,9 @@ const RoomSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now },
   creator_id: String,
   announcement: String,
+  invite_code: { type: String, unique: true, sparse: true }, // グループ招待コード
+  invite_enabled: { type: Boolean, default: true },
+  theme_color: { type: String, default: '' }, // チャットテーマカラー
 });
 
 const MessageSchema = new mongoose.Schema({
