@@ -1,28 +1,23 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
-// 無料TURNサーバー（複数用意して冗長性を確保）
-const ICE_SERVERS = {
+// ICEサーバー設定（サーバーから動的取得 or フォールバック）
+let ICE_SERVERS = {
   iceServers: [
-    // Google STUN（信頼性高い）
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    // Cloudflare STUN
     { urls: 'stun:stun.cloudflare.com:3478' },
-    // Metered.ca 無料TURN（複数ポート・プロトコル）
     { urls: 'turn:openrelay.metered.ca:80',            username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443',           username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turns:openrelay.metered.ca:443',          username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-    // FreeTURN（バックアップ）
-    { urls: 'turn:freestun.net:3479',  username: 'free', credential: 'free' },
-    { urls: 'turns:freestun.net:5350', username: 'free', credential: 'free' },
+    { urls: 'turns:openrelay.metered.ca:443',          username: 'openrelayproject', credential: 'openrelayproject' },
   ],
   iceCandidatePoolSize: 10,
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
+  iceTransportPolicy: 'all', // STUNで繋がらなければTURNに自動フォールバック
 };
+// サーバーからICEサーバー設定を取得（起動時に1回）
+fetch('/api/ice-servers').then(r => r.json()).then(data => {
+  if (data.iceServers) ICE_SERVERS = { ...ICE_SERVERS, iceServers: data.iceServers };
+}).catch(() => {});
 
 export default function VideoCall({ currentUser, socket, roomId, targetUserId, isCaller, incomingOffer, onEnd, minimized, onToggleMinimize }) {
   const localVideoRef = useRef(null);
