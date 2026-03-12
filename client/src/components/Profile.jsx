@@ -265,6 +265,38 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
         </div>
       </div>
 
+      {/* アプリアイコン変更 */}
+      <div className="card" style={{ margin:10 }}>
+        <div className="profile-section-title">🏠 アプリアイコン</div>
+        <div style={{ fontSize:12, color:'var(--text2)', marginBottom:10 }}>ホーム画面に追加する際のアイコンを選択</div>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          {[
+            { id:'default', emoji:'💬', label:'デフォルト' },
+            { id:'green',   emoji:'🟢', label:'グリーン' },
+            { id:'dark',    emoji:'🌙', label:'ダーク' },
+            { id:'pink',    emoji:'🌸', label:'ピンク' },
+            { id:'fire',    emoji:'🔥', label:'レッド' },
+          ].map(icon => {
+            const current = localStorage.getItem('appIcon') || 'default';
+            return (
+              <button key={icon.id} onClick={() => {
+                localStorage.setItem('appIcon', icon.id);
+                window.dispatchEvent(new CustomEvent('appIconChange', { detail: icon.id }));
+              }}
+                style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 12px', borderRadius:12, border:'2px solid',
+                  borderColor: current===icon.id ? 'var(--primary)' : 'var(--border)',
+                  background: current===icon.id ? 'rgba(var(--primary-rgb),0.1)' : 'var(--surface2)', cursor:'pointer' }}>
+                <span style={{ fontSize:28 }}>{icon.emoji}</span>
+                <span style={{ fontSize:11 }}>{icon.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ fontSize:11, color:'var(--text2)', marginTop:8 }}>
+          💡 ホーム画面に追加後は再追加が必要です
+        </div>
+      </div>
+
       <div style={{ padding:'0 10px 20px' }}>
         <button className="btn btn-danger" style={{ width:'100%', padding:12 }} onClick={() => setShowLogoutConfirm(true)}>
           ログアウト

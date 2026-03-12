@@ -13,6 +13,7 @@ import './App.css';
 
 // 遅延読み込み（初回ロード高速化）
 const Friends = lazy(() => import('./components/Friends'));
+const OfficialAccounts = lazy(() => import('./components/OfficialAccounts'));
 const Timeline = lazy(() => import('./components/Timeline'));
 const StampShop = lazy(() => import('./components/StampShop'));
 const Album = lazy(() => import('./components/Album'));
@@ -128,6 +129,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const messagesCache = useRef({});
+  const hasMoreMessages = useRef({}); // ルームごとにまだ読めるか
+  const loadingMoreRef = useRef(false); // 二重ロード防止
   const [inputText, setInputText] = useState('');
   const [showStampPanel, setShowStampPanel] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
@@ -320,6 +323,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     setShowSecret(false);
     if (!selectedRoom) return;
     messagesCache.current._current = selectedRoom.id; // 現在のルームを記録
+    hasMoreMessages.current[selectedRoom.id] = true; // 過去メッセージがある可能性あり
     // キャッシュがあれば即表示
     if (messagesCache.current[selectedRoom.id]) {
       setMessages(messagesCache.current[selectedRoom.id]);
@@ -364,6 +368,29 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }); // 'smooth'より速い
     }
   }, [messages]);
+
+  // 過去メッセージを追加読み込み
+  const loadMoreMessages = async () => {
+    if (!selectedRoom || loadingMoreRef.current) return;
+    if (hasMoreMessages.current[selectedRoom.id] === false) return;
+    const oldest = messages[0];
+    if (!oldest) return;
+    loadingMoreRef.current = true;
+    try {
+      const res = await axios.get(`/api/rooms/${selectedRoom.id}/messages?limit=50&before=${encodeURIComponent(oldest.createdAt || oldest.created_at)}`);
+      if (res.data.length === 0) {
+        hasMoreMessages.current[selectedRoom.id] = false;
+        return;
+      }
+      // 既存メッセージの前に追加
+      setMessages(prev => {
+        const existIds = new Set(prev.map(m => m.id));
+        const newMsgs = res.data.filter(m => !existIds.has(m.id));
+        return [...newMsgs, ...prev];
+      });
+    } catch (e) { console.error(e); }
+    finally { loadingMoreRef.current = false; }
+  };
 
   const handleSend = async () => {
     if (!inputText.trim() || !selectedRoom || !socket) return;
@@ -1260,6 +1287,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             onScroll={(e) => {
               const el = e.currentTarget;
               isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+              // 上端近くで過去メッセージ読み込み
+              if (el.scrollTop < 60) loadMoreMessages();
             }}
             style={chatBg !== 'default' ? {
               backgroundImage: chatBg.startsWith('#') ? 'none' : `url(${chatBg})`,
@@ -1381,6 +1410,7 @@ function TabBar({ activeTab, setActiveTab, notifications }) {
   const tabs = [
     { id: 'chat', label: 'トーク', icon: '💬' },
     { id: 'friends', label: '友達', icon: '👥' },
+    { id: 'official', label: '公式', icon: '⭐' },
     { id: 'timeline', label: 'タイムライン', icon: '📰' },
     { id: 'stampshop', label: 'ショップ', icon: '🎫' },
     { id: 'profile', label: 'プロフィール', icon: '👤' },
@@ -1579,6 +1609,13 @@ export default function App() {
         <div style={tabVisible('friends')}>
           <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
             <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />
+          </Suspense></ErrorBoundary>
+        </div>
+      )}
+      {activeTab === 'official' && (
+        <div style={tabVisible('official')}>
+          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+            <OfficialAccounts currentUser={currentUser} />
           </Suspense></ErrorBoundary>
         </div>
       )}

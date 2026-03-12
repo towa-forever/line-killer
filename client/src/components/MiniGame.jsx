@@ -1,137 +1,359 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
-// チャット内ミニゲーム: 反射神経ゲーム・数字当てゲーム
-export default function MiniGame({ onSendResult, onClose }) {
-  const [game, setGame] = useState(null); // null | 'reflex' | 'number'
-  const [phase, setPhase] = useState('ready'); // ready | playing | result
-  const [score, setScore] = useState(0);
-  const [target, setTarget] = useState(null);
-  const [guess, setGuess] = useState('');
-  const [hint, setHint] = useState('');
-  const [attempts, setAttempts] = useState(0);
-  const [reflexTime, setReflexTime] = useState(null);
-  const startRef = useRef(null);
-  const timerRef = useRef(null);
+const GAMES = [
+  { id:'reflex',  emoji:'⚡', name:'反射神経テスト',   desc:'画面が変わったら即タップ！' },
+  { id:'number',  emoji:'🔢', name:'数字当てゲーム',   desc:'1〜100の数字を当てよう！' },
+  { id:'memory',  emoji:'🧠', name:'記憶力ゲーム',     desc:'カードの組み合わせを覚えよう！' },
+  { id:'type',    emoji:'⌨️', name:'タイピングゲーム', desc:'表示されたテキストを素早く入力！' },
+  { id:'color',   emoji:'🎨', name:'色当てゲーム',     desc:'表示された色名の色を選べ！' },
+  { id:'math',    emoji:'🔣', name:'暗算チャレンジ',   desc:'素早く計算せよ！' },
+];
 
-  const startReflex = () => {
-    setPhase('playing'); setReflexTime(null);
-    const delay = 1500 + Math.random() * 3000;
+// ---- 各ゲームコンポーネント ----
+
+function ReflexGame({ onShare, onBack }) {
+  const [phase, setPhase] = useState('ready');
+  const [ms, setMs]       = useState(null);
+  const startRef  = useRef(null);
+  const timerRef  = useRef(null);
+
+  const start = () => {
+    setPhase('waiting'); setMs(null);
     timerRef.current = setTimeout(() => {
-      startRef.current = Date.now();
-      setPhase('tap');
-    }, delay);
+      startRef.current = Date.now(); setPhase('tap');
+    }, 1500 + Math.random() * 3000);
   };
-
-  const tapReflex = () => {
-    if (phase !== 'tap') { clearTimeout(timerRef.current); setPhase('false-start'); return; }
-    const ms = Date.now() - startRef.current;
-    setReflexTime(ms); setPhase('result');
+  const tap = () => {
+    if (phase === 'waiting') { clearTimeout(timerRef.current); setPhase('false'); return; }
+    if (phase === 'tap') { setMs(Date.now() - startRef.current); setPhase('result'); }
   };
+  const label = ms < 150 ? '🚀 超人的！！' : ms < 250 ? '⚡ めちゃ速い！' : ms < 400 ? '👍 なかなか！' : '🐢 もう少し！';
+  return (
+    <div>
+      <button onClick={onBack} style={backBtnStyle}>← 戻る</button>
+      <div style={{ fontWeight:800, fontSize:17, marginBottom:12 }}>⚡ 反射神経テスト</div>
+      {phase === 'ready' && <><div style={{ fontSize:13, color:'var(--text2)', marginBottom:16 }}>緑になったらすぐタップ！赤の間はタップしないで！</div><button onClick={start} style={primaryBtn}>スタート</button></>}
+      {phase === 'waiting' && <div onClick={tap} style={{ ...colorBox, background:'#ff3b30', color:'white' }}>待て…⏳</div>}
+      {phase === 'tap'}
+      {phase === 'tap' && <div onClick={tap} style={{ ...colorBox, background:'#06c755', color:'white', fontSize:26 }}>タップ！！</div>}
+      {phase === 'false' && <><div style={{ fontSize:36, marginBottom:8 }}>😅</div><div style={{ color:'#ff3b30', fontWeight:700, marginBottom:16 }}>フライング！</div><button onClick={start} style={primaryBtn}>もう一度</button></>}
+      {phase === 'result' && ms && <><div style={{ fontSize:40, marginBottom:4 }}>{ms < 250 ? '🚀' : '👍'}</div><div style={{ fontSize:36, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>{ms}ms</div><div style={{ color:'var(--text2)', marginBottom:16 }}>{label}</div><div style={{ display:'flex', gap:8 }}><button onClick={start} style={secBtn}>もう一度</button><button onClick={() => onShare(`⚡ 反射神経テスト: ${ms}ms！${label}`)} style={primaryBtn}>シェア</button></div></>}
+    </div>
+  );
+}
 
-  const startNumber = () => {
-    const n = Math.floor(Math.random() * 100) + 1;
-    setTarget(n); setGuess(''); setHint(''); setAttempts(0); setPhase('playing');
-  };
+function NumberGame({ onShare, onBack }) {
+  const [target]   = useState(() => Math.floor(Math.random() * 100) + 1);
+  const [guess, setGuess] = useState('');
+  const [hint, setHint]   = useState('');
+  const [tries, setTries] = useState(0);
+  const [won, setWon]     = useState(false);
 
-  const guessNumber = () => {
-    const g = parseInt(guess);
-    if (isNaN(g) || g < 1 || g > 100) return;
-    const a = attempts + 1; setAttempts(a);
-    if (g === target) { setPhase('result'); setScore(Math.max(0, 10 - a)); }
+  const check = () => {
+    const g = parseInt(guess); if (isNaN(g) || g < 1 || g > 100) return;
+    const t = tries + 1; setTries(t);
+    if (g === target) setWon(true);
     else { setHint(g < target ? '📈 もっと大きい！' : '📉 もっと小さい！'); setGuess(''); }
   };
+  const score = Math.max(0, 10 - tries);
+  return (
+    <div>
+      <button onClick={onBack} style={backBtnStyle}>← 戻る</button>
+      <div style={{ fontWeight:800, fontSize:17, marginBottom:4 }}>🔢 数字当てゲーム</div>
+      <div style={{ fontSize:12, color:'var(--text2)', marginBottom:16 }}>1〜100 / {tries}回目</div>
+      {!won ? <>
+        {hint && <div style={{ fontSize:16, fontWeight:600, marginBottom:10 }}>{hint}</div>}
+        <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+          <input type="number" min="1" max="100" value={guess} onChange={e => setGuess(e.target.value)} onKeyDown={e => e.key==='Enter'&&check()} placeholder="1〜100" className="form-input" style={{ flex:1, marginBottom:0, textAlign:'center', fontSize:18 }} autoFocus />
+          <button onClick={check} style={{ ...primaryBtn, padding:'0 20px' }}>→</button>
+        </div>
+      </> : <>
+        <div style={{ fontSize:40, marginBottom:6 }}>🏆</div>
+        <div style={{ fontSize:24, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>正解！ {target}</div>
+        <div style={{ color:'var(--text2)', marginBottom:16 }}>{tries}回でクリア！スコア {score}/10</div>
+        <button onClick={() => onShare(`🔢 数字当てゲーム: ${tries}回で正解！スコア ${score}/10点`)} style={primaryBtn}>シェア</button>
+      </>}
+    </div>
+  );
+}
 
-  const shareResult = (text) => {
-    onSendResult(text); onClose();
+const CARD_EMOJIS = ['🍎','🍕','🎮','🐱','⚽','🌸','🎵','🔥','💎','🚀','🌈','🦁'];
+function MemoryGame({ onShare, onBack }) {
+  const size = 8; // ペア数
+  const [cards, setCards]     = useState(() => shuffle([...CARD_EMOJIS.slice(0,size), ...CARD_EMOJIS.slice(0,size)].map((e,i) => ({ id:i, emoji:e, flipped:false, matched:false }))));
+  const [selected, setSelected] = useState([]);
+  const [moves, setMoves]       = useState(0);
+  const [done, setDone]         = useState(false);
+
+  const flip = (card) => {
+    if (card.flipped || card.matched || selected.length === 2) return;
+    const next = [...selected, card];
+    const newCards = cards.map(c => c.id === card.id ? { ...c, flipped:true } : c);
+    setCards(newCards); setSelected(next);
+    if (next.length === 2) {
+      setMoves(m => m+1);
+      if (next[0].emoji === next[1].emoji) {
+        setTimeout(() => {
+          setCards(cs => cs.map(c => next.some(s => s.id === c.id) ? { ...c, matched:true } : c));
+          setSelected([]);
+          if (newCards.filter(c => !c.matched).length === 2) setDone(true);
+        }, 400);
+      } else {
+        setTimeout(() => {
+          setCards(cs => cs.map(c => next.some(s => s.id === c.id) ? { ...c, flipped:false } : c));
+          setSelected([]);
+        }, 900);
+      }
+    }
   };
+  return (
+    <div>
+      <button onClick={onBack} style={backBtnStyle}>← 戻る</button>
+      <div style={{ fontWeight:800, fontSize:17, marginBottom:4 }}>🧠 記憶力ゲーム</div>
+      <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12 }}>{moves}手 / 残り{cards.filter(c=>!c.matched).length/2}ペア</div>
+      {!done ? (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6 }}>
+          {cards.map(card => (
+            <div key={card.id} onClick={() => flip(card)}
+              style={{ height:56, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center',
+                fontSize:24, cursor:'pointer', userSelect:'none',
+                background: card.matched ? '#e8f5e9' : card.flipped ? 'var(--surface2)' : 'var(--primary)',
+                transition:'all 0.2s' }}>
+              {card.flipped || card.matched ? card.emoji : ''}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          <div style={{ fontSize:40, marginBottom:6 }}>🏆</div>
+          <div style={{ fontSize:20, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>クリア！</div>
+          <div style={{ color:'var(--text2)', marginBottom:16 }}>{moves}手でクリア！</div>
+          <button onClick={() => onShare(`🧠 記憶力ゲーム: ${moves}手でクリア！`)} style={primaryBtn}>シェア</button>
+        </>
+      )}
+    </div>
+  );
+}
+
+const TYPING_SENTENCES = [
+  'LINE Killerで楽しくチャット！',
+  'おはようございます！今日もよろしく！',
+  '今日のランチは何食べる？',
+  'プログラミングって楽しいよね！',
+  'スマホとPCでどこでも繋がれる！',
+];
+function TypingGame({ onShare, onBack }) {
+  const [idx]     = useState(() => Math.floor(Math.random() * TYPING_SENTENCES.length));
+  const target    = TYPING_SENTENCES[idx];
+  const [input, setInput] = useState('');
+  const [started, setStarted] = useState(false);
+  const [done, setDone]       = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const startTime = useRef(null);
+  const timer     = useRef(null);
+
+  const start = () => {
+    setStarted(true); setInput(''); setDone(false); setElapsed(0);
+    startTime.current = Date.now();
+    timer.current = setInterval(() => setElapsed(Math.floor((Date.now() - startTime.current)/1000)), 100);
+  };
+  const onChange = (v) => {
+    setInput(v);
+    if (v === target) {
+      clearInterval(timer.current);
+      const sec = ((Date.now() - startTime.current)/1000).toFixed(1);
+      setElapsed(parseFloat(sec)); setDone(true);
+    }
+  };
+  const wpm = done ? Math.round((target.length / 5) / (elapsed / 60)) : 0;
+  return (
+    <div>
+      <button onClick={onBack} style={backBtnStyle}>← 戻る</button>
+      <div style={{ fontWeight:800, fontSize:17, marginBottom:12 }}>⌨️ タイピングゲーム</div>
+      {!started ? (
+        <><div style={{ padding:14, background:'var(--surface2)', borderRadius:12, fontSize:14, marginBottom:16, lineHeight:1.6 }}>「{target}」</div><button onClick={start} style={primaryBtn}>スタート</button></>
+      ) : !done ? (
+        <>
+          <div style={{ padding:12, background:'var(--surface2)', borderRadius:12, fontSize:14, marginBottom:8, lineHeight:1.6 }}>
+            {target.split('').map((ch,i) => (
+              <span key={i} style={{ color: i < input.length ? (input[i]===ch ? '#06c755' : '#ff3b30') : 'var(--text)' }}>{ch}</span>
+            ))}
+          </div>
+          <div style={{ fontSize:12, color:'var(--text2)', marginBottom:8 }}>{elapsed}秒</div>
+          <input value={input} onChange={e => onChange(e.target.value)} className="form-input" placeholder="ここに入力..." autoFocus style={{ marginBottom:0 }} />
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize:40, marginBottom:6 }}>🏆</div>
+          <div style={{ fontSize:22, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>{elapsed}秒！</div>
+          <div style={{ color:'var(--text2)', marginBottom:16 }}>約{wpm} WPM</div>
+          <button onClick={() => onShare(`⌨️ タイピングゲーム: ${elapsed}秒でクリア！${wpm}WPM`)} style={primaryBtn}>シェア</button>
+        </>
+      )}
+    </div>
+  );
+}
+
+const COLORS = [
+  { name:'赤', color:'#e74c3c' }, { name:'青', color:'#3498db' },
+  { name:'緑', color:'#2ecc71' }, { name:'黄', color:'#f1c40f' },
+  { name:'紫', color:'#9b59b6' }, { name:'橙', color:'#e67e22' },
+];
+function ColorGame({ onShare, onBack }) {
+  const [q, setQ]       = useState(() => genQ());
+  const [score, setScore] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [flash, setFlash] = useState(null); // 'correct'|'wrong'
+
+  function genQ() {
+    const correct = COLORS[Math.floor(Math.random() * COLORS.length)];
+    const shown   = COLORS[Math.floor(Math.random() * COLORS.length)]; // テキストの色（名前とは違う色）
+    const opts = shuffle([correct, ...COLORS.filter(c=>c.name!==correct.name).slice(0,3)]);
+    return { correct, shown, opts };
+  }
+  const answer = (c) => {
+    const ok = c.name === q.correct.name;
+    setFlash(ok ? 'correct' : 'wrong');
+    setScore(s => ok ? s+1 : s); setTotal(t => t+1);
+    setTimeout(() => { setFlash(null); setQ(genQ()); }, 600);
+  };
+  return (
+    <div>
+      <button onClick={onBack} style={backBtnStyle}>← 戻る</button>
+      <div style={{ fontWeight:800, fontSize:17, marginBottom:4 }}>🎨 色当てゲーム</div>
+      <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12 }}>{score}/{total} 正解</div>
+      <div style={{ fontSize:13, marginBottom:8 }}>この文字の「色」はどれ？</div>
+      <div style={{ fontSize:52, fontWeight:900, color: q.shown.color, marginBottom:20,
+        background: flash ? (flash==='correct' ? '#e8f5e9' : '#fde8e8') : 'var(--surface2)',
+        borderRadius:16, padding:'16px 0', transition:'background 0.2s' }}>
+        {q.correct.name}
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+        {q.opts.map(c => (
+          <button key={c.name} onClick={() => answer(c)}
+            style={{ padding:14, borderRadius:14, border:'2px solid var(--border)', background:c.color, color:'white', fontWeight:800, fontSize:16, cursor:'pointer' }}>
+            {c.name}
+          </button>
+        ))}
+      </div>
+      {total >= 10 && (
+        <div style={{ marginTop:12 }}>
+          <button onClick={() => onShare(`🎨 色当てゲーム: ${score}/${total}問正解！`)} style={primaryBtn}>シェア</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MathGame({ onShare, onBack }) {
+  const [q, setQ]         = useState(() => genMath());
+  const [input, setInput] = useState('');
+  const [score, setScore] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [flash, setFlash] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [over, setOver]   = useState(false);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      setTimeLeft(t => { if (t <= 1) { clearInterval(timerRef.current); setOver(true); return 0; } return t-1; });
+    }, 1000);
+    return () => clearInterval(timerRef.current);
+  }, []);
+
+  function genMath() {
+    const ops = ['+','-','×'];
+    const op = ops[Math.floor(Math.random()*ops.length)];
+    const a = Math.floor(Math.random()*12)+1, b = Math.floor(Math.random()*12)+1;
+    const ans = op==='+' ? a+b : op==='-' ? a-b : a*b;
+    return { expr:`${a} ${op} ${b}`, ans };
+  }
+  const submit = () => {
+    const ok = parseInt(input) === q.ans;
+    setFlash(ok ? 'correct' : 'wrong');
+    setScore(s => ok ? s+1 : s); setTotal(t => t+1);
+    setInput('');
+    setTimeout(() => { setFlash(null); setQ(genMath()); }, 400);
+  };
+  return (
+    <div>
+      <button onClick={onBack} style={backBtnStyle}>← 戻る</button>
+      <div style={{ fontWeight:800, fontSize:17, marginBottom:4 }}>🔣 暗算チャレンジ</div>
+      {!over ? (
+        <>
+          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
+            <span style={{ fontSize:13, color:'var(--text2)' }}>{score}/{total} 正解</span>
+            <span style={{ fontSize:13, fontWeight:700, color: timeLeft<10 ? '#e74c3c' : 'var(--text)' }}>⏱ {timeLeft}秒</span>
+          </div>
+          <div style={{ fontSize:44, fontWeight:900, color: flash ? (flash==='correct' ? '#06c755' : '#e74c3c') : 'var(--text)',
+            background:'var(--surface2)', borderRadius:16, padding:'20px 0', marginBottom:16, transition:'color 0.2s' }}>
+            {q.expr} = ?
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            <input type="number" value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key==='Enter' && submit()} className="form-input" style={{ flex:1, marginBottom:0, textAlign:'center', fontSize:20 }} autoFocus />
+            <button onClick={submit} style={{ ...primaryBtn, padding:'0 20px' }}>→</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize:40, marginBottom:6 }}>🏆</div>
+          <div style={{ fontSize:22, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>{score}問正解！</div>
+          <div style={{ color:'var(--text2)', marginBottom:16 }}>30秒で{total}問中{score}問正解</div>
+          <button onClick={() => onShare(`🔣 暗算チャレンジ: 30秒で${score}問正解！`)} style={primaryBtn}>シェア</button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---- スタイル定数 ----
+const primaryBtn = { padding:'12px 24px', borderRadius:16, background:'var(--primary)', color:'white', border:'none', fontWeight:700, fontSize:14, cursor:'pointer' };
+const secBtn     = { padding:'12px 24px', borderRadius:16, background:'var(--surface2)', color:'var(--text)', border:'none', fontWeight:600, fontSize:14, cursor:'pointer' };
+const backBtnStyle = { background:'none', border:'none', color:'var(--text2)', fontSize:13, cursor:'pointer', marginBottom:10, padding:'4px 0' };
+const colorBox   = { height:150, borderRadius:20, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:18, fontWeight:700 };
+
+function shuffle(arr) { return [...arr].sort(() => Math.random()-0.5); }
+
+// ---- メインコンポーネント ----
+export default function MiniGame({ onSendResult, onClose }) {
+  const [game, setGame] = useState(null);
+
+  const share = (text) => { onSendResult(text); onClose(); };
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000 }} onClick={onClose}>
-      <div style={{ background:'var(--surface)', borderRadius:24, padding:24, width:'90%', maxWidth:340, textAlign:'center' }} onClick={e => e.stopPropagation()}>
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000 }}
+      onClick={!game ? onClose : undefined}>
+      <div style={{ background:'var(--surface)', borderRadius:24, padding:24, width:'92%', maxWidth:360, textAlign:'center', maxHeight:'85vh', overflowY:'auto' }}
+        onClick={e => e.stopPropagation()}>
         {!game ? (
           <>
-            <div style={{ fontSize:24, marginBottom:8 }}>🎮</div>
-            <div style={{ fontWeight:800, fontSize:18, marginBottom:6 }}>ミニゲーム</div>
-            <div style={{ fontSize:13, color:'var(--text2)', marginBottom:20 }}>みんなで盛り上がろう！</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              <button onClick={() => { setGame('reflex'); setPhase('ready'); }} style={{ padding:16, borderRadius:16, background:'linear-gradient(135deg,#ff6b6b,#ff8fab)', color:'white', border:'none', fontWeight:700, fontSize:15, cursor:'pointer' }}>
-                ⚡ 反射神経テスト<br/><span style={{ fontSize:11, fontWeight:400 }}>画面が変わったら即タップ！</span>
-              </button>
-              <button onClick={() => { setGame('number'); startNumber(); }} style={{ padding:16, borderRadius:16, background:'linear-gradient(135deg,#667eea,#764ba2)', color:'white', border:'none', fontWeight:700, fontSize:15, cursor:'pointer' }}>
-                🔢 数字当てゲーム<br/><span style={{ fontSize:11, fontWeight:400 }}>1〜100の数字を当てよう！</span>
-              </button>
+            <div style={{ fontSize:28, marginBottom:4 }}>🎮</div>
+            <div style={{ fontWeight:800, fontSize:18, marginBottom:4 }}>ミニゲーム</div>
+            <div style={{ fontSize:13, color:'var(--text2)', marginBottom:16 }}>みんなで盛り上がろう！</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {GAMES.map(g => (
+                <button key={g.id} onClick={() => setGame(g.id)}
+                  style={{ padding:'14px 16px', borderRadius:16, background:'var(--surface2)', border:'1px solid var(--border)',
+                    color:'var(--text)', fontWeight:700, fontSize:14, cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:10 }}>
+                  <span style={{ fontSize:22 }}>{g.emoji}</span>
+                  <div>
+                    <div>{g.name}</div>
+                    <div style={{ fontSize:11, fontWeight:400, color:'var(--text2)', marginTop:2 }}>{g.desc}</div>
+                  </div>
+                </button>
+              ))}
             </div>
             <button onClick={onClose} style={{ marginTop:14, fontSize:13, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>閉じる</button>
           </>
-        ) : game === 'reflex' ? (
-          <div>
-            <div style={{ fontWeight:800, fontSize:18, marginBottom:12 }}>⚡ 反射神経テスト</div>
-            {phase === 'ready' && (
-              <>
-                <div style={{ fontSize:13, color:'var(--text2)', marginBottom:20 }}>緑になったらすぐタップ！<br/>赤の間はタップしないで！</div>
-                <button onClick={startReflex} style={{ padding:'14px 32px', borderRadius:20, background:'var(--primary)', color:'white', border:'none', fontWeight:700, fontSize:15, cursor:'pointer' }}>スタート</button>
-              </>
-            )}
-            {phase === 'playing' && (
-              <div onClick={tapReflex} style={{ height:160, borderRadius:20, background:'#ff3b30', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:16, color:'white', fontWeight:700 }}>
-                待て…⏳
-              </div>
-            )}
-            {phase === 'tap' && (
-              <div onClick={tapReflex} style={{ height:160, borderRadius:20, background:'#06c755', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:24, color:'white', fontWeight:800 }}>
-                タップ！！
-              </div>
-            )}
-            {phase === 'false-start' && (
-              <>
-                <div style={{ fontSize:40, marginBottom:8 }}>😅</div>
-                <div style={{ fontWeight:700, marginBottom:16, color:'#ff3b30' }}>フライング！</div>
-                <button onClick={startReflex} style={{ padding:'10px 24px', borderRadius:16, background:'var(--primary)', color:'white', border:'none', fontWeight:700, cursor:'pointer' }}>もう一度</button>
-              </>
-            )}
-            {phase === 'result' && reflexTime && (
-              <>
-                <div style={{ fontSize:48, marginBottom:8 }}>{reflexTime < 200 ? '🚀' : reflexTime < 400 ? '⚡' : reflexTime < 600 ? '👍' : '🐢'}</div>
-                <div style={{ fontSize:36, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>{reflexTime}ms</div>
-                <div style={{ fontSize:14, color:'var(--text2)', marginBottom:16 }}>
-                  {reflexTime < 200 ? '超人的！！' : reflexTime < 400 ? 'めちゃ速い！' : reflexTime < 600 ? 'なかなか！' : 'もう少し！'}
-                </div>
-                <div style={{ display:'flex', gap:8 }}>
-                  <button onClick={() => { setPhase('ready'); }} style={{ flex:1, padding:12, borderRadius:14, background:'var(--surface2)', color:'var(--text)', border:'none', fontWeight:600, cursor:'pointer' }}>もう一度</button>
-                  <button onClick={() => shareResult(`⚡ 反射神経テスト: ${reflexTime}ms！${reflexTime < 200 ? '超人的！！' : reflexTime < 400 ? 'めちゃ速い！' : reflexTime < 600 ? 'なかなか！' : 'もう少し！'}`)}
-                    style={{ flex:1, padding:12, borderRadius:14, background:'var(--primary)', color:'white', border:'none', fontWeight:700, cursor:'pointer' }}>シェア</button>
-                </div>
-              </>
-            )}
-          </div>
-        ) : (
-          <div>
-            <div style={{ fontWeight:800, fontSize:18, marginBottom:4 }}>🔢 数字当てゲーム</div>
-            <div style={{ fontSize:12, color:'var(--text2)', marginBottom:16 }}>1〜100 / {attempts}回目</div>
-            {phase === 'playing' ? (
-              <>
-                {hint && <div style={{ fontSize:16, marginBottom:12, fontWeight:600 }}>{hint}</div>}
-                <div style={{ display:'flex', gap:8, marginBottom:12 }}>
-                  <input type="number" min="1" max="100" value={guess} onChange={e => setGuess(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && guessNumber()}
-                    placeholder="数字を入力..." className="form-input" style={{ flex:1, marginBottom:0, fontSize:18, textAlign:'center' }} autoFocus />
-                  <button onClick={guessNumber} style={{ padding:'0 16px', borderRadius:12, background:'var(--primary)', color:'white', border:'none', fontWeight:700, fontSize:16, cursor:'pointer' }}>→</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ fontSize:48, marginBottom:8 }}>{score >= 8 ? '🏆' : score >= 5 ? '🎉' : '👏'}</div>
-                <div style={{ fontSize:22, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>正解！ {target}</div>
-                <div style={{ fontSize:14, color:'var(--text2)', marginBottom:16 }}>{attempts}回でクリア！ スコア: {score}/10</div>
-                <div style={{ display:'flex', gap:8 }}>
-                  <button onClick={startNumber} style={{ flex:1, padding:12, borderRadius:14, background:'var(--surface2)', color:'var(--text)', border:'none', fontWeight:600, cursor:'pointer' }}>もう一度</button>
-                  <button onClick={() => shareResult(`🔢 数字当てゲーム: ${attempts}回で正解！ スコア${score}/10点`)}
-                    style={{ flex:1, padding:12, borderRadius:14, background:'var(--primary)', color:'white', border:'none', fontWeight:700, cursor:'pointer' }}>シェア</button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+        ) : game === 'reflex'  ? <ReflexGame  onShare={share} onBack={() => setGame(null)} />
+        :   game === 'number'  ? <NumberGame  onShare={share} onBack={() => setGame(null)} />
+        :   game === 'memory'  ? <MemoryGame  onShare={share} onBack={() => setGame(null)} />
+        :   game === 'type'    ? <TypingGame  onShare={share} onBack={() => setGame(null)} />
+        :   game === 'color'   ? <ColorGame   onShare={share} onBack={() => setGame(null)} />
+        :   game === 'math'    ? <MathGame    onShare={share} onBack={() => setGame(null)} />
+        : null}
       </div>
     </div>
   );

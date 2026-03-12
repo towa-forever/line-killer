@@ -12,6 +12,10 @@ const UserSchema = new mongoose.Schema({
   avatar: String,
   cover_image: { type: String, default: '' }, // プロフィール背景画像
   display_name: { type: String, default: '' },
+  is_official: { type: Boolean, default: false }, // 公式アカウント
+  official_category: { type: String, default: '' }, // カテゴリ(news/shop/service等)
+  official_email: { type: String, default: '' }, // 申請メールアドレス
+  official_verified: { type: Boolean, default: false }, // 管理者承認済み
   bio: { type: String, default: '' },
   status: { type: String, default: '' },
   avatar_frame: { type: String, default: 'none' },

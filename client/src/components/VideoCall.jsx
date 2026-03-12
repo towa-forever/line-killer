@@ -379,6 +379,21 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   );
 }
 
+// VP8コーデックを優先させるSDP改変（スマホとPCの互換性向上）
+function preferVideoCodec(sdp, codec) {
+  const lines = sdp.split('\n');
+  const mLine = lines.findIndex(l => l.startsWith('m=video'));
+  if (mLine < 0) return sdp;
+  const codecPts = [];
+  const re = new RegExp('^a=rtpmap:(\\d+) ' + codec, 'i');
+  lines.forEach(l => { const m = l.match(re); if (m) codecPts.push(m[1]); });
+  if (!codecPts.length) return sdp;
+  const parts = lines[mLine].split(' ');
+  const rest = parts.slice(3).filter(p => !codecPts.includes(p));
+  lines[mLine] = [...parts.slice(0, 3), ...codecPts, ...rest].join(' ');
+  return lines.join('\n');
+}
+
 function fmtDuration(s) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
