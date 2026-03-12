@@ -614,7 +614,17 @@ app.get('/api/friends', async (req, res) => {
     const decoded = auth(req);
     const friends = await Friend.find({ user_id: decoded.id });
     const users = await User.find({ id: { $in: friends.map(f => f.friend_id) } }, { password: 0 });
-    res.json(users);
+    // idフィールドを確実に含める（MongoDBの_idとカスタムidを両方返す）
+    const result = users.map(u => ({
+      id: u.id,
+      _id: u._id,
+      username: u.username,
+      display_name: u.display_name || u.username,
+      avatar: u.avatar || null,
+      status: u.status || '',
+      bio: u.bio || '',
+    }));
+    res.json(result);
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 

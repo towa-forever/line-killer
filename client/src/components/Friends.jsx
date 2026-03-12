@@ -13,7 +13,13 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
   const [confirmDialog, setConfirmDialog] = useState(null); // {text, onOk}
 
   const fetchFriends = useCallback(async () => {
-    try { const res = await axios.get('/api/friends'); setFriends(res.data); } catch (err) {}
+    try {
+      const res = await axios.get('/api/friends');
+      console.log('[Friends] APIレスポンス:', res.data);
+      setFriends(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error('[Friends] 取得失敗:', err);
+    }
   }, []);
 
   const fetchRequests = useCallback(async () => {
@@ -78,10 +84,8 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
 
   const isFriend = (userId) => {
     if (!userId) return false;
-    return friends.some((f) => {
-      const fid = f.id || f._id || '';
-      return fid === userId || fid === String(userId);
-    });
+    const uid = String(userId);
+    return friends.some((f) => String(f.id || '') === uid || String(f._id || '') === uid);
   };
 
   return (
@@ -117,7 +121,12 @@ export default function Friends({ currentUser, socket, onClearNotif }) {
 
       {tab === 'list' && (
         <div>
-          {friends.length === 0 ? <div className="empty-state">友達がいません。検索で追加しよう！</div> : (
+          {friends.length === 0 ? (
+            <div className="empty-state">
+              <div>友達がいません。検索で追加しよう！</div>
+              <div style={{fontSize:11,color:'var(--text2)',marginTop:8}}>※ 申請を承認しあうと友達になれます</div>
+            </div>
+          ) : (
             friends.map((friend) => (
               <div key={friend._id || friend.id} className="user-item">
                 <div className="user-avatar-circle" style={{ overflow:'hidden', padding:0 }}>

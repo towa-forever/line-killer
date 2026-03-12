@@ -1556,34 +1556,61 @@ export default function App() {
     setIncomingCall(null);
   };
 
-  const renderTabs = () => {
-    const S = ({ children }) => (
-      <ErrorBoundary>
-        <Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-          {children}
-        </Suspense>
-      </ErrorBoundary>
-    );
-    // display:noneとlazy loadは相性最悪なので条件レンダリングに変更
-    switch (activeTab) {
-      case 'dashboard':
-        return <S><div style={{display:'flex',flexDirection:'column',flex:1,overflow:'hidden'}}><Dashboard currentUser={currentUser} onNavigateRoom={() => setActiveTab('chat')} /></div></S>;
-      case 'friends':
-        return <S><Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} /></S>;
-      case 'timeline':
-        return <S><Timeline currentUser={currentUser} /></S>;
-      case 'stampshop':
-        return <S><ErrorBoundary><StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} /></ErrorBoundary></S>;
-      case 'album':
-        return <S><Album currentUser={currentUser} /></S>;
-      case 'profile':
-        return <S><Profile currentUser={currentUser} onUpdate={(u) => setCurrentUser(u)} onLogout={handleLogout}
-          darkMode={darkMode} onToggleDark={() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(!darkMode); }}
-          darkAutoMode={darkAutoMode} onToggleAuto={() => { const v = !darkAutoMode; setDarkAutoMode(v); localStorage.setItem('darkAutoMode', v); if (v) setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches); }} /></S>;
-      default: // 'chat'
-        return <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} />;
-    }
-  };
+  // ChatScreenは常にマウントし続けてdisplay:noneで隠す（アンマウントするとselectedRoomが消えるため）
+  const tabVisible = (id) => ({ display: activeTab === id ? 'flex' : 'none', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 });
+  const renderTabs = () => (
+    <>
+      {/* チャット: 常にマウントしておく */}
+      <div style={tabVisible('chat')}>
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} />
+      </div>
+      {/* 以下はアクティブ時のみマウント（チャット以外はstate保持不要） */}
+      {activeTab === 'dashboard' && (
+        <div style={tabVisible('dashboard')}>
+          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+            <Dashboard currentUser={currentUser} onNavigateRoom={() => setActiveTab('chat')} />
+          </Suspense></ErrorBoundary>
+        </div>
+      )}
+      {activeTab === 'friends' && (
+        <div style={tabVisible('friends')}>
+          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+            <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />
+          </Suspense></ErrorBoundary>
+        </div>
+      )}
+      {activeTab === 'timeline' && (
+        <div style={tabVisible('timeline')}>
+          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+            <Timeline currentUser={currentUser} />
+          </Suspense></ErrorBoundary>
+        </div>
+      )}
+      {activeTab === 'stampshop' && (
+        <div style={tabVisible('stampshop')}>
+          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+            <StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} />
+          </Suspense></ErrorBoundary>
+        </div>
+      )}
+      {activeTab === 'album' && (
+        <div style={tabVisible('album')}>
+          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+            <Album currentUser={currentUser} />
+          </Suspense></ErrorBoundary>
+        </div>
+      )}
+      {activeTab === 'profile' && (
+        <div style={tabVisible('profile')}>
+          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+            <Profile currentUser={currentUser} onUpdate={(u) => setCurrentUser(u)} onLogout={handleLogout}
+              darkMode={darkMode} onToggleDark={() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(!darkMode); }}
+              darkAutoMode={darkAutoMode} onToggleAuto={() => { const v = !darkAutoMode; setDarkAutoMode(v); localStorage.setItem('darkAutoMode', v); if (v) setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches); }} />
+          </Suspense></ErrorBoundary>
+        </div>
+      )}
+    </>
+  );
 
   return (
     <Router>
