@@ -37,6 +37,9 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [facingMode, setFacingMode] = useState('user');
   const [iceState, setIceState] = useState('');
+  const [callDuration, setCallDuration] = useState(0); // 通話時間（秒）
+  const callStartTime  = useRef(null);  // 通話開始時刻
+  const durationTimer  = useRef(null);  // 表示用タイマー
   const screenTrackRef = useRef(null);
 
   // ---- 通話終了 ----
@@ -44,6 +47,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     if (endedRef.current) return;
     endedRef.current = true;
     clearTimeout(restartTimer.current);
+    clearInterval(durationTimer.current);
     setStatus('ended');
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     try { pcRef.current?.close(); } catch (_) {}
@@ -105,7 +109,15 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     pc.oniceconnectionstatechange = () => {
       const s = pc.iceConnectionState;
       setIceState(s);
-      if (['connected', 'completed'].includes(s)) setStatus('active');
+      if (['connected', 'completed'].includes(s)) {
+        setStatus('active');
+        if (!callStartTime.current) {
+          callStartTime.current = Date.now();
+          durationTimer.current = setInterval(() => {
+            setCallDuration(Math.floor((Date.now() - callStartTime.current) / 1000));
+          }, 1000);
+        }
+      }
       if (s === 'failed') {
         // ICE再起動（再接続試行）
         try { pc.restartIce(); } catch (_) {}
@@ -241,7 +253,11 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   };
 
   const endCall = () => {
-    socket?.emit('call:end', { roomId, to: targetUserId });
+    const duration = callStartTime.current
+      ? Math.floor((Date.now() - callStartTime.current) / 1000)
+      : 0;
+    socket?.emit('call:end', { roomId, to: targetUserId, duration });
+    clearInterval(durationTimer.current);
     safeEnd();
   };
 
@@ -331,10 +347,12 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
           </div>
         )}
 
-        {status === 'active' && iceLabel[iceState] && (
+        {status === 'active' && (
           <div style={{ position:'absolute', top:12, left:'50%', transform:'translateX(-50%)',
-            background:'rgba(0,0,0,0.65)', color:'white', fontSize:12, padding:'4px 12px',
-            borderRadius:16, whiteSpace:'nowrap' }}>{iceLabel[iceState]}</div>
+            background:'rgba(0,0,0,0.65)', color:'white', fontSize:13, padding:'4px 14px',
+            borderRadius:16, whiteSpace:'nowrap', fontWeight:600 }}>
+            {iceLabel[iceState] || `📞 ${fmtDuration(callDuration)}`}
+          </div>
         )}
 
         {error && (
@@ -359,6 +377,12 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       )}
     </div>
   );
+}
+
+function fmtDuration(s) {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
 }
 
 function CallBtn({ children, onClick, active, activeColor = 'rgba(255,255,255,0.25)', label, size = 56 }) {

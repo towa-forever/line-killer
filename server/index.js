@@ -1078,12 +1078,23 @@ io.on('connection', async (socket) => {
     socket.to(roomId).emit('typing:update', { username: socket.user.username, isTyping: false });
   });
 
-  socket.on('call:start', ({ roomId, offer, to }) => {
-    // toが指定されていればそのユーザーに直接送る、なければroomにブロードキャスト
+  socket.on('call:start', async ({ roomId, offer, to }) => {
     if (to) {
       io.to('user_' + to).emit('call:incoming', { from: socket.user.id, fromName: socket.user.username, offer, roomId });
     } else {
       socket.to(roomId).emit('call:incoming', { from: socket.user.id, fromName: socket.user.username, offer, roomId });
+    }
+    // 通話開始メッセージをチャットに保存
+    if (roomId) {
+      try {
+        const { v4: uuidv4 } = require('uuid');
+        const msg = await Message.create({
+          id: uuidv4(), room_id: roomId,
+          sender_id: socket.user.id, sender_name: socket.user.username,
+          content: '📞 通話を開始しました', type: 'call_start',
+        });
+        io.to(roomId).emit('message:new', msg);
+      } catch (_) {}
     }
   });
 
@@ -1095,13 +1106,39 @@ io.on('connection', async (socket) => {
     io.to('user_' + to).emit('call:ice', { candidate, from: socket.user.id });
   });
 
-  socket.on('call:end', ({ roomId, to }) => {
+  socket.on('call:end', async ({ roomId, to, duration }) => {
     if (to) {
       io.to('user_' + to).emit('call:ended', { from: socket.user.id });
     } else {
       socket.to(roomId).emit('call:ended', { from: socket.user.id });
     }
+    // 通話終了メッセージをチャットに保存
+    if (roomId) {
+      try {
+        const { v4: uuidv4 } = require('uuid');
+        const dur = duration > 0 ? formatDuration(duration) : null;
+        const content = dur ? `📵 通話終了（${dur}）` : '📵 通話終了（応答なし）';
+        const msg = await Message.create({
+          id: uuidv4(), room_id: roomId,
+          sender_id: socket.user.id, sender_name: socket.user.username,
+          content, type: 'call_end',
+        });
+        io.to(roomId).emit('message:new', msg);
+      } catch (_) {}
+    }
   });
+
+
+// 通話時間フォーマット
+function formatDuration(seconds) {
+  if (!seconds || seconds < 0) return null;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}時間${m}分${s}秒`;
+  if (m > 0) return `${m}分${s}秒`;
+  return `${s}秒`;
+}
 
   // ===== グループ通話シグナリング =====
   // gcallRooms: roomId -> Set of { userId, socketId, name }
@@ -1155,8 +1192,19 @@ io.on('connection', async (socket) => {
     io.socketsLeave('gcall_' + roomId);
   });
 
-  socket.on('call:reject', ({ to }) => {
+  socket.on('call:reject', async ({ to, roomId }) => {
     io.to('user_' + to).emit('call:rejected', { from: socket.user.id });
+    if (roomId) {
+      try {
+        const { v4: uuidv4 } = require('uuid');
+        const msg = await Message.create({
+          id: uuidv4(), room_id: roomId,
+          sender_id: socket.user.id, sender_name: socket.user.username,
+          content: '📵 通話を拒否しました', type: 'call_end',
+        });
+        io.to(roomId).emit('message:new', msg);
+      } catch (_) {}
+    }
   });
 
   socket.on('disconnect', () => {

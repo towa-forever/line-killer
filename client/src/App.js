@@ -474,7 +474,25 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       );
     }
     let content;
-    if (msg.type === 'stamp') {
+    if (msg.type === 'call_start' || msg.type === 'call_end') {
+      const isStart = msg.type === 'call_start';
+      return (
+        <div key={msg.id} style={{ display:'flex', justifyContent:'center', margin:'8px 0' }}>
+          <div style={{
+            display:'flex', alignItems:'center', gap:8,
+            background: isStart ? 'rgba(6,199,85,0.12)' : 'rgba(100,100,100,0.12)',
+            border: `1px solid ${isStart ? 'rgba(6,199,85,0.3)' : 'rgba(100,100,100,0.25)'}`,
+            borderRadius:20, padding:'6px 14px', fontSize:13, color:'var(--text2)',
+          }}>
+            <span style={{ fontSize:16 }}>{isStart ? '📞' : '📵'}</span>
+            <span>{msg.content}</span>
+            <span style={{ fontSize:11, opacity:0.7 }}>
+              {new Date(msg.created_at).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}
+            </span>
+          </div>
+        </div>
+      );
+    } else if (msg.type === 'stamp') {
       content = <span style={{ fontSize: 36 }}>{msg.content}</span>;
     } else if (msg.type === 'image' && msg.fileData?.url) {
       const imgSrc = msg.fileData.url?.startsWith('http') ? msg.fileData.url : `${SERVER_URL}${msg.fileData.url}`;
@@ -604,7 +622,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     {lastMsg?.createdAt && <div style={{ fontSize:11, color:'var(--text2)' }}>{new Date(lastMsg.createdAt).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}</div>}
                   </div>
                   <div className={`room-last-msg ${unreadCounts[room.id] > 0 ? 'unread' : ''}`}>
-                    {lastMsg?.type === 'stamp' ? '[スタンプ]' : lastMsg?.type === 'file' ? '[ファイル]' : lastMsg?.content?.slice(0, 30) || ''}
+                    {lastMsg?.type === 'stamp' ? '[スタンプ]' : lastMsg?.type === 'file' ? '[ファイル]' : lastMsg?.type === 'call_start' ? '📞 通話を開始しました' : lastMsg?.type === 'call_end' ? '📵 通話終了' : lastMsg?.content?.slice(0, 30) || ''}
                   </div>
                 </div>
               </div>
