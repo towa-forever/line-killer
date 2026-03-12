@@ -513,15 +513,15 @@ app.get('/api/auth/me', async (req, res) => {
 
 // ===== メール送信ユーティリティ =====
 function createMailTransporter() {
-  // Renderの環境変数 MAIL_USER / MAIL_PASS を使う
-  // Gmail使用: MAIL_USER=your@gmail.com, MAIL_PASS=アプリパスワード
   if (process.env.MAIL_USER && process.env.MAIL_PASS) {
     return nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp-mail.outlook.com',
+      port: 587,
+      secure: false, // STARTTLS
       auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
+      tls: { ciphers: 'SSLv3' },
     });
   }
-  // 未設定時はコンソールログのみ（開発用）
   return null;
 }
 
