@@ -534,63 +534,6 @@ Subject: ${subject}`);
   }
 }
 
-// ===== 公式アカウント =====
-// 公式アカウント一覧
-app.get('/api/official-accounts', async (req, res) => {
-  try {
-    const accounts = await User.find({ is_official: true }, { password: 0 });
-    res.json(accounts.map(u => ({
-      id: u.id, username: u.username, display_name: u.display_name || u.username,
-      avatar: u.avatar, bio: u.bio || '', official_category: u.official_category || '',
-      official_verified: u.official_verified || false,
-    })));
-  } catch { res.status(500).json({ error: 'エラー' }); }
-});
-
-// 公式アカウント申請
-app.post('/api/official-accounts/apply', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const { category, description, officialName } = req.body;
-    if (!category) return res.status(400).json({ error: 'カテゴリを選択してください' });
-    if (!officialName || !officialName.trim()) return res.status(400).json({ error: '公式アカウント名を入力してください' });
-    await User.findOneAndUpdate({ id: decoded.id }, {
-      official_category: category,
-      display_name: officialName.trim(),
-      bio: description || '',
-    });
-    console.log(`[公式申請] user:${decoded.username} name:${officialName} category:${category}`);
-    res.json({ ok: true, message: '申請を受け付けました。審査後にご連絡します（1〜3営業日）。' });
-  } catch (e) { res.status(401).json({ error: '認証エラー' }); }
-});
-
-// 管理者: 公式アカウント承認（adminユーザーのみ）
-app.post('/api/official-accounts/:userId/approve', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const admin = await User.findOne({ id: decoded.id });
-    if (!admin || admin.username !== 'admin') return res.status(403).json({ error: '権限なし' });
-    await User.findOneAndUpdate({ id: req.params.userId }, { is_official: true, official_verified: true });
-    res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
-});
-
-// 公式アカウントへのフォロー（友達申請と同じ仕組みを流用）
-app.post('/api/official-accounts/:officialId/follow', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const { v4: uuidv4 } = require('uuid');
-    // 公式→一般は自動承認（一般→公式のフォロー）
-    const official = await User.findOne({ id: req.params.officialId, is_official: true });
-    if (!official) return res.status(404).json({ error: '公式アカウントが見つかりません' });
-    const already = await Friend.findOne({ user_id: decoded.id, friend_id: official.id });
-    if (already) return res.json({ ok: true, message: 'フォロー済み' });
-    await Friend.create({ user_id: decoded.id, friend_id: official.id });
-    await Friend.create({ user_id: official.id, friend_id: decoded.id });
-    res.json({ ok: true, message: 'フォローしました' });
-  } catch { res.status(500).json({ error: 'エラー' }); }
-});
-
 // QRコードで友達追加（ユーザー名で検索して申請）
 app.post('/api/friends/by-qr', async (req, res) => {
   try {

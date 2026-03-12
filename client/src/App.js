@@ -13,7 +13,6 @@ import './App.css';
 
 // 遅延読み込み（初回ロード高速化）
 const Friends = lazy(() => import('./components/Friends'));
-const OfficialAccounts = lazy(() => import('./components/OfficialAccounts'));
 const Timeline = lazy(() => import('./components/Timeline'));
 const StampShop = lazy(() => import('./components/StampShop'));
 const Album = lazy(() => import('./components/Album'));
@@ -1410,7 +1409,6 @@ function TabBar({ activeTab, setActiveTab, notifications }) {
   const tabs = [
     { id: 'chat', label: 'トーク', icon: '💬' },
     { id: 'friends', label: '友達', icon: '👥' },
-    { id: 'official', label: '公式', icon: '⭐' },
     { id: 'timeline', label: 'タイムライン', icon: '📰' },
     { id: 'stampshop', label: 'ショップ', icon: '🎫' },
     { id: 'profile', label: 'プロフィール', icon: '👤' },
@@ -1609,13 +1607,6 @@ export default function App() {
         <div style={tabVisible('friends')}>
           <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
             <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />
-          </Suspense></ErrorBoundary>
-        </div>
-      )}
-      {activeTab === 'official' && (
-        <div style={tabVisible('official')}>
-          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-            <OfficialAccounts currentUser={currentUser} />
           </Suspense></ErrorBoundary>
         </div>
       )}
