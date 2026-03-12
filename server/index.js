@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const nodemailer = require('nodemailer');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
@@ -509,6 +510,45 @@ app.get('/api/auth/me', async (req, res) => {
 });
 
 
+
+// ===== メール送信ユーティリティ =====
+function createMailTransporter() {
+  // Renderの環境変数 MAIL_USER / MAIL_PASS を使う
+  // Gmail使用: MAIL_USER=your@gmail.com, MAIL_PASS=アプリパスワード
+  if (process.env.MAIL_USER && process.env.MAIL_PASS) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
+    });
+  }
+  // 未設定時はコンソールログのみ（開発用）
+  return null;
+}
+
+async function sendAdminMail({ subject, html }) {
+  const to = 'towa08062026@outlook.jp';
+  const transporter = createMailTransporter();
+  if (!transporter) {
+    console.log(`[メール未送信 - 環境変数未設定]
+To: ${to}
+Subject: ${subject}`);
+    return false;
+  }
+  try {
+    await transporter.sendMail({
+      from: process.env.MAIL_USER,
+      to,
+      subject,
+      html,
+    });
+    console.log(`[メール送信成功] ${subject}`);
+    return true;
+  } catch (e) {
+    console.error('[メール送信失敗]', e.message);
+    return false;
+  }
+}
+
 // ===== 公式アカウント =====
 // 公式アカウント一覧
 app.get('/api/official-accounts', async (req, res) => {
@@ -522,23 +562,48 @@ app.get('/api/official-accounts', async (req, res) => {
   } catch { res.status(500).json({ error: 'エラー' }); }
 });
 
-// 公式アカウント申請（メール確認あり）
+// 公式アカウント申請（メール通知あり）
 app.post('/api/official-accounts/apply', async (req, res) => {
   try {
     const decoded = auth(req);
-    const { category, email, description } = req.body;
+    const { category, email, description, officialName } = req.body;
     if (!email || !email.includes('@')) return res.status(400).json({ error: '有効なメールアドレスを入力してください' });
     if (!category) return res.status(400).json({ error: 'カテゴリを選択してください' });
-    // 申請内容をuserに保存（管理者が後で承認）
+    if (!officialName || !officialName.trim()) return res.status(400).json({ error: '公式アカウント名を入力してください' });
+
+    // 申請内容をDBに保存
     await User.findOneAndUpdate({ id: decoded.id }, {
       official_email: email,
       official_category: category,
+      display_name: officialName.trim(), // 公式アカウント名を表示名として保存
       bio: description || '',
     });
-    // 管理者への通知（実際はメール送信だが今はDBに記録のみ）
-    console.log(`[公式申請] user:${decoded.username} email:${email} category:${category}`);
-    res.json({ ok: true, message: '申請を受け付けました。審査後にメールでご連絡します。' });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+
+    // 管理者へメール通知
+    const categoryLabels = { news:'ニュース', shop:'ショップ', service:'サービス', creator:'クリエイター', school:'学校・教育', other:'その他' };
+    await sendAdminMail({
+      subject: `【LINE Killer】公式アカウント申請: ${officialName.trim()}`,
+      html: `
+        <h2>公式アカウント申請が届きました</h2>
+        <table style="border-collapse:collapse; width:100%">
+          <tr><th style="border:1px solid #ddd;padding:8px;background:#f5f5f5;text-align:left">項目</th><th style="border:1px solid #ddd;padding:8px;background:#f5f5f5;text-align:left">内容</th></tr>
+          <tr><td style="border:1px solid #ddd;padding:8px">公式アカウント名</td><td style="border:1px solid #ddd;padding:8px"><strong>${officialName.trim()}</strong></td></tr>
+          <tr><td style="border:1px solid #ddd;padding:8px">ユーザー名</td><td style="border:1px solid #ddd;padding:8px">@${decoded.username}</td></tr>
+          <tr><td style="border:1px solid #ddd;padding:8px">ユーザーID</td><td style="border:1px solid #ddd;padding:8px">${decoded.id}</td></tr>
+          <tr><td style="border:1px solid #ddd;padding:8px">カテゴリ</td><td style="border:1px solid #ddd;padding:8px">${categoryLabels[category] || category}</td></tr>
+          <tr><td style="border:1px solid #ddd;padding:8px">連絡先メール</td><td style="border:1px solid #ddd;padding:8px">${email}</td></tr>
+          <tr><td style="border:1px solid #ddd;padding:8px">説明</td><td style="border:1px solid #ddd;padding:8px">${description || '(なし)'}</td></tr>
+          <tr><td style="border:1px solid #ddd;padding:8px">申請日時</td><td style="border:1px solid #ddd;padding:8px">${new Date().toLocaleString('ja-JP')}</td></tr>
+        </table>
+        <br>
+        <p>承認する場合は以下のAPIを叩いてください：</p>
+        <code>POST /api/official-accounts/${decoded.id}/approve</code>
+        <p>（adminアカウントでログイン済みのトークンが必要です）</p>
+      `,
+    });
+
+    res.json({ ok: true, message: '申請を受け付けました。審査後にご連絡します（1〜3営業日）。' });
+  } catch (e) { res.status(401).json({ error: '認証エラー' }); }
 });
 
 // 管理者: 公式アカウント承認（adminユーザーのみ）

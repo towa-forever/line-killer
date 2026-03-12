@@ -20,6 +20,7 @@ export default function OfficialAccounts({ currentUser }) {
   const [applyEmail, setApplyEmail] = useState('');
   const [applyCategory, setApplyCategory] = useState('');
   const [applyDesc, setApplyDesc] = useState('');
+  const [applyName, setApplyName] = useState('');
   const [applying, setApplying] = useState(false);
   const [filterCat, setFilterCat] = useState('all');
 
@@ -42,11 +43,13 @@ export default function OfficialAccounts({ currentUser }) {
   };
 
   const applyOfficial = async () => {
+    if (!applyName.trim()) { setMessage('公式アカウント名を入力してください'); return; }
     if (!applyEmail || !applyCategory) { setMessage('メールとカテゴリは必須です'); return; }
     setApplying(true);
     try {
       const r = await axios.post('/api/official-accounts/apply', {
-        email: applyEmail, category: applyCategory, description: applyDesc
+        email: applyEmail, category: applyCategory, description: applyDesc,
+        officialName: applyName.trim(),
       });
       setMessage(r.data.message);
       setTab('list');
@@ -150,6 +153,13 @@ export default function OfficialAccounts({ currentUser }) {
             <strong style={{ color:'var(--text)' }}>📋 公式アカウントとは？</strong><br/>
             企業・店舗・クリエイターなどが運営する公式アカウントです。<br/>
             申請後、審査（1〜3営業日）が完了するとバッジが付与されます。
+          </div>
+
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>公式アカウント名 <span style={{ color:'red' }}>*</span></div>
+            <input className="form-input" placeholder="例: LINE Killer公式、〇〇ショップ など"
+              value={applyName} onChange={e => setApplyName(e.target.value)} style={{ marginBottom:0 }} maxLength={30} />
+            <div style={{ fontSize:11, color:'var(--text2)', marginTop:4 }}>チャットや公式一覧に表示される名前です（30文字以内）</div>
           </div>
 
           <div style={{ marginBottom:12 }}>
