@@ -515,11 +515,8 @@ app.get('/api/auth/me', async (req, res) => {
 function createMailTransporter() {
   if (process.env.MAIL_USER && process.env.MAIL_PASS) {
     return nodemailer.createTransport({
-      host: 'smtp-mail.outlook.com',
-      port: 587,
-      secure: false, // STARTTLS
+      service: 'gmail',
       auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
-      tls: { ciphers: 'SSLv3' },
     });
   }
   return null;
