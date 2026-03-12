@@ -63,7 +63,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   const getMedia = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 30 } },
+        video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 60 } },
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000 },
       });
       return stream;
@@ -134,10 +134,10 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
           const params = sender.getParameters();
           if (!params.encodings?.length) params.encodings = [{}];
           if (sender.track.kind === 'video') {
-            params.encodings[0].maxBitrate = 500_000; // 映像500kbps
-            params.encodings[0].maxFramerate = 24;
+            params.encodings[0].maxBitrate = 4_000_000; // 映像4Mbps（高画質）
+            params.encodings[0].maxFramerate = 60;
           } else {
-            params.encodings[0].maxBitrate = 64_000;  // 音声64kbps
+            params.encodings[0].maxBitrate = 128_000;   // 音声128kbps（高音質）
             params.encodings[0].priority = 'high';
           }
           await sender.setParameters(params).catch(() => {});
