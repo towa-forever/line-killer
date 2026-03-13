@@ -929,6 +929,36 @@ app.get('/api/rooms', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
+
+// ===== DM: 友達とのトークルームを取得または作成 =====
+app.post('/api/rooms/dm', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { targetUserId } = req.body;
+    if (!targetUserId) return res.status(400).json({ error: 'targetUserIdが必要です' });
+
+    // 2人だけのルームが既に存在するか探す
+    const existing = await Room.findOne({
+      members: { $all: [decoded.id, targetUserId], $size: 2 }
+    });
+    if (existing) return res.json(existing);
+
+    // なければ作成
+    const targetUser = await User.findOne({ id: targetUserId });
+    if (!targetUser) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+
+    const id = 'room_' + uuidv4();
+    const room = await Room.create({
+      id,
+      name: targetUser.display_name || targetUser.username,
+      members: [decoded.id, targetUserId],
+      creator_id: decoded.id,
+    });
+    [decoded.id, targetUserId].forEach(mid => io.to('user_' + mid).emit('room:new', room));
+    res.json(room);
+  } catch (e) { res.status(401).json({ error: '認証エラー' }); }
+});
+
 app.post('/api/rooms', async (req, res) => {
   try {
     const decoded = auth(req);

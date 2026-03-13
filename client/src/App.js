@@ -1460,6 +1460,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [socket, setSocket] = useState(null);
   const [activeTab, setActiveTab] = useState('chat');
+
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
 
   // axiosインターセプター: 401のとき自動ログアウト
@@ -1635,7 +1636,18 @@ export default function App() {
       {activeTab === 'friends' && (
         <div style={tabVisible('friends')}>
           <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-            <Friends currentUser={currentUser} socket={socket} onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))} />
+            <Friends
+              currentUser={currentUser}
+              socket={socket}
+              onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))}
+              onStartChat={async (friend) => {
+                try {
+                  const res = await axios.post('/api/rooms/dm', { targetUserId: friend.id || friend._id });
+                  // room:newイベントがSocketで飛んでくるのでタブだけ切り替える
+                  setActiveTab('chat');
+                } catch (e) { console.error('DM失敗', e); }
+              }}
+            />
           </Suspense></ErrorBoundary>
         </div>
       )}
