@@ -1,686 +1,157 @@
-require("dotenv").config();
-const express = require('express');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const compression = require('compression');
-const webpush = require('web-push');
-const { createServer } = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
-const multer = require('multer');
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
-// Cloudinary設定（環境変数から読み込み）
-if (process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME) {
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-}
-const useCloudinary = !!(process.env.CLOUDINARY_CLOUD_NAME);
-const path = require('path');
-const fs = require('fs');
-const { join } = require('path');
-const { v4: uuidv4 } = require('uuid');
-const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription } = require('./db');
+// ===== パスワードリセット =====
 
-const app = express();
-
-// VAPID設定
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BAwzRukb1C_xX8RFR2Luln0HcUEDsAgrimF1njzr2t4952nvpwfkrQ6yvSHE4z9wqXXpnp3tMhwzIBKuuvd5Xkk';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'NYWHWUJij3EUcOYPmq17yMihomww6SmBpvQe4ZTsDI0';
-webpush.setVapidDetails('mailto:admin@line-killer.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-
-// 管理者ユーザー名（お知らせ投稿・削除権限）
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'とわ';
-
-// push購読をメモリで管理（再起動でリセットされるが無料プランでは許容）
-const pushSubscriptions = new Map(); // userId -> subscription (メモリキャッシュ)
-// 起動時にDBからpush subscriptionsを読み込む
-(async () => {
-  try {
-    const subs = await PushSubscription.find();
-    subs.forEach(s => pushSubscriptions.set(s.user_id, s.subscription));
-    console.log(`Push subscriptions loaded: ${subs.length}`);
-  } catch(e) { console.error('Push subscription load error:', e); }
-})();
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
-  pingTimeout: 20000,       // 20秒（デフォルト20000）
-  pingInterval: 10000,      // 10秒ごとにping（デフォルト25000より短く）
-  transports: ['websocket', 'polling'], // WebSocket優先
-  upgradeTimeout: 5000,     // アップグレード待機5秒
-  maxHttpBufferSize: 2e6,   // 2MB（メッセージバッファ）
-  connectTimeout: 10000,    // 接続タイムアウト10秒
-});
-app.set('io', io);
-
-app.use(cors());
-app.use(compression()); // gzip圧縮（全ルートに有効）
-app.use(helmet({ contentSecurityPolicy: false })); // セキュリティヘッダー
-
-// ログイン・登録のレートリミット（ブルートフォース対策）
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分
-  max: 20, // 20回まで
-  message: { error: 'リクエストが多すぎます。しばらく待ってから試してください' },
-  standardHeaders: true, legacyHeaders: false,
-});
-// APIのレートリミット（一般）
-const apiLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1分
-  max: 300,
-  message: { error: 'リクエストが多すぎます' },
-  standardHeaders: true, legacyHeaders: false,
-});
-app.use('/api/auth', authLimiter);
-app.use('/api/', apiLimiter);
-// 管理エンドポイント（ADMIN_KEY必須）
-app.get('/admin/reset-requests', async (req, res) => {
-  try {
-    const key = req.query.key || req.headers['x-admin-key'];
-    if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) return res.status(403).json({ error: 'forbidden' });
-    await FriendRequest.deleteMany({});
-    res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: 'サーバーエラー' }); }
-});
-
-app.use(express.json());
-
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-app.use('/uploads', express.static(uploadDir));
-
-const diskStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, uuidv4() + path.extname(file.originalname))
-});
-const cloudStorage = useCloudinary ? new CloudinaryStorage({
-  cloudinary,
-  params: { folder: 'line-killer', allowed_formats: ['jpg','jpeg','png','gif','webp','mp4','pdf'] },
-}) : null;
-
-const storage = cloudStorage || diskStorage;
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
-const getFileUrl = (req) => {
-  if (useCloudinary && req.file?.path) return req.file.path; // Cloudinaryは絶対URL
-  return req.file ? `/uploads/${req.file.filename}` : null;
-};
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-production';
-
-const auth = (req) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  return jwt.verify(token, JWT_SECRET);
-};
-
-// スタンプセット定義
-const STAMP_SETS = [
-  { id: 1, name: '野球キャラクターセット', icon: '⚾', stamps: [
-    { emoji: '⚾', label: 'ナイスバッティング！' }, { emoji: '🏆', label: '優勝！' },
-    { emoji: '💪', label: '全力プレー！' }, { emoji: '🔥', label: '燃えてるぜ！' },
-    { emoji: '👊', label: 'ファイト！' }, { emoji: '🎯', label: 'ストライク！' },
-    { emoji: '🙌', label: 'やったー！' }, { emoji: '😤', label: '負けへんで！' },
-    { emoji: '🥇', label: 'チャンピオン！' }, { emoji: '⚡', label: '一撃必殺！' },
-  ]},
-  { id: 2, name: '動物キャラセット', icon: '🐶', stamps: [
-    { emoji: '🐶', label: 'わんわん！' }, { emoji: '🐱', label: 'にゃー！' },
-    { emoji: '🐻', label: 'よろしく！' }, { emoji: '🐼', label: 'のんびりね' },
-    { emoji: '🦊', label: 'ずるがしこい！' }, { emoji: '🐯', label: 'がおー！' },
-    { emoji: '🐸', label: 'けろけろ！' }, { emoji: '🐨', label: 'まったりしよ' },
-    { emoji: '🦁', label: '王様だ！' }, { emoji: '🐙', label: 'ぐにゃぐにゃ！' },
-  ]},
-  { id: 3, name: '面白い表情セット', icon: '😂', stamps: [
-    { emoji: '😂', label: '爆笑！' }, { emoji: '🤣', label: '草ァ！' },
-    { emoji: '😅', label: 'あせあせ…' }, { emoji: '🤪', label: 'いかれてる！' },
-    { emoji: '😈', label: 'いたずら中！' }, { emoji: '💀', label: '死んだ笑' },
-    { emoji: '🤯', label: '頭爆発！' }, { emoji: '😵', label: 'くらくら…' },
-    { emoji: '🥴', label: 'ふらふら…' }, { emoji: '🤡', label: 'ピエロだよ！' },
-  ]},
-  { id: 4, name: '食べ物キャラセット', icon: '🍕', stamps: [
-    { emoji: '🍕', label: 'ピザ食べたい！' }, { emoji: '🍔', label: 'バーガー最高！' },
-    { emoji: '🍣', label: 'お寿司食べよ！' }, { emoji: '🍜', label: 'ラーメン行こ！' },
-    { emoji: '🍩', label: 'ドーナツ食べたい' }, { emoji: '🍰', label: 'ケーキ！' },
-    { emoji: '🍦', label: 'アイス食べたい' }, { emoji: '🍫', label: 'チョコ好き！' },
-    { emoji: '🌮', label: 'タコス食べたい！' }, { emoji: '🍱', label: 'お弁当食べよ！' },
-  ]},
-  { id: 5, name: '季節・イベントセット', icon: '🎉', stamps: [
-    { emoji: '🌸', label: 'お花見しよ！' }, { emoji: '🎆', label: '花火きれい！' },
-    { emoji: '🍁', label: '紅葉シーズン！' }, { emoji: '⛄', label: '雪だるま！' },
-    { emoji: '🎉', label: 'やったー！' }, { emoji: '🎊', label: 'おめでとう！' },
-    { emoji: '🎋', label: '七夕だよ！' }, { emoji: '🎃', label: 'ハロウィン！' },
-    { emoji: '🎄', label: 'メリクリ！' }, { emoji: '🧧', label: 'お年玉！' },
-  ]},
-  { id: 6, name: 'ゆるキャラセット', icon: '👾', stamps: [
-    { emoji: '👾', label: 'ゆるゆる～' }, { emoji: '🤖', label: 'ロボットだよ！' },
-    { emoji: '👽', label: '宇宙人だよ！' }, { emoji: '👻', label: 'ばあ！' },
-    { emoji: '🎭', label: 'どっちの顔？' }, { emoji: '🧸', label: 'ぬいぐるみ！' },
-    { emoji: '🪆', label: 'マトリョーシカ' }, { emoji: '🎠', label: 'くるくる～' },
-    { emoji: '🎪', label: 'サーカスだよ！' }, { emoji: '🎨', label: 'アート！' },
-  ]},
-  { id: 7, name: '恋愛・気持ちセット', icon: '❤️', stamps: [
-    { emoji: '❤️', label: '大好き！' }, { emoji: '💕', label: 'ラブラブ！' },
-    { emoji: '💖', label: 'ドキドキ！' }, { emoji: '💘', label: '一目惚れ！' },
-    { emoji: '🥰', label: 'めちゃ好き！' }, { emoji: '😍', label: '最高！' },
-    { emoji: '💝', label: '贈り物！' }, { emoji: '💞', label: 'ずっと一緒！' },
-    { emoji: '🫶', label: 'ハートハンド！' }, { emoji: '💓', label: 'ときめき！' },
-  ]},
-  { id: 8, name: '日常会話セット', icon: '💬', stamps: [
-    { emoji: '👋', label: 'やあ！' }, { emoji: '🤝', label: 'よろしく！' },
-    { emoji: '👍', label: 'いいね！' }, { emoji: '👎', label: 'それはダメ！' },
-    { emoji: '🙏', label: 'お願い！' }, { emoji: '💪', label: 'がんばれ！' },
-    { emoji: '✌️', label: 'ピース！' }, { emoji: '👌', label: 'オッケー！' },
-    { emoji: '🤙', label: 'またね！' }, { emoji: '☝️', label: 'ちょっと待って！' },
-  ]},
-  { id: 9, name: 'スポーツセット', icon: '⚽', stamps: [
-    { emoji: '⚽', label: 'ゴール！' }, { emoji: '🏀', label: 'ダンク！' },
-    { emoji: '🏈', label: 'タッチダウン！' }, { emoji: '🎾', label: 'サーブ！' },
-    { emoji: '🏊', label: '泳ぐぞ！' }, { emoji: '🚴', label: 'レッツゴー！' },
-    { emoji: '🥊', label: 'ファイト！' }, { emoji: '🏆', label: '優勝！' },
-    { emoji: '🤸', label: '体操！' }, { emoji: '⛷️', label: 'スキー！' },
-  ]},
-  { id: 10, name: '音楽セット', icon: '🎵', stamps: [
-    { emoji: '🎵', label: 'ラララ～！' }, { emoji: '🎸', label: 'ギター！' },
-    { emoji: '🎹', label: 'ピアノ！' }, { emoji: '🥁', label: 'ドンドン！' },
-    { emoji: '🎤', label: '歌うよ！' }, { emoji: '🎧', label: '音楽聴こ！' },
-    { emoji: '🎺', label: 'ラッパ！' }, { emoji: '🎻', label: 'バイオリン！' },
-    { emoji: '🎷', label: 'サックス！' }, { emoji: '🎼', label: '作曲中！' },
-  ]},
-  { id: 11, name: 'ゲームセット', icon: '🎮', stamps: [
-    { emoji: '🎮', label: 'ゲームしよ！' }, { emoji: '🕹️', label: 'レトロゲー！' },
-    { emoji: '🏆', label: 'ゲームクリア！' }, { emoji: '💀', label: 'やられた！' },
-    { emoji: '⚔️', label: 'バトル！' }, { emoji: '🧩', label: 'パズル！' },
-    { emoji: '🎲', label: 'サイコロ！' }, { emoji: '♟️', label: 'チェス！' },
-    { emoji: '🎯', label: 'ねらい撃ち！' }, { emoji: '🥇', label: 'ランク１位！' },
-  ]},
-  { id: 12, name: '旅行セット', icon: '✈️', stamps: [
-    { emoji: '✈️', label: '旅行行こ！' }, { emoji: '🏖️', label: 'ビーチ！' },
-    { emoji: '🏔️', label: '山登り！' }, { emoji: '🗼', label: '東京タワー！' },
-    { emoji: '🌍', label: '世界旅行！' }, { emoji: '🧳', label: '旅の準備！' },
-    { emoji: '🗺️', label: '地図見よ！' }, { emoji: '🚂', label: '電車旅！' },
-    { emoji: '🚢', label: 'クルーズ！' }, { emoji: '🏯', label: 'お城！' },
-  ]},
-  { id: 13, name: '天気セット', icon: '☀️', stamps: [
-    { emoji: '☀️', label: '晴れだよ！' }, { emoji: '🌧️', label: '雨だよ！' },
-    { emoji: '⛈️', label: '嵐だ！' }, { emoji: '❄️', label: '雪だよ！' },
-    { emoji: '🌈', label: '虹が出た！' }, { emoji: '⚡', label: '雷！' },
-    { emoji: '🌊', label: '波が高い！' }, { emoji: '🌪️', label: '竜巻！' },
-    { emoji: '🌤️', label: '曇り時々晴れ' }, { emoji: '🌙', label: 'お月さま！' },
-  ]},
-  { id: 14, name: '勉強セット', icon: '📚', stamps: [
-    { emoji: '📚', label: '勉強するぞ！' }, { emoji: '✏️', label: 'メモメモ！' },
-    { emoji: '💡', label: 'ひらめいた！' }, { emoji: '🔬', label: '実験中！' },
-    { emoji: '🎓', label: '卒業！' }, { emoji: '📝', label: 'テスト中！' },
-    { emoji: '🏅', label: '満点！' }, { emoji: '📐', label: '数学！' },
-    { emoji: '🔭', label: '観察中！' }, { emoji: '📖', label: '読書中！' },
-  ]},
-  { id: 15, name: '仕事セット', icon: '💼', stamps: [
-    { emoji: '💼', label: '仕事行くぞ！' }, { emoji: '💻', label: 'PC作業中！' },
-    { emoji: '📊', label: 'データ分析！' }, { emoji: '📈', label: '右肩上がり！' },
-    { emoji: '☎️', label: '電話中！' }, { emoji: '📧', label: 'メール送った！' },
-    { emoji: '🗂️', label: 'ファイル整理！' }, { emoji: '⏰', label: '締め切り！' },
-    { emoji: '🖨️', label: '印刷中！' }, { emoji: '📋', label: '報告書！' },
-  ]},
-  { id: 16, name: 'お祝いセット', icon: '🎊', stamps: [
-    { emoji: '🎊', label: 'おめでとう！' }, { emoji: '🎉', label: 'やったー！' },
-    { emoji: '🎈', label: '風船！' }, { emoji: '🎁', label: 'プレゼント！' },
-    { emoji: '🥳', label: 'パーティー！' }, { emoji: '🍾', label: 'シャンパン！' },
-    { emoji: '🥂', label: '乾杯！' }, { emoji: '🌟', label: 'スター！' },
-    { emoji: '🎀', label: 'リボン！' }, { emoji: '🧨', label: '爆竹！' },
-  ]},
-  { id: 17, name: 'ホラーセット', icon: '👻', stamps: [
-    { emoji: '👻', label: 'ばあ！' }, { emoji: '💀', label: 'ガイコツ！' },
-    { emoji: '🕷️', label: 'クモ！' }, { emoji: '🦇', label: 'コウモリ！' },
-    { emoji: '😱', label: 'こわい！' }, { emoji: '🎃', label: 'ハロウィン！' },
-    { emoji: '🌑', label: '暗闇！' }, { emoji: '🔮', label: '占い！' },
-    { emoji: '⚰️', label: 'お墓！' }, { emoji: '🪦', label: 'R.I.P！' },
-  ]},
-  { id: 18, name: '宇宙セット', icon: '🚀', stamps: [
-    { emoji: '🚀', label: '発射！' }, { emoji: '🛸', label: 'UFO！' },
-    { emoji: '🌙', label: 'お月さま！' }, { emoji: '⭐', label: 'スター！' },
-    { emoji: '☄️', label: '彗星！' }, { emoji: '🌌', label: '銀河！' },
-    { emoji: '👨‍🚀', label: '宇宙飛行士！' }, { emoji: '🪐', label: '土星！' },
-    { emoji: '🌠', label: '流れ星！' }, { emoji: '🔭', label: '望遠鏡！' },
-  ]},
-  { id: 19, name: '学校セット', icon: '🏫', stamps: [
-    { emoji: '🏫', label: '学校行くぞ！' }, { emoji: '🎒', label: 'ランドセル！' },
-    { emoji: '✏️', label: '授業中！' }, { emoji: '🎓', label: '卒業！' },
-    { emoji: '👨‍🏫', label: '先生！' }, { emoji: '📝', label: 'テスト！' },
-    { emoji: '🏅', label: '表彰！' }, { emoji: '🖍️', label: 'お絵かき！' },
-    { emoji: '📌', label: '掲示板！' }, { emoji: '🔔', label: 'チャイム！' },
-  ]},
-  { id: 20, name: 'お疲れ様セット', icon: '😴', stamps: [
-    { emoji: '😴', label: 'お疲れ〜' }, { emoji: '🛌', label: 'もう寝る！' },
-    { emoji: '☕', label: 'コーヒー休憩' }, { emoji: '🍵', label: 'お茶しよ' },
-    { emoji: '😮‍💨', label: 'やれやれ…' }, { emoji: '🤕', label: 'つかれた〜' },
-    { emoji: '💤', label: 'zzz…' }, { emoji: '🧘', label: 'リラックス' },
-    { emoji: '🛁', label: 'お風呂入る！' }, { emoji: '🌙', label: 'おやすみ！' },
-  ]},
-  { id: 21, name: 'お腹すいたセット', icon: '🍜', stamps: [
-    { emoji: '🍜', label: 'ラーメン食べたい！' }, { emoji: '🍣', label: 'お寿司！' },
-    { emoji: '🍔', label: 'バーガー！' }, { emoji: '🍦', label: 'アイス！' },
-    { emoji: '🍰', label: 'ケーキ！' }, { emoji: '🍕', label: 'ピザ！' },
-    { emoji: '🥟', label: '餃子！' }, { emoji: '🍩', label: 'ドーナツ！' },
-    { emoji: '🌮', label: 'タコス！' }, { emoji: '😋', label: 'うまそ〜！' },
-  ]},
-  { id: 22, name: 'リアクションセット', icon: '👍', stamps: [
-    { emoji: '👍', label: 'いいね！' }, { emoji: '👎', label: 'よくない' },
-    { emoji: '👏', label: 'パチパチ！' }, { emoji: '🙌', label: 'やったー！' },
-    { emoji: '🤝', label: 'よろしく！' }, { emoji: '✌️', label: 'ピース！' },
-    { emoji: '🤟', label: 'ラブ！' }, { emoji: '💪', label: 'ガンバ！' },
-    { emoji: '🫶', label: 'ありがとう！' }, { emoji: '🤜', label: 'よっしゃ！' },
-  ]},
-  { id: 23, name: '天才・バカセット', icon: '🤓', stamps: [
-    { emoji: '🤓', label: '天才！' }, { emoji: '🤡', label: 'バカ！' },
-    { emoji: '🧠', label: '頭いい〜' }, { emoji: '💡', label: 'ひらめいた！' },
-    { emoji: '🤔', label: 'うーん…' }, { emoji: '😵', label: 'わからん！' },
-    { emoji: '🫠', label: 'とけそう' }, { emoji: '🤯', label: '頭爆発！' },
-    { emoji: '😤', label: 'なめんな！' }, { emoji: '🙃', label: 'まあいいか' },
-  ]},
-  { id: 24, name: '返事セット', icon: '💬', stamps: [
-    { emoji: '✅', label: 'OK！' }, { emoji: '❌', label: 'NG！' },
-    { emoji: '❓', label: '？' }, { emoji: '❗', label: '！' },
-    { emoji: '🆗', label: 'オーケー' }, { emoji: '🆘', label: 'たすけて！' },
-    { emoji: '📢', label: '注目！' }, { emoji: '🔕', label: 'しずかに！' },
-    { emoji: '💯', label: '100点！' }, { emoji: '🚫', label: 'ダメ！' },
-  ]},
-  { id: 25, name: 'ネコセット', icon: '🐱', stamps: [
-    { emoji: '🐱', label: 'にゃ〜' }, { emoji: '😺', label: 'うれしい猫' },
-    { emoji: '😸', label: '笑ってる猫' }, { emoji: '😹', label: '泣き笑い猫' },
-    { emoji: '😻', label: 'ときめき猫' }, { emoji: '😼', label: 'ドヤ猫' },
-    { emoji: '😽', label: 'チュー猫' }, { emoji: '🙀', label: 'びっくり猫' },
-    { emoji: '😿', label: '悲しい猫' }, { emoji: '😾', label: 'おこ猫' },
-  ]},
-  { id: 26, name: '天気・自然セット', icon: '🌈', stamps: [
-    { emoji: '🌈', label: '虹！' }, { emoji: '⛈️', label: '嵐だ！' },
-    { emoji: '🌊', label: '波！' }, { emoji: '🌸', label: '桜！' },
-    { emoji: '🍂', label: '秋！' }, { emoji: '❄️', label: '雪！' },
-    { emoji: '🌺', label: '花！' }, { emoji: '🌻', label: 'ひまわり！' },
-    { emoji: '🍀', label: 'ラッキー！' }, { emoji: '🌙', label: '月夜' },
-  ]},
-  { id: 27, name: 'パーティーセット', icon: '🥳', stamps: [
-    { emoji: '🥳', label: 'パーティー！' }, { emoji: '🎂', label: 'お誕生日！' },
-    { emoji: '🎁', label: 'プレゼント！' }, { emoji: '🎆', label: '花火！' },
-    { emoji: '🍾', label: 'かんぱい！' }, { emoji: '🎤', label: 'カラオケ！' },
-    { emoji: '🕺', label: 'ダンス！' }, { emoji: '💃', label: 'ノリノリ！' },
-    { emoji: '🎉', label: 'やったー！' }, { emoji: '🥂', label: 'おめでとう！' },
-  ]},
-  { id: 28, name: '乗り物セット', icon: '🚗', stamps: [
-    { emoji: '🚗', label: 'ドライブ！' }, { emoji: '🚆', label: '電車！' },
-    { emoji: '✈️', label: '旅行！' }, { emoji: '🚢', label: 'クルーズ！' },
-    { emoji: '🚲', label: 'サイクリング！' }, { emoji: '🏍️', label: 'バイク！' },
-    { emoji: '🚁', label: 'ヘリ！' }, { emoji: '🛸', label: 'UFO！' },
-    { emoji: '🚀', label: 'ロケット！' }, { emoji: '⛵', label: 'ヨット！' },
-  ]},
-  { id: 29, name: 'お金セット', icon: '💰', stamps: [
-    { emoji: '💰', label: 'お金！' }, { emoji: '💸', label: 'お金飛ぶ！' },
-    { emoji: '🤑', label: 'お金欲しい！' }, { emoji: '💳', label: 'カード払い' },
-    { emoji: '🏦', label: '銀行！' }, { emoji: '📈', label: '株上がれ！' },
-    { emoji: '📉', label: '下がった…' }, { emoji: '🎰', label: 'ギャンブル！' },
-    { emoji: '💎', label: 'ダイヤ！' }, { emoji: '🏆', label: '一等賞！' },
-  ]},
-  { id: 30, name: '健康・運動セット', icon: '🏋️', stamps: [
-    { emoji: '🏋️', label: '筋トレ！' }, { emoji: '🧗', label: 'クライミング！' },
-    { emoji: '🏊', label: '水泳！' }, { emoji: '🚴', label: 'サイクリング！' },
-    { emoji: '🧘', label: 'ヨガ！' }, { emoji: '🤸', label: '体操！' },
-    { emoji: '🏄', label: 'サーフィン！' }, { emoji: '⛷️', label: 'スキー！' },
-    { emoji: '🥊', label: 'ボクシング！' }, { emoji: '💪', label: '鍛えてる！' },
-  ]},
-  { id: 31, name: 'ホビーセット', icon: '🎯', stamps: [
-    { emoji: '🎯', label: '的中！' }, { emoji: '♟️', label: 'チェス！' },
-    { emoji: '🎲', label: 'サイコロ！' }, { emoji: '🧩', label: 'パズル！' },
-    { emoji: '🎭', label: '演劇！' }, { emoji: '🖼️', label: '絵！' },
-    { emoji: '📸', label: '写真！' }, { emoji: '✍️', label: '書道！' },
-    { emoji: '🪆', label: 'マトリョーシカ！' }, { emoji: '🎋', label: '七夕！' },
-  ]},
-  { id: 32, name: 'SFセット', icon: '🤖', stamps: [
-    { emoji: '🤖', label: 'ロボット！' }, { emoji: '👾', label: 'エイリアン！' },
-    { emoji: '🛸', label: 'UFO来た！' }, { emoji: '🌌', label: '宇宙！' },
-    { emoji: '⚡', label: 'エネルギー！' }, { emoji: '🔮', label: '予言！' },
-    { emoji: '🧬', label: 'DNA！' }, { emoji: '💻', label: 'ハッキング！' },
-    { emoji: '🕹️', label: 'コントローラー！' }, { emoji: '🦾', label: 'サイボーグ！' },
-  ]},
-  { id: 33, name: '恐竜・生き物セット', icon: '🦕', stamps: [
-    { emoji: '🦕', label: 'ブラキオ！' }, { emoji: '🦖', label: 'ティラノ！' },
-    { emoji: '🐉', label: 'ドラゴン！' }, { emoji: '🦋', label: '蝶！' },
-    { emoji: '🐝', label: 'ハチ！' }, { emoji: '🦈', label: 'サメ！' },
-    { emoji: '🐬', label: 'イルカ！' }, { emoji: '🦁', label: 'ライオン！' },
-    { emoji: '🐺', label: 'オオカミ！' }, { emoji: '🦅', label: '鷹！' },
-  ]},
-  { id: 34, name: '魔法・ファンタジーセット', icon: '🧙', stamps: [
-    { emoji: '🧙', label: '魔法使い！' }, { emoji: '🧚', label: '妖精！' },
-    { emoji: '🧛', label: '吸血鬼！' }, { emoji: '🧜', label: '人魚！' },
-    { emoji: '🧝', label: 'エルフ！' }, { emoji: '🧞', label: 'ジーニー！' },
-    { emoji: '🪄', label: '魔法の杖！' }, { emoji: '🔮', label: '水晶玉！' },
-    { emoji: '⚔️', label: '剣！' }, { emoji: '🛡️', label: '盾！' },
-  ]},
-  { id: 35, name: '日本文化セット', icon: '⛩️', stamps: [
-    { emoji: '⛩️', label: '神社！' }, { emoji: '🗻', label: '富士山！' },
-    { emoji: '🌸', label: '桜！' }, { emoji: '🍱', label: 'お弁当！' },
-    { emoji: '🥷', label: '忍者！' }, { emoji: '🎐', label: '風鈴！' },
-    { emoji: '🏮', label: 'ちょうちん！' }, { emoji: '🎍', label: '門松！' },
-    { emoji: '👘', label: '着物！' }, { emoji: '🥁', label: '和太鼓！' },
-  ]},
-  { id: 36, name: 'ミーム・インターネットセット', icon: '💀', stamps: [
-    { emoji: '💀', label: '草生えた' }, { emoji: '🗿', label: 'モアイ' },
-    { emoji: '🤌', label: 'マンマミーア' }, { emoji: '😭', label: 'マジ泣ける' },
-    { emoji: '🫡', label: 'ラジャ！' }, { emoji: '🥴', label: 'やばい' },
-    { emoji: '😈', label: 'やってやる！' }, { emoji: '🧌', label: 'トロール！' },
-    { emoji: '🫵', label: 'お前やな！' }, { emoji: '🤣', label: '爆笑' },
-  ]},
-  { id: 37, name: 'ビジネス敬語セット', icon: '💼', stamps: [
-    { emoji: '🙇', label: 'お世話になります' }, { emoji: '📊', label: 'ご報告します' },
-    { emoji: '📋', label: 'ご確認ください' }, { emoji: '✉️', label: 'ご連絡します' },
-    { emoji: '🤝', label: 'よろしくお願いします' }, { emoji: '📌', label: 'ご注意ください' },
-    { emoji: '⏰', label: 'お時間ください' }, { emoji: '🙏', label: 'ご了承ください' },
-    { emoji: '📞', label: 'お電話します' }, { emoji: '💪', label: '全力で取り組みます' },
-  ]},
-  { id: 38, name: 'ベビー・こどもセット', icon: '👶', stamps: [
-    { emoji: '👶', label: 'あかちゃん！' }, { emoji: '🍼', label: 'ミルク！' },
-    { emoji: '🧸', label: 'ぬいぐるみ！' }, { emoji: '🎠', label: '遊園地！' },
-    { emoji: '🪀', label: 'ヨーヨー！' }, { emoji: '🎪', label: 'サーカス！' },
-    { emoji: '🎡', label: 'メリゴー！' }, { emoji: '🍭', label: 'アメ！' },
-    { emoji: '🎈', label: '風船！' }, { emoji: '😊', label: 'えへへ' },
-  ]},
-  { id: 39, name: '天気・感情セット', icon: '🌤️', stamps: [
-    { emoji: '🌤️', label: '晴れ！' }, { emoji: '🌧️', label: '雨だ…' },
-    { emoji: '⛅', label: '曇り' }, { emoji: '🌩️', label: '雷！' },
-    { emoji: '🌪️', label: '台風！' }, { emoji: '🌈', label: '虹！' },
-    { emoji: '❄️', label: '雪だ！' }, { emoji: '🔥', label: '熱い！' },
-    { emoji: '💧', label: 'しずく' }, { emoji: '🌊', label: '大波！' },
-  ]},
-  { id: 40, name: 'LINE Killerオリジナルセット', icon: '💬', stamps: [
-    { emoji: '💬', label: 'LINE Killer！' }, { emoji: '🚀', label: 'LINEを超えた！' },
-    { emoji: '👑', label: '俺が王者！' }, { emoji: '🔥', label: '燃えてるぜ！' },
-    { emoji: '💎', label: 'プレミアム！' }, { emoji: '⚡', label: '爆速！' },
-    { emoji: '🎯', label: '完璧！' }, { emoji: '🌟', label: '最高！' },
-    { emoji: '🎊', label: 'みんなありがとう！' }, { emoji: '💚', label: 'LINE Killer愛してる！' },
-  ]},
-];
-
-// Push通知API
-app.get('/api/push/vapid-key', (req, res) => {
-  res.json({ publicKey: VAPID_PUBLIC_KEY });
-});
-
-app.post('/api/push/subscribe', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: '認証エラー' });
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    pushSubscriptions.set(decoded.id, req.body);
-    // DBにも保存（再起動対策）
-    PushSubscription.findOneAndUpdate({ user_id: decoded.id }, { user_id: decoded.id, subscription: req.body, updated_at: new Date() }, { upsert: true, new: true }).catch(() => {});
-    res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
-});
-
-app.delete('/api/push/subscribe', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: '認証エラー' });
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    pushSubscriptions.delete(decoded.id);
-    PushSubscription.deleteOne({ user_id: decoded.id }).catch(() => {});
-    res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
-});
-
-app.get('/api/stamps', (req, res) => res.json(STAMP_SETS));
-
-app.post('/api/stamps/acquire', async (req, res) => {
+// 秘密の質問を設定
+app.post('/api/auth/secret-question', async (req, res) => {
   try {
     const decoded = auth(req);
-    const { setId } = req.body;
-    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { acquired_stamps: setId } });
+    const { question, answer } = req.body;
+    if (!question || !answer) return res.status(400).json({ error: '質問と答えは必須です' });
+    const hashed = await bcrypt.hash(answer.trim().toLowerCase(), 10);
+    await User.findOneAndUpdate({ id: decoded.id }, { secret_question: question, secret_answer: hashed });
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-app.get('/api/stamps/mysets', async (req, res) => {
+// 秘密の質問取得（ユーザー名で検索）
+app.get('/api/auth/secret-question/:username', async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.params.username });
+    if (!user || !user.secret_question) return res.status(404).json({ error: '秘密の質問が設定されていません' });
+    res.json({ question: user.secret_question });
+  } catch { res.status(500).json({ error: 'エラー' }); }
+});
+
+// パスワードリセット実行
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { username, answer, newPassword } = req.body;
+    if (!username || !answer || !newPassword) return res.status(400).json({ error: '必須項目が不足しています' });
+    if (newPassword.length < 6) return res.status(400).json({ error: 'パスワードは6文字以上にしてください' });
+    const user = await User.findOne({ username });
+    if (!user || !user.secret_answer) return res.status(404).json({ error: 'ユーザーが見つからないか質問が未設定です' });
+    const ok = await bcrypt.compare(answer.trim().toLowerCase(), user.secret_answer);
+    if (!ok) return res.status(401).json({ error: '答えが違います' });
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await User.findOneAndUpdate({ username }, { password: hashed });
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'リセットに失敗しました' }); }
+});
+
+// ===== 2段階認証（PIN） =====
+app.post('/api/auth/pin/setup', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { pin } = req.body;
+    if (!pin || !/^\d{4,6}$/.test(pin)) return res.status(400).json({ error: 'PINは4〜6桁の数字にしてください' });
+    const hashed = await bcrypt.hash(pin, 10);
+    await User.findOneAndUpdate({ id: decoded.id }, { pin_code: hashed, pin_enabled: true });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/api/auth/pin/disable', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await User.findOneAndUpdate({ id: decoded.id }, { pin_code: '', pin_enabled: false });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.post('/api/auth/pin/verify', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
-    res.json({ acquired: user.acquired_stamps || [] });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
-});
-
-// ICEサーバー情報を提供（将来的に動的TURN認証に差し替え可能）
-app.get('/api/ice-servers', (req, res) => {
-  // METERED_API_KEY環境変数があれば動的取得、なければ静的リストを返す
-  const iceServers = [
-    // STUN（P2P直接接続の試行 - 高速）
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun.cloudflare.com:3478' },
-    // TURN（NAT越え用 - Cloudflare、低遅延）
-    {
-      urls: 'turn:turn.cloudflare.com:3478?transport=udp',
-      username: '${process.env.CF_TURN_TOKEN_ID || "cloudflare"}',
-      credential: '${process.env.CF_TURN_API_TOKEN || "cloudflare"}',
-    },
-    // TURN fallback（TCP、ファイアウォール越え）
-    { urls: 'turn:openrelay.metered.ca:80',            username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turns:openrelay.metered.ca:443',          username: 'openrelayproject', credential: 'openrelayproject' },
-  ];
-  res.json({ iceServers });
-});
-
-// 認証
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
-    const uname = username.trim();
-    if (uname.length < 2 || uname.length > 20) return res.status(400).json({ error: 'ユーザー名は2〜20文字にしてください' });
-    if (!/^[a-zA-Z0-9_　-鿿＀-￯一-鿿぀-ゟ゠-ヿ]+$/.test(uname)) return res.status(400).json({ error: 'ユーザー名に使えない文字が含まれています' });
-    if (password.length < 6) return res.status(400).json({ error: 'パスワードは6文字以上にしてください' });
-    const exists = await User.findOne({ username: uname });
-    if (exists) return res.status(400).json({ error: 'このユーザー名は既に使われてます' });
-    const hashed = await bcrypt.hash(password, 10);
-    const id = uuidv4();
-    await User.create({ id, username: uname, password: hashed });
-    const token = jwt.sign({ id, username: uname }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id, username: uname, avatar: null, displayName: uname, bio: '', status: '' } });
-  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
-});
-
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
-    const user = await User.findOne({ username: username.trim() });
-    if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return res.status(401).json({ error: 'パスワードが違います' });
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '' } });
-  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
-});
-
-app.get('/api/auth/me', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const user = await User.findOne({ id: decoded.id }, { password: 0 });
-    if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
-    res.json({ user: { id: user.id, username: user.username, avatar: user.avatar, coverImage: user.cover_image || '', displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '', mutedRooms: user.muted_rooms || [], bookmarks: user.bookmarked_messages || [], avatarFrame: user.avatar_frame || 'none', soundTheme: user.sound_theme || 'default' } });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
-});
-
-
-
-async function sendAdminMail({ subject, html }) {
-  const to = 'towa08062026@outlook.jp';
-  const transporter = createMailTransporter();
-  if (!transporter) {
-    console.log(`[メール未送信 - 環境変数未設定]
-To: ${to}
-Subject: ${subject}`);
-    return false;
-  }
-  try {
-    await transporter.sendMail({
-      from: process.env.MAIL_USER,
-      to,
-      subject,
-      html,
-    });
-    console.log(`[メール送信成功] ${subject}`);
-    return true;
-  } catch (e) {
-    console.error('[メール送信失敗]', e.message);
-    return false;
-  }
-}
-
-
-// ===== グループ招待リンク =====
-app.post('/api/rooms/:roomId/invite', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
-    if (!room) return res.status(403).json({ error: '権限なし' });
-    if (!room.invite_code) {
-      const { v4: uuidv4 } = require('uuid');
-      room.invite_code = uuidv4().replace(/-/g, '').slice(0, 12);
-      await room.save();
-    }
-    res.json({ inviteCode: room.invite_code, inviteUrl: `${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/invite/${room.invite_code}` });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
-});
-
-app.post('/api/invite/:code/join', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const room = await Room.findOne({ invite_code: req.params.code, invite_enabled: true });
-    if (!room) return res.status(404).json({ error: '招待リンクが無効です' });
-    if (room.members.includes(decoded.id)) return res.json({ ok: true, roomId: room.id, message: 'すでに参加しています' });
-    room.members.push(decoded.id);
-    await room.save();
-    io.to('room_' + room.id).emit('room:member_joined', { roomId: room.id, userId: decoded.id, username: decoded.username });
-    res.json({ ok: true, roomId: room.id, roomName: room.name });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
-});
-
-// ===== ユーザープロフィール表示 =====
-app.get('/api/users/:username/profile', async (req, res) => {
-  try {
-    auth(req); // 認証必須
-    const user = await User.findOne({ username: req.params.username }, { password: 0 });
-    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
-    res.json({
-      id: user.id, username: user.username,
-      displayName: user.display_name || user.username,
-      avatar: user.avatar, coverImage: user.cover_image || '',
-      bio: user.bio || '', status: user.status || '',
-      avatarFrame: user.avatar_frame || 'none',
-      isOnline: !!(io.onlineUsers?.has(user.id)),
-      lastSeen: user.last_seen,
-      showOnline: user.show_online !== false,
-    });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
-});
-
-// ===== チャットテーマカラー =====
-app.patch('/api/rooms/:roomId/theme', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const { themeColor } = req.body;
-    const room = await Room.findOneAndUpdate(
-      { id: req.params.roomId, members: decoded.id },
-      { theme_color: themeColor || '' },
-      { new: true }
-    );
-    if (!room) return res.status(403).json({ error: '権限なし' });
-    io.to('room_' + req.params.roomId).emit('room:theme_changed', { roomId: req.params.roomId, themeColor: themeColor || '' });
+    if (!user || !user.pin_enabled) return res.json({ ok: true }); // PIN未設定は通過
+    const ok = await bcrypt.compare(String(req.body.pin), user.pin_code);
+    if (!ok) return res.status(401).json({ error: 'PINが違います' });
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-
-// ===== サブアカウント =====
-
-// サブアカ一覧取得
-app.get('/api/sub-accounts', async (req, res) => {
+// ===== ログイン履歴 =====
+app.get('/api/auth/login-history', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
-    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
-    const subs = await User.find({ id: { $in: user.sub_accounts || [] } }, { password: 0 });
-    res.json(subs.map(s => ({ id: s.id, username: s.username, displayName: s.display_name || s.username, avatar: s.avatar, bio: s.bio })));
+    res.json(user?.login_history?.slice(-10).reverse() || []);
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-// サブアカ作成
-app.post('/api/sub-accounts', async (req, res) => {
+// ===== 下書き保存 =====
+app.put('/api/drafts/:roomId', async (req, res) => {
   try {
     const decoded = auth(req);
-    const parent = await User.findOne({ id: decoded.id });
-    if (!parent) return res.status(404).json({ error: 'ユーザーが見つかりません' });
-    // 親アカ自体もサブアカの場合は作成不可
-    if (parent.parent_account_id) return res.status(400).json({ error: 'サブアカウントからはサブアカを作成できません' });
-    // 上限チェック（最大5個）
-    if ((parent.sub_accounts || []).length >= 5) return res.status(400).json({ error: 'サブアカウントは最大5個までです' });
-
-    const { username, password, displayName } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'IDとパスワードは必須です' });
-    if (username.length < 3) return res.status(400).json({ error: 'IDは3文字以上にしてください' });
-    
-    const exists = await User.findOne({ username });
-    if (exists) return res.status(400).json({ error: 'このIDはすでに使われています' });
-
-    const id = require('uuid').v4();
-    const hashed = await bcrypt.hash(password, 10);
-    const sub = await User.create({
-      id, username, password: hashed,
-      display_name: displayName || username,
-      parent_account_id: parent.id,
-    });
-    parent.sub_accounts = [...(parent.sub_accounts || []), id];
-    await parent.save();
-    res.json({ ok: true, sub: { id: sub.id, username: sub.username, displayName: sub.display_name } });
-  } catch (e) {
-    console.error('[サブアカ作成]', e);
-    res.status(500).json({ error: '作成に失敗しました' });
-  }
-});
-
-// サブアカに切り替え（トークンを発行）
-app.post('/api/sub-accounts/:subId/switch', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const parent = await User.findOne({ id: decoded.id });
-    // 親アカかサブアカ本人のみ切り替え可能
-    const isParent = parent && (parent.sub_accounts || []).includes(req.params.subId);
-    const isSelf   = decoded.id === req.params.subId;
-    if (!isParent && !isSelf) return res.status(403).json({ error: '権限がありません' });
-
-    const sub = await User.findOne({ id: req.params.subId });
-    if (!sub) return res.status(404).json({ error: 'サブアカが見つかりません' });
-    const token = jwt.sign({ id: sub.id, username: sub.username }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: {
-      id: sub.id, username: sub.username,
-      displayName: sub.display_name || sub.username,
-      avatar: sub.avatar, bio: sub.bio || '', status: sub.status || '',
-      parentAccountId: sub.parent_account_id,
-    }});
-  } catch { res.status(401).json({ error: '認証エラー' }); }
-});
-
-// サブアカ削除
-app.delete('/api/sub-accounts/:subId', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const parent = await User.findOne({ id: decoded.id });
-    if (!parent || !(parent.sub_accounts || []).includes(req.params.subId)) return res.status(403).json({ error: '権限がありません' });
-    await User.deleteOne({ id: req.params.subId });
-    parent.sub_accounts = (parent.sub_accounts || []).filter(id => id !== req.params.subId);
-    await parent.save();
+    const { content } = req.body;
+    const user = await User.findOne({ id: decoded.id });
+    const drafts = user?.drafts || {};
+    if (content) drafts[req.params.roomId] = content;
+    else delete drafts[req.params.roomId];
+    await User.findOneAndUpdate({ id: decoded.id }, { drafts });
     res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.get('/api/drafts', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id });
+    res.json(user?.drafts || {});
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// ===== 後で読む =====
+app.post('/api/read-later/:msgId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { read_later: req.params.msgId } });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.delete('/api/read-later/:msgId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { read_later: req.params.msgId } });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+app.get('/api/read-later', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id });
+    const msgs = await Message.find({ id: { $in: user?.read_later || [] } });
+    res.json(msgs);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// ===== ギフト送信 =====
+app.post('/api/users/:userId/gift', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { amount, stampId } = req.body;
+    if (!amount || amount < 1 || amount > 1000) return res.status(400).json({ error: 'ギフト量が不正です' });
+    const sender = await User.findOne({ id: decoded.id });
+    if (!sender || (sender.coins || 0) < amount) return res.status(400).json({ error: 'コインが不足しています' });
+    const receiver = await User.findOne({ id: req.params.userId });
+    if (!receiver) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    await User.findOneAndUpdate({ id: decoded.id }, { $inc: { coins: -amount, gift_sent: amount } });
+    await User.findOneAndUpdate({ id: req.params.userId }, { $inc: { coins: amount, gift_received: amount } });
+    // ギフト通知
+    io.to('user_' + req.params.userId).emit('gift:received', {
+      from: decoded.username, amount, stampId,
+    });
+    res.json({ ok: true, newBalance: (sender.coins || 0) - amount });
+  } catch { res.status(500).json({ error: 'ギフト送信に失敗しました' }); }
+});
+
+// コイン残高取得
+app.get('/api/users/me/coins', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id });
+    res.json({ coins: user?.coins || 0, gift_sent: user?.gift_sent || 0, gift_received: user?.gift_received || 0 });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 

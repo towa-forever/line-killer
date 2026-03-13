@@ -21,7 +21,12 @@ const EventCalendar = lazy(() => import('./components/EventCalendar'));
 const MiniGame = lazy(() => import('./components/MiniGame'));
 const VoiceCall = lazy(() => import('./components/VoiceCall'));
 const SubAccounts = lazy(() => import('./components/SubAccounts'));
-const ContactForm = lazy(() => import('./components/ContactForm'));
+const ContactForm     = lazy(() => import('./components/ContactForm'));
+const PasswordReset   = lazy(() => import('./components/PasswordReset'));
+const GiftModal       = lazy(() => import('./components/GiftModal'));
+const ReadLater       = lazy(() => import('./components/ReadLater'));
+const PinSetup        = lazy(() => import('./components/PinSetup').then(m => ({ default: m.PinSetup })));
+const PinVerify       = lazy(() => import('./components/PinSetup').then(m => ({ default: m.PinVerify })));
 const StickerMaker = lazy(() => import('./components/StickerMaker'));
 const AIAssistant = lazy(() => import('./components/AIAssistant'));
 const PollCard = lazy(() => import('./components/PollCard'));
@@ -1499,6 +1504,13 @@ export default function App() {
   const [showSubAccounts, setShowSubAccounts] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId, roomId }
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [showGift, setShowGift] = useState(null);
+  const [showReadLater, setShowReadLater] = useState(false);
+  const [showPinSetup, setShowPinSetup] = useState(false);
+  const [pinVerified, setPinVerified] = useState(true);
+  const [drafts, setDrafts] = useState({});
+  const [mentions, setMentions] = useState([]);
   const [groupCall, setGroupCall] = useState(null); // { roomId, members, roomName }
   const [darkAutoMode, setDarkAutoMode] = useState(() => localStorage.getItem('darkAutoMode') === 'true');
 
@@ -1547,6 +1559,15 @@ export default function App() {
     axios.get('/api/users/online').then(r => setOnlineUsers(new Set(r.data))).catch(() => {});
     s.on('call:incoming', (data) => {
       setIncomingCall(data);
+    });
+    // メンション通知
+    s.on('mention:new', (data) => {
+      setMentions(prev => [data, ...prev].slice(0, 20));
+      showToast(`@メンション: ${data.from}さんから`, 'info');
+    });
+    // ギフト受信通知
+    s.on('gift:received', (data) => {
+      showToast(`🎁 ${data.from}さんから ${data.stamp} ${data.amount}コインもらった！`, 'success');
     });
     setSocket(s);
     return () => s.disconnect();
@@ -1603,7 +1624,17 @@ export default function App() {
     return () => { vv.removeEventListener('resize', handler); vv.removeEventListener('scroll', handler); };
   }, []);
 
-  const handleLogin = (user) => setCurrentUser(user);
+  const handleLogin = async (user) => {
+    setCurrentUser(user);
+    // 下書きを取得
+    try {
+      const res = await import('axios').then(m => m.default.get('/api/drafts'));
+      setDrafts(res.data || {});
+    } catch (_) {}
+    // PINが設定されてたら確認画面
+    if (user.pin_enabled) setPinVerified(false);
+    else setPinVerified(true);
+  };
 
 
   const handleLogout = () => {
@@ -1746,6 +1777,41 @@ export default function App() {
               }}
               onClose={() => setShowSubAccounts(false)}
             />
+          </Suspense>
+        )}
+
+        {/* PIN認証（未確認の場合） */}
+        {currentUser && !pinVerified && (
+          <Suspense fallback={null}>
+            <PinVerify
+              onSuccess={() => setPinVerified(true)}
+              onCancel={() => { setCurrentUser(null); setPinVerified(false); }}
+            />
+          </Suspense>
+        )}
+
+        {/* PIN設定 */}
+        {showPinSetup && (
+          <Suspense fallback={null}>
+            <PinSetup enabled={!!currentUser?.pinEnabled} onClose={() => setShowPinSetup(false)} />
+          </Suspense>
+        )}
+
+        {/* ギフト送信 */}
+        {showGift && (
+          <Suspense fallback={null}>
+            <GiftModal
+              targetUser={showGift}
+              currentUser={currentUser}
+              onClose={() => setShowGift(null)}
+            />
+          </Suspense>
+        )}
+
+        {/* 後で読む */}
+        {showReadLater && (
+          <Suspense fallback={null}>
+            <ReadLater currentUser={currentUser} onClose={() => setShowReadLater(false)} />
           </Suspense>
         )}
 
