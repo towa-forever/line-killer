@@ -1506,12 +1506,16 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('call:start', async ({ roomId, offer, to }) => {
+    console.log(`[call:start] from:${socket.user.username} to:${to} roomId:${roomId} offer:${!!offer}`);
+    if (!offer) { console.error('[call:start] offerがない！'); return; }
     if (to) {
+      // user_<id> ルームに送信
+      const sockets = await io.in('user_' + to).allSockets();
+      console.log(`[call:start] user_${to} のsocket数: ${sockets.size}`);
       io.to('user_' + to).emit('call:incoming', { from: socket.user.id, fromName: socket.user.username, offer, roomId });
     } else {
       socket.to(roomId).emit('call:incoming', { from: socket.user.id, fromName: socket.user.username, offer, roomId });
     }
-    // 通話開始メッセージをチャットに保存
     if (roomId) {
       try {
         const { v4: uuidv4 } = require('uuid');
@@ -1526,10 +1530,13 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('call:answer', ({ answer, to }) => {
+    console.log(`[call:answer] from:${socket.user.username} to:${to} answer:${!!answer}`);
+    if (!answer || !to) return;
     io.to('user_' + to).emit('call:answered', { answer, from: socket.user.id });
   });
 
   socket.on('call:ice', ({ candidate, to }) => {
+    if (!candidate || !to) return;
     io.to('user_' + to).emit('call:ice', { candidate, from: socket.user.id });
   });
 
