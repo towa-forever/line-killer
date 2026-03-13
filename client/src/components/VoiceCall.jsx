@@ -45,10 +45,10 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
     pc.onicecandidate = e => { if (e.candidate) socket.emit('call:ice', { to: targetUser.id, candidate: e.candidate, callId: callIdRef.current }); };
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') { setStatus('active'); startTimer(); }
-      if (['disconnected','failed','closed'].includes(pc.connectionState)) endCall();
+      if (['disconnected','failed','closed'].includes(pc.connectionState)) onClose();
     };
     return pc;
-  }, [socket, targetUser]);
+  }, [socket, targetUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 発信
   const startCall = useCallback(async () => {
@@ -90,7 +90,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       socket.off('voice:end', handleEnd);
       socket.off('voice:reject', handleEnd);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 着信応答
   const acceptCall = async () => {

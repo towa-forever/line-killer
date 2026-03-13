@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 const GAMES = [
   { id:'reflex',  emoji:'⚡', name:'反射神経テスト',   desc:'画面が変わったら即タップ！' },

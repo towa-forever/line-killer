@@ -22,7 +22,6 @@ const MiniGame = lazy(() => import('./components/MiniGame'));
 const VoiceCall = lazy(() => import('./components/VoiceCall'));
 const SubAccounts = lazy(() => import('./components/SubAccounts'));
 const StickerMaker = lazy(() => import('./components/StickerMaker'));
-const UserProfile = lazy(() => import('./components/UserProfile'));
 const AIAssistant = lazy(() => import('./components/AIAssistant'));
 const PollCard = lazy(() => import('./components/PollCard'));
 const TaskPanel = lazy(() => import('./components/TaskPanel'));
@@ -127,7 +126,7 @@ function AvatarImg({ src, name, size = 40, frame = 'none' }) {
   );
 }
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default' }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -174,8 +173,6 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showTaskPanel, setShowTaskPanel] = useState(false);
   const [showVoice, setShowVoice] = useState(false);
   const [showStickerMaker, setShowStickerMaker] = useState(false);
-  const [showSubAccounts, setShowSubAccounts] = useState(false);
-  const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId }
   const [roomTheme, setRoomTheme] = useState({}); // roomId -> themeColor
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null); // { message, onOk }
@@ -718,7 +715,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   { icon:'✅', label:'タスク', action: () => setShowTaskPanel(true) },
                   { icon:'🎮', label:'ゲーム', action: () => setShowMiniGame(true) },
                   { icon:'🎨', label:'スタンプ自作', action: () => setShowStickerMaker(true) },
-                  { icon:'📞', label:'音声通話', action: () => { setVoiceCall({ targetUser: selectedRoom?.members?.find(m => m !== currentUser.id) ? { id: selectedRoom.members.find(m => m !== currentUser.id), displayName: selectedRoom.name } : null, isIncoming: false }); } },
+                  { icon:'📞', label:'音声通話', action: () => { const otherId = selectedRoom?.members?.find(m => m !== currentUser.id); setVoiceCall({ targetUser: otherId ? { id: otherId, displayName: selectedRoom.name } : null, isIncoming: false, roomId: selectedRoom?.id, callId: null }); } },
                   { icon:'🤖', label:'AIアシスタント', action: () => setShowAI(true) },
                   { icon:'🎨', label:'背景を変える', action: () => setShowBgPicker(true) },
                 ].map(item => (
@@ -882,7 +879,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         </div>
       )}
       {showEventCal && <Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense>}
-          {/* スタンプ自作 */}
+      {/* スタンプ自作 */}
       {showStickerMaker && (
         <Suspense fallback={null}>
           <StickerMaker
@@ -1500,6 +1497,8 @@ export default function App() {
   const [mutedRooms, setMutedRooms] = useState(new Set());
   const [activeCall, setActiveCall] = useState(null); // { roomId, targetUserId, isCaller, offer }
   const [callMinimized, setCallMinimized] = useState(false);
+  const [showSubAccounts, setShowSubAccounts] = useState(false);
+  const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId, roomId }
   const [groupCall, setGroupCall] = useState(null); // { roomId, members, roomName }
   const [darkAutoMode, setDarkAutoMode] = useState(() => localStorage.getItem('darkAutoMode') === 'true');
 
@@ -1642,7 +1641,7 @@ export default function App() {
     <>
       {/* チャット: 常にマウントしておく */}
       <div style={tabVisible('chat')}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} />
       </div>
       {/* 以下はアクティブ時のみマウント（チャット以外はstate保持不要） */}
       {activeTab === 'dashboard' && (
@@ -1748,6 +1747,36 @@ export default function App() {
             onToggleMinimize={() => setCallMinimized(m => !m)}
           />
         )}
+        {/* サブアカウント切り替え */}
+        {showSubAccounts && (
+          <Suspense fallback={null}>
+            <SubAccounts
+              currentUser={currentUser}
+              onSwitch={(user) => {
+                setCurrentUser(user);
+                setShowSubAccounts(false);
+                setTimeout(() => window.location.reload(), 100);
+              }}
+              onClose={() => setShowSubAccounts(false)}
+            />
+          </Suspense>
+        )}
+
+        {/* 音声通話 */}
+        {voiceCall && (
+          <Suspense fallback={null}>
+            <VoiceCall
+              socket={socket}
+              currentUser={currentUser}
+              targetUser={voiceCall.targetUser}
+              roomId={voiceCall.roomId}
+              isIncoming={voiceCall.isIncoming}
+              callId={voiceCall.callId}
+              onClose={() => setVoiceCall(null)}
+            />
+          </Suspense>
+        )}
+
         {incomingCall && (
           <div style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999,

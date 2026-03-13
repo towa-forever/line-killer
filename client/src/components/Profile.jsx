@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 
@@ -24,7 +24,6 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   const [subError, setSubError] = useState('');
   const [subLoading, setSubLoading] = useState(false);
   // QRスキャン
-  const [showQrScanner, setShowQrScanner] = useState(false);
   const [qrResult, setQrResult] = useState('');
   const [qrSending, setQrSending] = useState(false);
   const fileInputRef = useRef(null);
@@ -105,7 +104,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
       setMessage(res.data.message || '友達申請を送りました！');
     } catch (e) {
       setMessage(e.response?.data?.error || '申請に失敗しました');
-    } finally { setQrSending(false); setShowQrScanner(false); }
+    } finally { setQrSending(false); /* removed */; }
   };
 
   // カメラQRスキャン（スマホ向け）

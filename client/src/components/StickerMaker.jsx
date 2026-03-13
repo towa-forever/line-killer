@@ -2,19 +2,18 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 
 const BGCOLORS = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#c77dff','#ff9a3c','#00c9a7','#f72585','transparent'];
-const FONTS = ['Arial','serif','monospace','cursive','fantasy'];
 
 export default function StickerMaker({ onSend, onClose }) {
   const canvasRef = useRef(null);
   const [text, setText]       = useState('😊');
   const [fontSize, setFontSize] = useState(60);
   const [bgColor, setBgColor]  = useState('#ffd93d');
-  const [fontColor, setFontColor] = useState('#333333');
-  const [font, setFont]        = useState('Arial');
+  const [fontColor] = useState('#333333');
+  const [font]                  = useState('Arial');
   const [shape, setShape]      = useState('circle'); // circle|square|rounded
   const [sending, setSending]  = useState(false);
 
-  useEffect(() => { drawSticker(); }, [text, fontSize, bgColor, fontColor, font, shape]);
+  useEffect(() => { drawSticker(); }, [text, fontSize, bgColor, fontColor, font, shape]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const drawSticker = () => {
     const canvas = canvasRef.current;
