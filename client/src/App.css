@@ -340,6 +340,7 @@ a { text-decoration: none; color: var(--accent); }
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   padding-bottom: env(safe-area-inset-bottom);
+  position: relative;
 }
 .stamp-panel {
   padding: 8px; display: flex; flex-wrap: wrap; gap: 6px;

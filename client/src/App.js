@@ -22,7 +22,7 @@ const MiniGame = lazy(() => import('./components/MiniGame'));
 const VoiceCall = lazy(() => import('./components/VoiceCall'));
 const SubAccounts = lazy(() => import('./components/SubAccounts'));
 const ContactForm     = lazy(() => import('./components/ContactForm'));
-const PasswordReset   = lazy(() => import('./components/PasswordReset'));
+// PasswordReset は AuthScreen 内で inline lazy import
 const GiftModal       = lazy(() => import('./components/GiftModal'));
 const ReadLater       = lazy(() => import('./components/ReadLater'));
 const PinSetup        = lazy(() => import('./components/PinSetup').then(m => ({ default: m.PinSetup })));
@@ -51,6 +51,7 @@ function AuthScreen({ onLogin }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showReset, setShowReset] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -63,6 +64,15 @@ function AuthScreen({ onLogin }) {
     } catch (err) { setError(err.response?.data?.error || '接続エラー'); }
     finally { setLoading(false); }
   };
+
+  if (showReset) {
+    const PasswordResetInline = React.lazy(() => import('./components/PasswordReset'));
+    return (
+      <React.Suspense fallback={<div className="auth-screen"><div className="auth-card">読み込み中...</div></div>}>
+        <PasswordResetInline onBack={() => setShowReset(false)} />
+      </React.Suspense>
+    );
+  }
 
   return (
     <div className="auth-screen">
@@ -82,6 +92,14 @@ function AuthScreen({ onLogin }) {
             {loading ? '...' : isLogin ? 'ログイン' : '登録'}
           </button>
         </form>
+        {isLogin && (
+          <button onClick={() => setShowReset(true)} style={{
+            background:'none', border:'none', color:'var(--primary)', fontSize:13,
+            cursor:'pointer', padding:'4px 0', marginTop:4, display:'block', width:'100%'
+          }}>
+            パスワードを忘れた方はこちら
+          </button>
+        )}
         <button className="auth-toggle" onClick={() => setIsLogin(!isLogin)}>
           {isLogin ? 'アカウント作成' : 'ログインへ戻る'}
         </button>
@@ -132,7 +150,7 @@ function AvatarImg({ src, name, size = 40, frame = 'none' }) {
   );
 }
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -202,12 +220,22 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [mentionSuggestions, setMentionSuggestions] = useState([]); // @補完候補
+  const draftRef = useRef({}); // 下書き一時保存 { roomId: text }
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const isAtBottomRef = useRef(true); // スクロール最下部にいるかどうか
 
   const myStampSets = allStampSets.filter(s => acquiredStampIds.includes(s.id));
+
+  // マウント時にAPIから下書きを取得してdraftRefに入れる
+  useEffect(() => {
+    axios.get('/api/drafts').then(res => {
+      const data = res.data || {};
+      Object.assign(draftRef.current, data);
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchRooms = useCallback(async () => {
     try { const res = await axios.get('/api/rooms'); setRooms(res.data); }
@@ -322,7 +350,18 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
   useEffect(() => {
     // ルーム切り替え時に状態をリセット
-    setInputText('');
+    // 前のルームの下書きを保存
+    if (draftRef.current._prevRoom && inputText.trim()) {
+      draftRef.current[draftRef.current._prevRoom] = inputText;
+      // APIにも非同期で保存
+      axios.put('/api/drafts/' + draftRef.current._prevRoom, { content: inputText }).catch(() => {});
+    } else if (draftRef.current._prevRoom) {
+      draftRef.current[draftRef.current._prevRoom] = '';
+    }
+    draftRef.current._prevRoom = selectedRoom?.id;
+    // 新しいルームの下書きを復元
+    const savedDraft = selectedRoom ? (draftRef.current[selectedRoom.id] || '') : '';
+    setInputText(savedDraft);
     setReplyTo(null);
     setShowInputMenu(false);
     setShowHeaderMenu(false);
@@ -330,6 +369,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     setShowVoice(false);
     setShowLocation(false);
     setShowSecret(false);
+    setMentionSuggestions([]);
     if (!selectedRoom) return;
     messagesCache.current._current = selectedRoom.id; // 現在のルームを記録
     hasMoreMessages.current[selectedRoom.id] = true; // 過去メッセージがある可能性あり
@@ -441,15 +481,40 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   };
 
   const handleTyping = (e) => {
-    setInputText(e.target.value);
+    const val = e.target.value;
+    setInputText(val);
     // textareaの高さを自動調整
     const ta = e.target;
     ta.style.height = 'auto';
     ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+    // @メンション補完
+    const cursor = ta.selectionStart;
+    const textBefore = val.slice(0, cursor);
+    const atMatch = textBefore.match(/@(\S*)$/);
+    if (atMatch && selectedRoom?.members?.length > 0) {
+      const q = atMatch[1].toLowerCase();
+      const members = selectedRoom.members.filter(m =>
+        m.id !== currentUser.id &&
+        (m.username?.toLowerCase().includes(q) || m.displayName?.toLowerCase().includes(q))
+      ).slice(0, 5);
+      setMentionSuggestions(members);
+    } else {
+      setMentionSuggestions([]);
+    }
     if (!socket || !selectedRoom) return;
     socket.emit('typing:start', { roomId: selectedRoom.id });
     clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => socket.emit('typing:stop', { roomId: selectedRoom.id }), 2000);
+  };
+
+  const handleMentionSelect = (member) => {
+    const ta = document.querySelector('.message-input');
+    const cursor = ta?.selectionStart ?? inputText.length;
+    const textBefore = inputText.slice(0, cursor);
+    const replaced = textBefore.replace(/@(\S*)$/, `@${member.username || member.displayName} `);
+    setInputText(replaced + inputText.slice(cursor));
+    setMentionSuggestions([]);
+    setTimeout(() => ta?.focus(), 0);
   };
 
   const renderMessage = (msg) => {
@@ -835,6 +900,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                       setBookmarks(prev => new Set([...prev, msgMenu.msg.id]));
                     }
                   }},
+                  { icon:'📖', label:'後で読む', action: () => {
+                    axios.post('/api/read-later/' + msgMenu.msg.id).catch(() => {});
+                    showToast('後で読むに追加したで👍', 'success');
+                  }},
+                  ...(msgMenu.msg.senderId !== currentUser.id ? [
+                    { icon:'🎁', label:'ギフトを贈る', action: () => setShowGift({ id: msgMenu.msg.senderId, username: msgMenu.msg.senderName }) },
+                  ] : []),
                   ...(selectedRoom?.members?.length > 2 && msgMenu.msg.senderId === currentUser.id ? [
                     { icon:'📢', label:'アナウンス', action: () => { setAnnounceText(msgMenu.msg.content || ''); setShowAnnounce(true); } },
                   ] : []),
@@ -1355,6 +1427,30 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             <div ref={messagesEndRef} />
           </div>
           <div className="input-area">
+            {/* @メンション候補 */}
+            {mentionSuggestions.length > 0 && (
+              <div style={{
+                position:'absolute', bottom:'100%', left:0, right:0, background:'var(--surface)',
+                border:'1px solid var(--border)', borderRadius:'12px 12px 0 0', boxShadow:'0 -4px 16px rgba(0,0,0,0.12)',
+                zIndex:200, overflow:'hidden', marginBottom:2
+              }}>
+                {mentionSuggestions.map(m => (
+                  <button key={m.id} onClick={() => handleMentionSelect(m)} style={{
+                    display:'flex', alignItems:'center', gap:10, width:'100%', padding:'10px 16px',
+                    background:'none', border:'none', borderBottom:'1px solid var(--border)', cursor:'pointer',
+                    fontSize:14, color:'var(--text)', WebkitTapHighlightColor:'transparent'
+                  }}>
+                    <div style={{ width:32, height:32, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, flexShrink:0 }}>
+                      {(m.displayName || m.username || '?')[0]}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight:600 }}>{m.displayName || m.username}</div>
+                      <div style={{ fontSize:12, color:'var(--text2)' }}>@{m.username}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
             {replyTo && (
               <div className="reply-bar">
                 <div className="reply-bar-content">
@@ -1504,13 +1600,11 @@ export default function App() {
   const [showSubAccounts, setShowSubAccounts] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId, roomId }
-  const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [showGift, setShowGift] = useState(null);
   const [showReadLater, setShowReadLater] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [pinVerified, setPinVerified] = useState(true);
-  const [drafts, setDrafts] = useState({});
-  const [mentions, setMentions] = useState([]);
+  const [, setMentions] = useState([]);  // メンション通知リスト（未読バッジ用）
   const [groupCall, setGroupCall] = useState(null); // { roomId, members, roomName }
   const [darkAutoMode, setDarkAutoMode] = useState(() => localStorage.getItem('darkAutoMode') === 'true');
 
@@ -1626,11 +1720,6 @@ export default function App() {
 
   const handleLogin = async (user) => {
     setCurrentUser(user);
-    // 下書きを取得
-    try {
-      const res = await import('axios').then(m => m.default.get('/api/drafts'));
-      setDrafts(res.data || {});
-    } catch (_) {}
     // PINが設定されてたら確認画面
     if (user.pin_enabled) setPinVerified(false);
     else setPinVerified(true);
@@ -1665,7 +1754,7 @@ export default function App() {
     <>
       {/* チャット: 常にマウントしておく */}
       <div style={tabVisible('chat')}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} />
       </div>
       {/* 以下はアクティブ時のみマウント（チャット以外はstate保持不要） */}
       {activeTab === 'dashboard' && (
@@ -1719,7 +1808,9 @@ export default function App() {
           <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
             <Profile currentUser={currentUser} onUpdate={(u) => setCurrentUser(u)} onLogout={handleLogout} onContact={() => setShowContact(true)}
               darkMode={darkMode} onToggleDark={() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(!darkMode); }}
-              darkAutoMode={darkAutoMode} onToggleAuto={() => { const v = !darkAutoMode; setDarkAutoMode(v); localStorage.setItem('darkAutoMode', v); if (v) setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches); }} />
+              darkAutoMode={darkAutoMode} onToggleAuto={() => { const v = !darkAutoMode; setDarkAutoMode(v); localStorage.setItem('darkAutoMode', v); if (v) setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches); }}
+              onOpenPinSetup={() => setShowPinSetup(true)}
+              onSwitchAccount={(token, user) => { localStorage.setItem('token', token); axios.defaults.headers.common['Authorization'] = `Bearer ${token}`; setCurrentUser(user); window.location.reload(); }} />
           </Suspense></ErrorBoundary>
         </div>
       )}

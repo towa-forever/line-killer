@@ -4,7 +4,7 @@ import { QRCodeSVG as QRCode } from 'qrcode.react';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 
-export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccount, darkMode, onToggleDark, darkAutoMode, onToggleAuto, onContact }) {
+export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccount, darkMode, onToggleDark, darkAutoMode, onToggleAuto, onContact, onOpenPinSetup }) {
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser.displayName || '');
   const [bio, setBio] = useState(currentUser.bio || '');
@@ -29,6 +29,65 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   const fileInputRef = useRef(null);
   const coverInputRef = useRef(null);
   const qrInputRef = useRef(null);
+
+  // セキュリティ設定
+  const [showSecurity, setShowSecurity] = useState(false);
+  const [loginHistory, setLoginHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [loadingBlocked, setLoadingBlocked] = useState(false);
+  const [secQuestion, setSecQuestion] = useState('');
+  const [secAnswer, setSecAnswer] = useState('');
+  const [secSaving, setSecSaving] = useState(false);
+  const [secMsg, setSecMsg] = useState('');
+  const [showSecForm, setShowSecForm] = useState(false);
+  const SECURITY_QUESTIONS = [
+    'ペットの名前は？', '母親の旧姓は？', '出身小学校の名前は？',
+    '好きな食べ物は？', '初めて買ったゲームは？', '生まれた病院の名前は？'
+  ];
+
+  const loadLoginHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await axios.get('/api/auth/login-history');
+      setLoginHistory(res.data || []);
+    } catch { setLoginHistory([]); }
+    finally { setLoadingHistory(false); }
+  };
+
+  const loadBlockedUsers = async () => {
+    setLoadingBlocked(true);
+    try {
+      const res = await axios.get('/api/users/me');
+      setBlockedUsers(res.data.blockedUsers || []);
+    } catch { setBlockedUsers([]); }
+    finally { setLoadingBlocked(false); }
+  };
+
+  const handleOpenSecurity = () => {
+    setShowSecurity(true);
+    loadLoginHistory();
+    loadBlockedUsers();
+  };
+
+  const handleUnblock = async (userId) => {
+    try {
+      await axios.post(`/api/users/${userId}/block`); // toggle
+      setBlockedUsers(prev => prev.filter(u => u.id !== userId && u !== userId));
+    } catch {}
+  };
+
+  const handleSaveSecQuestion = async () => {
+    if (!secQuestion || !secAnswer.trim()) { setSecMsg('質問と答えを入力してや'); return; }
+    setSecSaving(true); setSecMsg('');
+    try {
+      await axios.patch('/api/users/me', { secretQuestion: secQuestion, secretAnswer: secAnswer });
+      setSecMsg('秘密の質問を設定したで！');
+      setShowSecForm(false);
+      setSecAnswer('');
+    } catch { setSecMsg('保存に失敗した...'); }
+    finally { setSecSaving(false); }
+  };
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
@@ -300,6 +359,120 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
           💡 ホーム画面に追加後は再追加が必要です
         </div>
       </div>
+
+      {/* ===== セキュリティ設定 ===== */}
+      <div className="card" style={{ margin:10 }}>
+        <div className="profile-section-title">🔐 セキュリティ</div>
+
+        {/* PIN設定 */}
+        <div className="setting-row" onClick={onOpenPinSetup} style={{ cursor:'pointer' }}>
+          <div>
+            <div>🔒 2段階認証（PIN）</div>
+            <div style={{ fontSize:11, color:'var(--text2)' }}>{currentUser.pinEnabled ? '設定済み ✅' : '未設定'}</div>
+          </div>
+          <span style={{ color:'var(--text2)', fontSize:18 }}>›</span>
+        </div>
+
+        {/* 秘密の質問 */}
+        <div className="setting-row" onClick={() => setShowSecForm(v=>!v)} style={{ cursor:'pointer' }}>
+          <div>
+            <div>❓ 秘密の質問</div>
+            <div style={{ fontSize:11, color:'var(--text2)' }}>{currentUser.secretQuestion ? `設定済み: ${currentUser.secretQuestion}` : '未設定（パスワードリセット用）'}</div>
+          </div>
+          <span style={{ color:'var(--text2)', fontSize:18 }}>{showSecForm ? '∨' : '›'}</span>
+        </div>
+        {showSecForm && (
+          <div style={{ padding:'10px 0 4px', borderBottom:'1px solid var(--border)' }}>
+            <select value={secQuestion} onChange={e => setSecQuestion(e.target.value)}
+              style={{ width:'100%', padding:'10px 12px', borderRadius:10, border:'1.5px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:14, marginBottom:8 }}>
+              <option value="">質問を選んでや</option>
+              {SECURITY_QUESTIONS.map(q => <option key={q} value={q}>{q}</option>)}
+            </select>
+            <input className="form-input" placeholder="答えを入力" value={secAnswer} onChange={e => setSecAnswer(e.target.value)}
+              style={{ marginBottom:8 }} />
+            {secMsg && <div style={{ fontSize:12, color: secMsg.includes('！') ? 'var(--primary)' : 'var(--danger)', marginBottom:6 }}>{secMsg}</div>}
+            <button onClick={handleSaveSecQuestion} disabled={secSaving}
+              style={{ width:'100%', padding:10, borderRadius:10, background:'var(--primary)', color:'white', border:'none', fontSize:14, fontWeight:700, cursor:'pointer', marginBottom:8 }}>
+              {secSaving ? '保存中...' : '保存する'}
+            </button>
+          </div>
+        )}
+
+        {/* セキュリティ詳細（履歴・ブロック） */}
+        <div className="setting-row" onClick={handleOpenSecurity} style={{ cursor:'pointer' }}>
+          <div>📋 ログイン履歴・ブロックリスト</div>
+          <span style={{ color:'var(--text2)', fontSize:18 }}>›</span>
+        </div>
+      </div>
+
+      {/* セキュリティ詳細モーダル */}
+      {showSecurity && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:9999, display:'flex', alignItems:'flex-end', justifyContent:'center' }}
+          onClick={() => setShowSecurity(false)}>
+          <div style={{ background:'var(--surface)', borderRadius:'20px 20px 0 0', width:'100%', maxHeight:'80vh', overflow:'hidden', display:'flex', flexDirection:'column' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ padding:'16px 20px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ fontSize:16, fontWeight:700 }}>セキュリティ詳細</div>
+              <button onClick={() => setShowSecurity(false)} style={{ background:'none', border:'none', fontSize:22, color:'var(--text2)', cursor:'pointer', lineHeight:1 }}>✕</button>
+            </div>
+            <div style={{ overflowY:'auto', flex:1, padding:16 }}>
+
+              {/* ログイン履歴 */}
+              <div style={{ marginBottom:20 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--text2)', marginBottom:10, textTransform:'uppercase', letterSpacing:0.5 }}>
+                  📋 ログイン履歴
+                </div>
+                {loadingHistory ? (
+                  <div style={{ textAlign:'center', padding:20, color:'var(--text2)', fontSize:14 }}>読み込み中...</div>
+                ) : loginHistory.length === 0 ? (
+                  <div style={{ textAlign:'center', padding:20, color:'var(--text2)', fontSize:13 }}>履歴がないで</div>
+                ) : loginHistory.slice(0, 10).map((h, i) => (
+                  <div key={i} style={{ padding:'10px 0', borderBottom:'1px solid var(--border)', fontSize:13 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:2 }}>
+                      <span style={{ fontWeight:600, color: i === 0 ? 'var(--primary)' : 'var(--text)' }}>
+                        {i === 0 ? '🟢 最新' : `#${i + 1}`}
+                      </span>
+                      <span style={{ color:'var(--text2)', fontSize:12 }}>
+                        {h.at ? new Date(h.at).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '不明'}
+                      </span>
+                    </div>
+                    <div style={{ color:'var(--text2)', fontSize:12 }}>🌐 IP: {h.ip || '不明'}</div>
+                    <div style={{ color:'var(--text2)', fontSize:11, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      📱 {h.ua ? h.ua.slice(0, 60) + (h.ua.length > 60 ? '...' : '') : '不明'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ブロックリスト */}
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--text2)', marginBottom:10, textTransform:'uppercase', letterSpacing:0.5 }}>
+                  🚫 ブロックリスト
+                </div>
+                {loadingBlocked ? (
+                  <div style={{ textAlign:'center', padding:20, color:'var(--text2)', fontSize:14 }}>読み込み中...</div>
+                ) : blockedUsers.length === 0 ? (
+                  <div style={{ textAlign:'center', padding:20, color:'var(--text2)', fontSize:13 }}>ブロックしてるユーザーはいないで</div>
+                ) : blockedUsers.map((u, i) => (
+                  <div key={u.id || i} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                    <div style={{ width:40, height:40, borderRadius:'50%', background:'var(--border)', color:'var(--text2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700, flexShrink:0 }}>
+                      {(u.displayName || u.username || u)[0] || '?'}
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:14, fontWeight:600 }}>{u.displayName || u.username || u}</div>
+                      {u.username && <div style={{ fontSize:12, color:'var(--text2)' }}>@{u.username}</div>}
+                    </div>
+                    <button onClick={() => handleUnblock(u.id || u)}
+                      style={{ padding:'6px 14px', borderRadius:20, background:'var(--surface2)', border:'1.5px solid var(--border)', fontSize:12, cursor:'pointer', color:'var(--danger)', fontWeight:600 }}>
+                      解除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== サブアカウント ===== */}
       <SubAccountSection
