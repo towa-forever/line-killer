@@ -1,3 +1,124 @@
+require("dotenv").config();
+const express = require('express');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const compression = require('compression');
+const webpush = require('web-push');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+// Cloudinary設定（環境変数から読み込み）
+if (process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+}
+const useCloudinary = !!(process.env.CLOUDINARY_CLOUD_NAME);
+const path = require('path');
+const fs = require('fs');
+const { join } = require('path');
+const { v4: uuidv4 } = require('uuid');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription } = require('./db');
+
+const app = express();
+
+// VAPID設定
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BAwzRukb1C_xX8RFR2Luln0HcUEDsAgrimF1njzr2t4952nvpwfkrQ6yvSHE4z9wqXXpnp3tMhwzIBKuuvd5Xkk';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'NYWHWUJij3EUcOYPmq17yMihomww6SmBpvQe4ZTsDI0';
+webpush.setVapidDetails('mailto:admin@line-killer.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
+// 管理者ユーザー名（お知らせ投稿・削除権限）
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'とわ';
+
+// push購読をメモリで管理（再起動でリセットされるが無料プランでは許容）
+const pushSubscriptions = new Map(); // userId -> subscription (メモリキャッシュ)
+// 起動時にDBからpush subscriptionsを読み込む
+(async () => {
+  try {
+    const subs = await PushSubscription.find();
+    subs.forEach(s => pushSubscriptions.set(s.user_id, s.subscription));
+    console.log(`Push subscriptions loaded: ${subs.length}`);
+  } catch(e) { console.error('Push subscription load error:', e); }
+})();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: '*', methods: ['GET', 'POST'] },
+  pingTimeout: 20000,       // 20秒（デフォルト20000）
+  pingInterval: 10000,      // 10秒ごとにping（デフォルト25000より短く）
+  transports: ['websocket', 'polling'], // WebSocket優先
+  upgradeTimeout: 5000,     // アップグレード待機5秒
+  maxHttpBufferSize: 2e6,   // 2MB（メッセージバッファ）
+  connectTimeout: 10000,    // 接続タイムアウト10秒
+});
+app.set('io', io);
+
+app.use(cors());
+app.use(compression()); // gzip圧縮（全ルートに有効）
+app.use(helmet({ contentSecurityPolicy: false })); // セキュリティヘッダー
+
+// ログイン・登録のレートリミット（ブルートフォース対策）
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15分
+  max: 20, // 20回まで
+  message: { error: 'リクエストが多すぎます。しばらく待ってから試してください' },
+  standardHeaders: true, legacyHeaders: false,
+});
+// APIのレートリミット（一般）
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1分
+  max: 300,
+  message: { error: 'リクエストが多すぎます' },
+  standardHeaders: true, legacyHeaders: false,
+});
+app.use('/api/auth', authLimiter);
+app.use('/api/', apiLimiter);
+// 管理エンドポイント（ADMIN_KEY必須）
+app.get('/admin/reset-requests', async (req, res) => {
+  try {
+    const key = req.query.key || req.headers['x-admin-key'];
+    if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) return res.status(403).json({ error: 'forbidden' });
+    await FriendRequest.deleteMany({});
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+app.use(express.json());
+
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+app.use('/uploads', express.static(uploadDir));
+
+const diskStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => cb(null, uuidv4() + path.extname(file.originalname))
+});
+const cloudStorage = useCloudinary ? new CloudinaryStorage({
+  cloudinary,
+  params: { folder: 'line-killer', allowed_formats: ['jpg','jpeg','png','gif','webp','mp4','pdf'] },
+}) : null;
+
+const storage = cloudStorage || diskStorage;
+const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
+const getFileUrl = (req) => {
+  if (useCloudinary && req.file?.path) return req.file.path; // Cloudinaryは絶対URL
+  return req.file ? `/uploads/${req.file.filename}` : null;
+};
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-production';
+
+const auth = (req) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  return jwt.verify(token, JWT_SECRET);
+};
+
+// スタンプセット定義
 
 // ===== パスワードリセット =====
 
