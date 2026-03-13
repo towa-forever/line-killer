@@ -846,19 +846,21 @@ app.get('/api/posts', async (req, res) => {
 app.post('/api/posts', upload.single('image'), async (req, res) => {
   try {
     const decoded = auth(req);
-    console.log('[投稿API] username:', decoded.username, 'ADMIN:', ADMIN_USERNAME);
-    // 管理者のみ投稿可能
-    if (!decoded.username || decoded.username.trim().toLowerCase() !== ADMIN_USERNAME.trim().toLowerCase()) {
-      console.log('[投稿API] 403: username不一致', decoded.username, '!=', ADMIN_USERNAME);
-      return res.status(403).json({ error: `お知らせの投稿は管理者のみです（あなたのID: ${decoded.username}）` });
-    }
+    // JWTにusernameがない古いトークン対策：DBから必ず取得
     const user = await User.findOne({ id: decoded.id });
+    if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません。ログインし直してください' });
+    const actualUsername = user.username;
+    console.log('[投稿API] DBusername:', actualUsername, 'ADMIN:', ADMIN_USERNAME);
+    // 管理者のみ投稿可能
+    if (actualUsername.trim().toLowerCase() !== ADMIN_USERNAME.trim().toLowerCase()) {
+      return res.status(403).json({ error: `お知らせの投稿は管理者のみです（あなたのID: ${actualUsername}）` });
+    }
     const { content } = req.body;
     if (!content && !req.file) return res.status(400).json({ error: '内容を入力してください' });
     const id = uuidv4();
     const post = await Post.create({
-      id, user_id: decoded.id, username: decoded.username,
-      avatar: user?.avatar || null,
+      id, user_id: user.id, username: actualUsername,
+      avatar: user.avatar || null,
       content: content || '',
       image: req.file ? getFileUrl(req) : null
     });
