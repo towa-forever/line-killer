@@ -1720,8 +1720,8 @@ export default function App() {
 
   const handleLogin = async (user) => {
     setCurrentUser(user);
-    // PINが設定されてたら確認画面
-    if (user.pin_enabled) setPinVerified(false);
+    // PINが設定されてたら確認画面（pin_enabled / pinEnabled 両対応）
+    if (user.pin_enabled || user.pinEnabled) setPinVerified(false);
     else setPinVerified(true);
   };
 
