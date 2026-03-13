@@ -36,7 +36,7 @@ const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'NYWHWUJij3EUcOYPmq17
 webpush.setVapidDetails('mailto:admin@line-killer.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 // 管理者ユーザー名（お知らせ投稿・削除権限）
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'towa';
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'とわ';
 
 // push購読をメモリで管理（再起動でリセットされるが無料プランでは許容）
 const pushSubscriptions = new Map(); // userId -> subscription (メモリキャッシュ)
@@ -597,6 +597,20 @@ app.patch('/api/rooms/:roomId/theme', async (req, res) => {
     );
     if (!room) return res.status(403).json({ error: '権限なし' });
     io.to('room_' + req.params.roomId).emit('room:theme_changed', { roomId: req.params.roomId, themeColor: themeColor || '' });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// ===== パスワード照合（管理者投稿前確認用）=====
+app.post('/api/auth/verify-password', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: 'パスワードを入力してください' });
+    const user = await User.findOne({ id: decoded.id });
+    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.status(401).json({ error: 'パスワードが違います' });
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });

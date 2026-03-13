@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
-const ADMIN_USERNAME = 'towa';
+const ADMIN_USERNAME = 'とわ';
 
 export default function Timeline({ currentUser }) {
   const [posts, setPosts]                   = useState([]);
@@ -16,6 +16,9 @@ export default function Timeline({ currentUser }) {
   const [confirmDialog, setConfirmDialog]   = useState(null);
   const [error, setError]                   = useState('');
   const [success, setSuccess]               = useState('');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const fileInputRef = useRef(null);
 
   // 管理者判定 - 複数の方法でチェック
@@ -49,10 +52,35 @@ export default function Timeline({ currentUser }) {
     reader.readAsDataURL(file);
   };
 
+  // パスワード確認モーダルを開く
+  const openPasswordModal = () => {
+    if (!newPostText.trim() && !newPostImage) return;
+    setAdminPassword('');
+    setPasswordError('');
+    setShowPasswordModal(true);
+  };
+
+  // パスワードをサーバーで照合してから投稿
+  const verifyAndPost = async () => {
+    if (!adminPassword.trim()) { setPasswordError('パスワードを入力してください'); return; }
+    try {
+      const token = localStorage.getItem('token');
+      // パスワード照合API
+      await axios.post('/api/auth/verify-password', { password: adminPassword }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // 照合OK → 投稿実行
+      handlePost();
+    } catch (err) {
+      setPasswordError(err.response?.data?.error || 'パスワードが違います');
+    }
+  };
+
   const handlePost = async () => {
     if (!newPostText.trim() && !newPostImage) return;
     setPosting(true);
     setError('');
+    setShowPasswordModal(false);
     try {
       const token = localStorage.getItem('token');
       if (!token) { setError('ログインが必要です'); return; }
@@ -147,6 +175,40 @@ export default function Timeline({ currentUser }) {
         </div>
       )}
 
+      {/* パスワード確認モーダル */}
+      {showPasswordModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={() => setShowPasswordModal(false)}>
+          <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:320 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:18, fontWeight:800, textAlign:'center', marginBottom:4 }}>🔒 管理者確認</div>
+            <div style={{ fontSize:13, color:'var(--text2)', textAlign:'center', marginBottom:16 }}>パスワードを入力してください</div>
+            <input
+              type="password"
+              className="form-input"
+              placeholder="パスワード"
+              value={adminPassword}
+              onChange={e => { setAdminPassword(e.target.value); setPasswordError(''); }}
+              onKeyDown={e => e.key === 'Enter' && verifyAndPost()}
+              autoFocus
+              style={{ marginBottom: passwordError ? 6 : 16 }}
+            />
+            {passwordError && (
+              <div style={{ fontSize:12, color:'var(--danger)', marginBottom:12, textAlign:'center' }}>{passwordError}</div>
+            )}
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setShowPasswordModal(false)}
+                style={{ flex:1, padding:12, borderRadius:12, background:'var(--surface2)', border:'none', fontSize:15, cursor:'pointer' }}>
+                キャンセル
+              </button>
+              <button onClick={verifyAndPost}
+                style={{ flex:1, padding:12, borderRadius:12, background:'#06c755', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer' }}>
+                投稿する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ヘッダー */}
       <div style={{ background:'#06c755', color:'white', padding:'16px 16px 18px', paddingTop:'calc(16px + env(safe-area-inset-top))' }}>
         <div style={{ fontSize:20, fontWeight:800, marginBottom:2 }}>📢 お知らせ</div>
@@ -193,7 +255,7 @@ export default function Timeline({ currentUser }) {
               <input ref={fileInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleImageSelect} />
             </label>
             <button
-              onClick={handlePost}
+              onClick={openPasswordModal}
               disabled={posting || (!newPostText.trim() && !newPostImage)}
               style={{
                 padding:'10px 24px', borderRadius:24,
