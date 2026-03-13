@@ -20,6 +20,7 @@ const Dashboard = lazy(() => import('./components/Dashboard'));
 const EventCalendar = lazy(() => import('./components/EventCalendar'));
 const MiniGame = lazy(() => import('./components/MiniGame'));
 const VoiceCall = lazy(() => import('./components/VoiceCall'));
+const SubAccounts = lazy(() => import('./components/SubAccounts'));
 const StickerMaker = lazy(() => import('./components/StickerMaker'));
 const UserProfile = lazy(() => import('./components/UserProfile'));
 const AIAssistant = lazy(() => import('./components/AIAssistant'));
@@ -173,6 +174,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showTaskPanel, setShowTaskPanel] = useState(false);
   const [showVoice, setShowVoice] = useState(false);
   const [showStickerMaker, setShowStickerMaker] = useState(false);
+  const [showSubAccounts, setShowSubAccounts] = useState(false);
   const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId }
   const [roomTheme, setRoomTheme] = useState({}); // roomId -> themeColor
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
@@ -616,9 +618,18 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   return (
     <div className="chat-screen">
       <div className={`room-list ${selectedRoom ? "hidden" : ""}`}>
-        <div className="room-list-header">
-          <span>トーク</span>
-          <button className="icon-btn" onClick={() => setShowCreateRoom(true)}>✏️</button>
+        <div className="room-list-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          {/* アカウントアイコン（クリックでサブアカ切替） */}
+          <button onClick={() => setShowSubAccounts(true)}
+            style={{ display:'flex', alignItems:'center', gap:8, background:'none', border:'none', cursor:'pointer', padding:'2px 4px', borderRadius:10 }}>
+            <div style={{ width:34, height:34, borderRadius:'50%', background:'rgba(255,255,255,0.25)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:700, overflow:'hidden', flexShrink:0 }}>
+              {currentUser?.avatar
+                ? <img src={currentUser.avatar.startsWith('http') ? currentUser.avatar : `${process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com'}${currentUser.avatar}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                : (currentUser?.displayName?.[0] || '?')}
+            </div>
+            <span style={{ color:'white', fontSize:18, fontWeight:800 }}>トーク</span>
+          </button>
+          <button className="icon-btn" onClick={() => setShowCreateRoom(true)} style={{ fontSize:22, color:'white' }}>✏️</button>
         </div>
         <StoryBar currentUser={currentUser} friendsList={friendsList} socket={socket} />
         <div className="room-items">
@@ -1594,6 +1605,14 @@ export default function App() {
   }, []);
 
   const handleLogin = (user) => setCurrentUser(user);
+
+  const handleSwitchAccount = (token, user) => {
+    localStorage.setItem('token', token);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    setCurrentUser(user);
+    if (socket) { socket.disconnect(); }
+    setTimeout(() => window.location.reload(), 100);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');

@@ -1,10 +1,10 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 
-export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onToggleDark, darkAutoMode, onToggleAuto }) {
+export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccount, darkMode, onToggleDark, darkAutoMode, onToggleAuto }) {
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser.displayName || '');
   const [bio, setBio] = useState(currentUser.bio || '');
@@ -18,6 +18,11 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
   const [coverPreview, setCoverPreview] = useState(null);
   const [coverFile, setCoverFile] = useState(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [subAccounts, setSubAccounts] = useState([]);
+  const [showSubModal, setShowSubModal] = useState(false);
+  const [subForm, setSubForm] = useState({ username:'', password:'', displayName:'' });
+  const [subError, setSubError] = useState('');
+  const [subLoading, setSubLoading] = useState(false);
   // QRスキャン
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [qrResult, setQrResult] = useState('');
@@ -297,6 +302,22 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
         </div>
       </div>
 
+      {/* ===== サブアカウント ===== */}
+      <SubAccountSection
+        currentUser={currentUser}
+        subAccounts={subAccounts}
+        setSubAccounts={setSubAccounts}
+        showSubModal={showSubModal}
+        setShowSubModal={setShowSubModal}
+        subForm={subForm}
+        setSubForm={setSubForm}
+        subError={subError}
+        setSubError={setSubError}
+        subLoading={subLoading}
+        setSubLoading={setSubLoading}
+        onSwitchAccount={onSwitchAccount}
+      />
+
       <div style={{ padding:'0 10px 20px' }}>
         <button className="btn btn-danger" style={{ width:'100%', padding:12 }} onClick={() => setShowLogoutConfirm(true)}>
           ログアウト
@@ -315,6 +336,128 @@ export default function Profile({ currentUser, onUpdate, onLogout, darkMode, onT
         .toggle-knob { width:20px; height:20px; border-radius:50%; background:white; position:absolute; top:2px; left:2px; transition:left 0.3s; box-shadow:0 1px 4px rgba(0,0,0,0.2); }
         .toggle.on .toggle-knob { left:22px; }
       `}</style>
+    </div>
+  );
+}
+
+function SubAccountSection({ currentUser, subAccounts, setSubAccounts, showSubModal, setShowSubModal, subForm, setSubForm, subError, setSubError, subLoading, setSubLoading, onSwitchAccount }) {
+  const isSubAccount = !!currentUser?.parentAccountId;
+
+  useEffect(() => {
+    if (isSubAccount) return;
+    axios.get('/api/sub-accounts').then(r => setSubAccounts(r.data)).catch(() => {});
+  }, [isSubAccount, setSubAccounts]);
+
+  const createSub = async () => {
+    if (!subForm.username.trim() || !subForm.password.trim()) { setSubError('IDとパスワードは必須です'); return; }
+    setSubLoading(true); setSubError('');
+    try {
+      const res = await axios.post('/api/sub-accounts', subForm);
+      setSubAccounts(p => [...p, res.data.sub]);
+      setShowSubModal(false);
+      setSubForm({ username:'', password:'', displayName:'' });
+    } catch (e) { setSubError(e.response?.data?.error || '作成に失敗しました'); }
+    finally { setSubLoading(false); }
+  };
+
+  const deleteSub = async (subId) => {
+    if (!window.confirm('このサブアカウントを削除しますか？')) return;
+    try {
+      await axios.delete(`/api/sub-accounts/${subId}`);
+      setSubAccounts(p => p.filter(s => s.id !== subId));
+    } catch {}
+  };
+
+  const switchTo = async (subId) => {
+    try {
+      const res = await axios.post(`/api/sub-accounts/${subId}/switch`);
+      onSwitchAccount?.(res.data.token, res.data.user);
+    } catch {}
+  };
+
+  const switchToParent = async () => {
+    try {
+      const res = await axios.post(`/api/sub-accounts/${currentUser.id}/switch`);
+      onSwitchAccount?.(res.data.token, res.data.user);
+    } catch {}
+  };
+
+  return (
+    <div className="card" style={{ margin:10 }}>
+      {/* サブアカ作成モーダル */}
+      {showSubModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
+          onClick={() => setShowSubModal(false)}>
+          <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:340 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:18, fontWeight:800, marginBottom:4 }}>➕ サブアカウント作成</div>
+            <div style={{ fontSize:13, color:'var(--text2)', marginBottom:16 }}>新しいアカウントを追加します</div>
+            <input className="form-input" placeholder="ID（ユーザー名）*" value={subForm.username}
+              onChange={e => setSubForm(p => ({...p, username: e.target.value}))} style={{ marginBottom:10 }} />
+            <input className="form-input" placeholder="表示名（省略可）" value={subForm.displayName}
+              onChange={e => setSubForm(p => ({...p, displayName: e.target.value}))} style={{ marginBottom:10 }} />
+            <input className="form-input" type="password" placeholder="パスワード*" value={subForm.password}
+              onChange={e => setSubForm(p => ({...p, password: e.target.value}))} style={{ marginBottom: subError ? 6 : 16 }} />
+            {subError && <div style={{ fontSize:12, color:'var(--danger)', marginBottom:12 }}>{subError}</div>}
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setShowSubModal(false)} style={{ flex:1, padding:12, borderRadius:12, background:'var(--surface2)', border:'none', fontSize:15, cursor:'pointer' }}>キャンセル</button>
+              <button onClick={createSub} disabled={subLoading} style={{ flex:1, padding:12, borderRadius:12, background:'#06c755', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer' }}>
+                {subLoading ? '作成中...' : '作成'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="profile-section-title">👤 アカウント管理</div>
+
+      {/* 現在のアカウント */}
+      <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'0.5px solid var(--border)', marginBottom:8 }}>
+        <div style={{ width:40, height:40, borderRadius:'50%', background:'linear-gradient(135deg,#06c755,#03a040)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700 }}>
+          {(currentUser?.displayName||currentUser?.username||'?')[0]}
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:14, fontWeight:700 }}>{currentUser?.displayName || currentUser?.username}</div>
+          <div style={{ fontSize:12, color:'var(--text2)' }}>@{currentUser?.username} {isSubAccount ? '（サブアカ）' : '（メイン）'}</div>
+        </div>
+        <span style={{ fontSize:11, background:'#06c755', color:'white', borderRadius:20, padding:'2px 10px', fontWeight:700 }}>使用中</span>
+      </div>
+
+      {/* サブアカ一覧 */}
+      {!isSubAccount && subAccounts.map(sub => (
+        <div key={sub.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'0.5px solid var(--border)' }}>
+          <div style={{ width:40, height:40, borderRadius:'50%', background:'linear-gradient(135deg,#3498db,#2980b9)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700 }}>
+            {(sub.displayName||sub.username||'?')[0]}
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:600 }}>{sub.displayName || sub.username}</div>
+            <div style={{ fontSize:12, color:'var(--text2)' }}>@{sub.username}</div>
+          </div>
+          <button onClick={() => switchTo(sub.id)}
+            style={{ padding:'6px 14px', borderRadius:20, background:'#06c755', color:'white', border:'none', fontSize:12, fontWeight:700, cursor:'pointer', marginRight:4 }}>
+            切替
+          </button>
+          <button onClick={() => deleteSub(sub.id)}
+            style={{ padding:'6px 10px', borderRadius:20, background:'var(--surface2)', border:'1px solid var(--border)', fontSize:12, cursor:'pointer', color:'var(--danger)' }}>
+            🗑️
+          </button>
+        </div>
+      ))}
+
+      {/* サブアカからメインに戻る */}
+      {isSubAccount && (
+        <button onClick={switchToParent}
+          style={{ width:'100%', padding:'10px 0', borderRadius:12, background:'var(--surface2)', border:'1.5px solid var(--border)', fontSize:14, cursor:'pointer', marginBottom:8 }}>
+          ← メインアカウントに戻る
+        </button>
+      )}
+
+      {/* 追加ボタン */}
+      {!isSubAccount && (
+        <button onClick={() => setShowSubModal(true)}
+          style={{ width:'100%', padding:'10px 0', borderRadius:12, background:'var(--surface2)', border:'1.5px dashed var(--border)', fontSize:14, cursor:'pointer', color:'var(--text2)', marginTop:8 }}>
+          ➕ サブアカウントを追加（{subAccounts.length}/5）
+        </button>
+      )}
     </div>
   );
 }

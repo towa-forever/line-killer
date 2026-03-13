@@ -13,8 +13,10 @@ const UserSchema = new mongoose.Schema({
   cover_image: { type: String, default: '' }, // プロフィール背景画像
   display_name: { type: String, default: '' },
   is_official: { type: Boolean, default: false }, // 公式アカウント
-  last_seen: { type: Date, default: Date.now }, // 最終オンライン時刻
-  show_online: { type: Boolean, default: true }, // オンライン状態を表示するか
+  last_seen: { type: Date, default: Date.now },
+  show_online: { type: Boolean, default: true },
+  parent_account_id: { type: String, default: null }, // サブアカの場合、親アカウントのid
+  sub_accounts: [{ type: String }], // 親アカの場合、サブアカのid一覧
   official_category: { type: String, default: '' }, // カテゴリ(news/shop/service等)
   official_email: { type: String, default: '' }, // 申請メールアドレス
   official_verified: { type: Boolean, default: false }, // 管理者承認済み

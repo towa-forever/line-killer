@@ -601,6 +601,89 @@ app.patch('/api/rooms/:roomId/theme', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
+
+// ===== サブアカウント =====
+
+// サブアカ一覧取得
+app.get('/api/sub-accounts', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id });
+    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    const subs = await User.find({ id: { $in: user.sub_accounts || [] } }, { password: 0 });
+    res.json(subs.map(s => ({ id: s.id, username: s.username, displayName: s.display_name || s.username, avatar: s.avatar, bio: s.bio })));
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// サブアカ作成
+app.post('/api/sub-accounts', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const parent = await User.findOne({ id: decoded.id });
+    if (!parent) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    // 親アカ自体もサブアカの場合は作成不可
+    if (parent.parent_account_id) return res.status(400).json({ error: 'サブアカウントからはサブアカを作成できません' });
+    // 上限チェック（最大5個）
+    if ((parent.sub_accounts || []).length >= 5) return res.status(400).json({ error: 'サブアカウントは最大5個までです' });
+
+    const { username, password, displayName } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'IDとパスワードは必須です' });
+    if (username.length < 3) return res.status(400).json({ error: 'IDは3文字以上にしてください' });
+    
+    const exists = await User.findOne({ username });
+    if (exists) return res.status(400).json({ error: 'このIDはすでに使われています' });
+
+    const id = require('uuid').v4();
+    const hashed = await bcrypt.hash(password, 10);
+    const sub = await User.create({
+      id, username, password: hashed,
+      display_name: displayName || username,
+      parent_account_id: parent.id,
+    });
+    parent.sub_accounts = [...(parent.sub_accounts || []), id];
+    await parent.save();
+    res.json({ ok: true, sub: { id: sub.id, username: sub.username, displayName: sub.display_name } });
+  } catch (e) {
+    console.error('[サブアカ作成]', e);
+    res.status(500).json({ error: '作成に失敗しました' });
+  }
+});
+
+// サブアカに切り替え（トークンを発行）
+app.post('/api/sub-accounts/:subId/switch', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const parent = await User.findOne({ id: decoded.id });
+    // 親アカかサブアカ本人のみ切り替え可能
+    const isParent = parent && (parent.sub_accounts || []).includes(req.params.subId);
+    const isSelf   = decoded.id === req.params.subId;
+    if (!isParent && !isSelf) return res.status(403).json({ error: '権限がありません' });
+
+    const sub = await User.findOne({ id: req.params.subId });
+    if (!sub) return res.status(404).json({ error: 'サブアカが見つかりません' });
+    const token = jwt.sign({ id: sub.id, username: sub.username }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: {
+      id: sub.id, username: sub.username,
+      displayName: sub.display_name || sub.username,
+      avatar: sub.avatar, bio: sub.bio || '', status: sub.status || '',
+      parentAccountId: sub.parent_account_id,
+    }});
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// サブアカ削除
+app.delete('/api/sub-accounts/:subId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const parent = await User.findOne({ id: decoded.id });
+    if (!parent || !(parent.sub_accounts || []).includes(req.params.subId)) return res.status(403).json({ error: '権限がありません' });
+    await User.deleteOne({ id: req.params.subId });
+    parent.sub_accounts = (parent.sub_accounts || []).filter(id => id !== req.params.subId);
+    await parent.save();
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
 // ===== パスワード照合（管理者投稿前確認用）=====
 app.post('/api/auth/verify-password', async (req, res) => {
   try {

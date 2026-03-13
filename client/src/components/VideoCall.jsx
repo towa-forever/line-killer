@@ -1,22 +1,34 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
-// ICEサーバー設定
+// ICEサーバー設定（複数のSTUN/TURNで確実に繋ぐ）
+const BASE_ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  // openrelay TURN（無料・信頼性高）
+  { urls: 'turn:openrelay.metered.ca:80',               username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:80?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443',              username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turns:openrelay.metered.ca:443',             username: 'openrelayproject', credential: 'openrelayproject' },
+];
+
 let ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'turn:openrelay.metered.ca:80',                username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp',  username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turns:openrelay.metered.ca:443',               username: 'openrelayproject', credential: 'openrelayproject' },
-  ],
-  iceCandidatePoolSize: 5,
+  iceServers: BASE_ICE_SERVERS,
+  iceCandidatePoolSize: 10,
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
   iceTransportPolicy: 'all',
 };
-fetch('/api/ice-servers').then(r => r.json()).then(d => {
-  if (d.iceServers) ICE_SERVERS = { ...ICE_SERVERS, iceServers: d.iceServers };
-}).catch(() => {});
+
+// サーバーからTURN情報を取得（失敗しても標準のまま使う）
+fetch('/api/ice-servers')
+  .then(r => r.ok ? r.json() : null)
+  .then(d => {
+    if (d?.iceServers?.length) {
+      ICE_SERVERS = { ...ICE_SERVERS, iceServers: [...d.iceServers, ...BASE_ICE_SERVERS] };
+    }
+  }).catch(() => {});
 
 export default function VideoCall({ currentUser, socket, roomId, targetUserId, isCaller, incomingOffer, onEnd, minimized, onToggleMinimize }) {
   // ---- refs（minimized切り替えでもDOMが変わらないように全部ref管理）----
@@ -175,7 +187,10 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       localStreamRef.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       const pc = initPC(stream);
-      const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+      const rawOffer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+      // VP8を優先してスマホ/PC間の互換性を上げる
+      const modifiedSdp = preferVideoCodec(rawOffer.sdp, 'VP8');
+      const offer = new RTCSessionDescription({ type: rawOffer.type, sdp: modifiedSdp });
       await pc.setLocalDescription(offer);
       socket.emit('call:start', { roomId, offer: pc.localDescription, to: targetUserId });
     };
@@ -189,7 +204,9 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
       remoteDescSet.current = true;
       await flushBuf(pc);
-      const answer = await pc.createAnswer();
+      const rawAnswer = await pc.createAnswer();
+      const modifiedSdp = preferVideoCodec(rawAnswer.sdp, 'VP8');
+      const answer = new RTCSessionDescription({ type: rawAnswer.type, sdp: modifiedSdp });
       await pc.setLocalDescription(answer);
       socket.emit('call:answer', { answer: pc.localDescription, to: targetUserId });
     };
@@ -197,19 +214,23 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     socket.on('call:answered', async ({ answer }) => {
       if (!pcRef.current) return;
       try {
-        await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer));
-        remoteDescSet.current = true;
-        await flushBuf(pcRef.current);
-      } catch (_) {}
+        if (pcRef.current.signalingState === 'have-local-offer') {
+          await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer));
+          remoteDescSet.current = true;
+          await flushBuf(pcRef.current);
+        }
+      } catch (e) { console.warn('[call:answered error]', e); }
     });
 
     socket.on('call:ice', async ({ candidate }) => {
       if (!candidate) return;
-      if (remoteDescSet.current && pcRef.current) {
-        try { await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch (_) {}
-      } else {
-        iceBuf.current.push(candidate);
-      }
+      try {
+        if (remoteDescSet.current && pcRef.current?.remoteDescription) {
+          await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+        } else {
+          iceBuf.current.push(candidate);
+        }
+      } catch (e) { console.warn('[ICE candidate error]', e); }
     });
 
     socket.on('call:ended',   safeEnd);
