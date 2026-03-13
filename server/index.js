@@ -846,21 +846,31 @@ app.get('/api/posts', async (req, res) => {
 app.post('/api/posts', upload.single('image'), async (req, res) => {
   try {
     const decoded = auth(req);
+    console.log('[投稿API] username:', decoded.username, 'ADMIN:', ADMIN_USERNAME);
     // 管理者のみ投稿可能
-    if (decoded.username !== ADMIN_USERNAME) return res.status(403).json({ error: 'お知らせの投稿は管理者のみです' });
+    if (!decoded.username || decoded.username.trim().toLowerCase() !== ADMIN_USERNAME.trim().toLowerCase()) {
+      console.log('[投稿API] 403: username不一致', decoded.username, '!=', ADMIN_USERNAME);
+      return res.status(403).json({ error: `お知らせの投稿は管理者のみです（あなたのID: ${decoded.username}）` });
+    }
     const user = await User.findOne({ id: decoded.id });
     const { content } = req.body;
     if (!content && !req.file) return res.status(400).json({ error: '内容を入力してください' });
     const id = uuidv4();
     const post = await Post.create({
       id, user_id: decoded.id, username: decoded.username,
-      avatar: user.avatar || null,
+      avatar: user?.avatar || null,
       content: content || '',
       image: req.file ? getFileUrl(req) : null
     });
     io.emit('post:new', post);
     res.json(post);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) {
+    console.error('[投稿API] エラー:', e.message);
+    if (e.name === 'JsonWebTokenError' || e.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'ログインし直してください' });
+    }
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/posts/:postId/like', async (req, res) => {
