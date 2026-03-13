@@ -1,6 +1,5 @@
 require("dotenv").config();
 const express = require('express');
-const mongoose = require('mongoose');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
@@ -13,8 +12,14 @@ const bcrypt = require('bcrypt');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const path = require('path');
+const fs = require('fs');
+const { join } = require('path');
+const { v4: uuidv4 } = require('uuid');
+const mongoose = require('mongoose');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription } = require('./db');
 
-// Cloudinary設定（環境変数から読み込み）
+// Cloudinary設定
 if (process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME) {
   cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -23,11 +28,14 @@ if (process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME) {
   });
 }
 const useCloudinary = !!(process.env.CLOUDINARY_CLOUD_NAME);
-const path = require('path');
-const fs = require('fs');
-const { join } = require('path');
-const { v4: uuidv4 } = require('uuid');
-const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription } = require('./db');
+
+// MongoDB接続
+const MONGO_URI = process.env.MONGO_URI;
+if (MONGO_URI && mongoose.connection.readyState === 0) {
+  mongoose.connect(MONGO_URI)
+    .then(() => console.log('MongoDB接続成功'))
+    .catch(err => console.error('MongoDB接続失敗', err));
+}
 
 const app = express();
 
