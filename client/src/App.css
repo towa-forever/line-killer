@@ -1427,3 +1427,192 @@ body.dark .page-header { background: #1c1c1e; }
   padding: 2px 8px;
   font-weight: 600;
 }
+
+/* ===================================================
+   LINEライク 大幅デザイン改善
+   =================================================== */
+
+/* グローバルヘッダー廃止（タブごとのヘッダーを使う） */
+.app-header { display: none !important; }
+
+/* app-mainを全画面に */
+.app-main {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* safe-area対応 */
+  padding-top: env(safe-area-inset-top);
+}
+
+/* ===== タブバー LINEライク ===== */
+.tab-bar {
+  background: var(--surface);
+  border-top: 0.5px solid rgba(0,0,0,0.12);
+  box-shadow: 0 -0.5px 0 var(--border);
+  padding-bottom: max(env(safe-area-inset-bottom), 4px);
+  height: calc(56px + max(env(safe-area-inset-bottom), 4px));
+}
+.tab-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px 2px;
+  font-size: 9px;
+  font-weight: 500;
+  color: #8e8e93;
+  background: none;
+  border: none;
+  cursor: pointer;
+  gap: 2px;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+.tab-btn.active { color: #06c755; }
+.tab-icon {
+  font-size: 23px;
+  line-height: 1;
+  transition: transform 0.12s;
+}
+.tab-btn.active .tab-icon { transform: scale(1.05); }
+.tab-label { font-size: 9px; font-weight: 500; margin-top: 1px; }
+body.dark .tab-bar { background: #1c1c1e; border-top-color: #3a3a3c; }
+body.dark .tab-btn { color: #636366; }
+body.dark .tab-btn.active { color: #06c755; }
+
+/* ===== トーク一覧ヘッダー ===== */
+.room-list-header {
+  background: #06c755 !important;
+  color: white !important;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 12px !important;
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  border-bottom: none !important;
+  min-height: calc(52px + env(safe-area-inset-top));
+}
+body.dark .room-list-header { background: #1c1c1e !important; }
+
+/* ===== トーク一覧アイテム ===== */
+.room-item {
+  padding: 13px 16px;
+  min-height: 72px;
+  border-bottom: 0.5px solid var(--border);
+}
+.room-avatar { width: 52px; height: 52px; font-size: 22px; border-radius: 50%; }
+.room-name { font-size: 16px; font-weight: 600; }
+.room-last-msg { font-size: 13px; margin-top: 3px; max-width: none; }
+
+/* ===== メッセージバブル LINEライク ===== */
+.bubble-self {
+  background: #06c755 !important;
+  color: white !important;
+  border-radius: 18px 18px 4px 18px !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+.bubble-other {
+  background: var(--surface) !important;
+  border-radius: 18px 18px 18px 4px !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+body.dark .bubble-other { background: #2c2c2e !important; }
+
+/* ===== チャット背景 ===== */
+.message-area { background: #eae9e4; }
+body.dark .message-area { background: #1a1a1a; }
+
+/* メッセージ入力エリア */
+.input-area {
+  background: var(--surface) !important;
+  border-top: 0.5px solid var(--border) !important;
+  padding: 8px 10px !important;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+  gap: 6px !important;
+}
+
+/* ===== チャットヘッダー ===== */
+.chat-header {
+  background: #06c755;
+  padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+  min-height: calc(52px + env(safe-area-inset-top));
+}
+body.dark .chat-header { background: #1c1c1e; }
+
+/* ===== 着信モーダル LINEライク ===== */
+.incoming-call-modal {
+  background: linear-gradient(160deg, #1a1a2e, #0f3460);
+  border-radius: 28px;
+  padding: 40px 36px;
+  min-width: 300px;
+  text-align: center;
+  color: white;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  animation: callSlideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes callSlideUp {
+  from { opacity: 0; transform: translateY(40px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+/* ===== トースト通知 ===== */
+.toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30,30,30,0.92);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 9999;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+  animation: toastIn 0.2s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.toast-success { background: rgba(6,199,85,0.92); }
+.toast-error   { background: rgba(231,76,60,0.92); }
+
+/* ===== form-input 統一 ===== */
+.form-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+  -webkit-appearance: none;
+}
+.form-input:focus { border-color: #06c755; }
+body.dark .form-input { background: #2c2c2e; border-color: #3a3a3c; }
+
+/* ===== 友達タブヘッダー ===== */
+.friends-header {
+  background: #06c755;
+  color: white;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+  font-size: 20px;
+  font-weight: 800;
+}
+body.dark .friends-header { background: #1c1c1e; }
+
+/* ===== お知らせタブヘッダー ===== */
+.timeline-header {
+  background: #06c755;
+  color: white;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+  font-size: 20px;
+  font-weight: 800;
+}
+body.dark .timeline-header { background: #1c1c1e; }

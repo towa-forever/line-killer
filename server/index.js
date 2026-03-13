@@ -684,6 +684,45 @@ app.delete('/api/sub-accounts/:subId', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
+// ===== お問い合わせ =====
+const contactSchema = new mongoose.Schema({
+  id: String,
+  user_id: String,
+  username: String,
+  category: String,
+  title: String,
+  body: String,
+  status: { type: String, default: 'open' }, // open | in_progress | closed
+  created_at: { type: Date, default: Date.now },
+});
+const Contact = mongoose.model('Contact', contactSchema);
+
+// お問い合わせ送信
+app.post('/api/contact', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { category, title, body } = req.body;
+    if (!category || !title?.trim() || !body?.trim()) return res.status(400).json({ error: '必須項目を入力してください' });
+    if (body.trim().length < 10) return res.status(400).json({ error: '内容を10文字以上入力してください' });
+    const { v4: uuidv4 } = require('uuid');
+    await Contact.create({ id: uuidv4(), user_id: decoded.id, username: decoded.username, category, title: title.trim(), body: body.trim() });
+    // 管理者に通知
+    io.emit('admin:contact_new', { username: decoded.username, category, title });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: '送信に失敗しました' }); }
+});
+
+// お問い合わせ一覧（管理者のみ）
+app.get('/api/contact', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id });
+    if (!user || user.username !== ADMIN_USERNAME) return res.status(403).json({ error: '権限がありません' });
+    const contacts = await Contact.find().sort({ created_at: -1 }).limit(100);
+    res.json(contacts);
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
 // ===== パスワード照合（管理者投稿前確認用）=====
 app.post('/api/auth/verify-password', async (req, res) => {
   try {

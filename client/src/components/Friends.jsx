@@ -165,7 +165,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
 
       {/* ヘッダー + タブ */}
       <div style={{ background:'#06c755', color:'white', paddingTop:'calc(14px + env(safe-area-inset-top))' }}>
-        <div style={{ fontSize:20, fontWeight:800, padding:'0 16px 10px' }}>友達</div>
+        <div className="friends-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}><span>友達</span></div>
         <div style={{ display:'flex' }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}

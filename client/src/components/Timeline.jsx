@@ -211,7 +211,7 @@ export default function Timeline({ currentUser }) {
 
       {/* ヘッダー */}
       <div style={{ background:'#06c755', color:'white', padding:'16px 16px 18px', paddingTop:'calc(16px + env(safe-area-inset-top))' }}>
-        <div style={{ fontSize:20, fontWeight:800, marginBottom:2 }}>📢 お知らせ</div>
+        <div className="timeline-header">📢 お知らせ</div>
         <div style={{ fontSize:12, opacity:0.85 }}>LINE Killerからの最新情報</div>
       </div>
 

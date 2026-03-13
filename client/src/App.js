@@ -21,6 +21,7 @@ const EventCalendar = lazy(() => import('./components/EventCalendar'));
 const MiniGame = lazy(() => import('./components/MiniGame'));
 const VoiceCall = lazy(() => import('./components/VoiceCall'));
 const SubAccounts = lazy(() => import('./components/SubAccounts'));
+const ContactForm = lazy(() => import('./components/ContactForm'));
 const StickerMaker = lazy(() => import('./components/StickerMaker'));
 const AIAssistant = lazy(() => import('./components/AIAssistant'));
 const PollCard = lazy(() => import('./components/PollCard'));
@@ -173,7 +174,6 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showTaskPanel, setShowTaskPanel] = useState(false);
   const [showVoice, setShowVoice] = useState(false);
   const [showStickerMaker, setShowStickerMaker] = useState(false);
-  const [roomTheme, setRoomTheme] = useState({}); // roomId -> themeColor
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null); // { message, onOk }
   const appConfirm = (message, onOk) => setConfirmDialog({ message, onOk });
@@ -490,8 +490,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       );
     }
     const time = new Date(msg.createdAt || msg.created_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-    const readByOthers = msg.read_by?.some(id => id !== currentUser.id);
-    // 削除済みメッセージ
+      // 削除済みメッセージ
     if (msg.deleted) {
       return (
         <div key={msg.id} className={`message ${isMine ? 'mine' : 'theirs'}`} style={{ marginBottom: 2 }}>
@@ -1498,6 +1497,7 @@ export default function App() {
   const [activeCall, setActiveCall] = useState(null); // { roomId, targetUserId, isCaller, offer }
   const [callMinimized, setCallMinimized] = useState(false);
   const [showSubAccounts, setShowSubAccounts] = useState(false);
+  const [showContact, setShowContact] = useState(false);
   const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId, roomId }
   const [groupCall, setGroupCall] = useState(null); // { roomId, members, roomName }
   const [darkAutoMode, setDarkAutoMode] = useState(() => localStorage.getItem('darkAutoMode') === 'true');
@@ -1605,13 +1605,6 @@ export default function App() {
 
   const handleLogin = (user) => setCurrentUser(user);
 
-  const handleSwitchAccount = (token, user) => {
-    localStorage.setItem('token', token);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    setCurrentUser(user);
-    if (socket) { socket.disconnect(); }
-    setTimeout(() => window.location.reload(), 100);
-  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -1660,7 +1653,7 @@ export default function App() {
               onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))}
               onStartChat={async (friend) => {
                 try {
-                  const res = await axios.post('/api/rooms/dm', { targetUserId: friend.id || friend._id });
+                  await axios.post('/api/rooms/dm', { targetUserId: friend.id || friend._id });
                   // room:newイベントがSocketで飛んでくるのでタブだけ切り替える
                   setActiveTab('chat');
                 } catch (e) { console.error('DM失敗', e); }
@@ -1693,7 +1686,7 @@ export default function App() {
       {activeTab === 'profile' && (
         <div style={tabVisible('profile')}>
           <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-            <Profile currentUser={currentUser} onUpdate={(u) => setCurrentUser(u)} onLogout={handleLogout}
+            <Profile currentUser={currentUser} onUpdate={(u) => setCurrentUser(u)} onLogout={handleLogout} onContact={() => setShowContact(true)}
               darkMode={darkMode} onToggleDark={() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(!darkMode); }}
               darkAutoMode={darkAutoMode} onToggleAuto={() => { const v = !darkAutoMode; setDarkAutoMode(v); localStorage.setItem('darkAutoMode', v); if (v) setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches); }} />
           </Suspense></ErrorBoundary>
@@ -1705,13 +1698,7 @@ export default function App() {
   return (
     <Router>
       <div className={`app ${darkMode ? 'dark' : ''}`}>
-        <header className="app-header">
-          <span className="app-title">💬 LINE Killer</span>
-          <div className="header-actions">
-            <span className="online-status">🟢 {currentUser.username}</span>
-            <button className="icon-btn" onClick={() => setDarkMode(!darkMode)}>{darkMode ? '☀️' : '🌙'}</button>
-          </div>
-        </header>
+{/* LINEはタブごとにヘッダーを持つためグローバルヘッダーは非表示 */}
         <main className="app-main">
           <Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',fontSize:24}}>⏳</div>}>
             <Routes>
@@ -1762,7 +1749,14 @@ export default function App() {
           </Suspense>
         )}
 
-        {/* 音声通話 */}
+        {/* お問い合わせ */}
+        {showContact && (
+          <Suspense fallback={null}>
+            <ContactForm currentUser={currentUser} onClose={() => setShowContact(false)} />
+          </Suspense>
+        )}
+
+        {/* 音声通話 */}}
         {voiceCall && (
           <Suspense fallback={null}>
             <VoiceCall
@@ -1778,29 +1772,27 @@ export default function App() {
         )}
 
         {incomingCall && (
-          <div style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999,
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
-            <div style={{
-              background: '#1a1a2e', borderRadius: 20, padding: '32px 40px',
-              textAlign: 'center', color: 'white', boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-              minWidth: 280
-            }}>
-              <div style={{ fontSize: 48, marginBottom: 8 }}>📞</div>
-              <div style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 4 }}>着信中</div>
-              <div style={{ fontSize: 16, color: '#aaa', marginBottom: 24 }}>{incomingCall.fromName}</div>
-              <div style={{ display: 'flex', gap: 24, justifyContent: 'center' }}>
-                <button onClick={handleRejectCall} style={{
-                  width: 64, height: 64, borderRadius: '50%', background: '#e74c3c',
-                  fontSize: 28, border: 'none', cursor: 'pointer'
-                }}>📵</button>
-                <button onClick={handleAcceptCall} style={{
-                  width: 64, height: 64, borderRadius: '50%', background: '#2ecc71',
-                  fontSize: 28, border: 'none', cursor: 'pointer'
-                }}>📞</button>
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.65)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+            <div className="incoming-call-modal">
+              {/* 発信者アバター */}
+              <div style={{ width:80, height:80, borderRadius:'50%', background:'linear-gradient(135deg,#06c755,#03a040)', margin:'0 auto 16px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, fontWeight:700, border:'3px solid rgba(255,255,255,0.3)' }}>
+                {incomingCall.fromName?.[0]?.toUpperCase() || '?'}
+              </div>
+              <div style={{ fontSize:13, color:'rgba(255,255,255,0.6)', marginBottom:4, letterSpacing:1 }}>ビデオ通話</div>
+              <div style={{ fontSize:22, fontWeight:800, marginBottom:4 }}>{incomingCall.fromName}</div>
+              <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:32 }}>着信中…</div>
+              <div style={{ display:'flex', gap:32, justifyContent:'center', alignItems:'center' }}>
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+                  <button onClick={handleRejectCall} style={{ width:68, height:68, borderRadius:'50%', background:'#e74c3c', fontSize:28, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 16px rgba(231,76,60,0.5)' }}>📵</button>
+                  <span style={{ fontSize:12, color:'rgba(255,255,255,0.6)' }}>拒否</span>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+                  <button onClick={handleAcceptCall} style={{ width:68, height:68, borderRadius:'50%', background:'#06c755', fontSize:28, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 16px rgba(6,199,85,0.5)', animation:'pulse 1.5s infinite' }}>📞</button>
+                  <span style={{ fontSize:12, color:'rgba(255,255,255,0.6)' }}>応答</span>
+                </div>
               </div>
             </div>
+            <style>{`@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }`}</style>
           </div>
         )}
       </div>
