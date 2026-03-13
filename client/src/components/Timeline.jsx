@@ -18,8 +18,14 @@ export default function Timeline({ currentUser }) {
   const [success, setSuccess]               = useState('');
   const fileInputRef = useRef(null);
 
-  // 管理者判定 - usernameが一致するか確認
-  const isAdmin = !!(currentUser?.username && currentUser.username === ADMIN_USERNAME);
+  // 管理者判定 - 複数の方法でチェック
+  const checkIsAdmin = () => {
+    const u = currentUser;
+    if (!u) return false;
+    const name = (u.username || u.displayName || '').toLowerCase().trim();
+    return name === ADMIN_USERNAME.toLowerCase();
+  };
+  const isAdmin = checkIsAdmin();
 
   const fetchPosts = useCallback(async () => {
     try {
@@ -48,7 +54,6 @@ export default function Timeline({ currentUser }) {
     setPosting(true);
     setError('');
     try {
-      // トークンを確認してからリクエスト
       const token = localStorage.getItem('token');
       if (!token) { setError('ログインが必要です'); return; }
 
@@ -67,9 +72,9 @@ export default function Timeline({ currentUser }) {
       setNewPostImage(null);
       setNewPostImagePreview(null);
       setSuccess('投稿しました！');
-      setTimeout(() => setSuccess(''), 2500);
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      console.error('投稿エラー:', err.response?.data, err.message);
+      console.error('投稿エラー:', err.response?.status, err.response?.data);
       const msg = err.response?.data?.error || err.message || '投稿に失敗しました';
       setError(msg);
     } finally {
@@ -191,8 +196,10 @@ export default function Timeline({ currentUser }) {
               onClick={handlePost}
               disabled={posting || (!newPostText.trim() && !newPostImage)}
               style={{
-                padding:'10px 24px', borderRadius:24, background: (posting || (!newPostText.trim() && !newPostImage)) ? '#ccc' : '#06c755',
-                color:'white', border:'none', fontSize:14, fontWeight:700, cursor: posting ? 'wait' : 'pointer',
+                padding:'10px 24px', borderRadius:24,
+                background: (posting || (!newPostText.trim() && !newPostImage)) ? '#ccc' : '#06c755',
+                color:'white', border:'none', fontSize:14, fontWeight:700,
+                cursor: (posting || (!newPostText.trim() && !newPostImage)) ? 'not-allowed' : 'pointer',
                 boxShadow: posting ? 'none' : '0 3px 10px rgba(6,199,85,0.35)',
               }}>
               {posting ? '投稿中...' : '📢 投稿する'}
@@ -215,7 +222,6 @@ export default function Timeline({ currentUser }) {
             const showComments = expandedComments[post.id];
             return (
               <div key={post.id} style={{ background:'var(--surface)', borderBottom:'0.5px solid var(--border)', padding:16 }}>
-                {/* 投稿ヘッダー */}
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
                   <div style={{ width:44, height:44, borderRadius:12, background:'linear-gradient(135deg,#06c755,#03a040)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
                     📢
@@ -232,8 +238,6 @@ export default function Timeline({ currentUser }) {
                       style={{ fontSize:18, background:'none', border:'none', cursor:'pointer', color:'var(--text2)', padding:6, borderRadius:8 }}>🗑️</button>
                   )}
                 </div>
-
-                {/* 本文 */}
                 {post.content && (
                   <p style={{ fontSize:14, lineHeight:1.7, marginBottom:10, whiteSpace:'pre-wrap', color:'var(--text)' }}>{post.content}</p>
                 )}
@@ -244,8 +248,6 @@ export default function Timeline({ currentUser }) {
                     style={{ width:'100%', maxHeight:360, objectFit:'cover', borderRadius:12, marginBottom:10, display:'block' }}
                   />
                 )}
-
-                {/* リアクション */}
                 <div style={{ display:'flex', gap:10, paddingTop:8, borderTop:'0.5px solid var(--border)' }}>
                   <button onClick={() => handleLike(post.id)}
                     style={{ display:'flex', alignItems:'center', gap:5, fontSize:13, color: liked ? '#e74c3c' : 'var(--text2)', padding:'5px 12px', borderRadius:20,
@@ -257,8 +259,6 @@ export default function Timeline({ currentUser }) {
                     💬 {post.comments?.length || 0}件
                   </button>
                 </div>
-
-                {/* コメント */}
                 {showComments && (
                   <div style={{ marginTop:10, paddingTop:10, borderTop:'0.5px solid var(--border)' }}>
                     {post.comments?.map((c, i) => (
