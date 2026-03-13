@@ -208,6 +208,60 @@ app.get('/api/auth/login-history', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
+// ===== 認証 =====
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
+    const uname = username.trim();
+    if (uname.length < 2 || uname.length > 20) return res.status(400).json({ error: 'ユーザー名は2〜20文字にしてください' });
+    if (password.length < 6) return res.status(400).json({ error: 'パスワードは6文字以上にしてください' });
+    const exists = await User.findOne({ username: uname });
+    if (exists) return res.status(400).json({ error: 'このユーザー名は既に使われてます' });
+    const hashed = await bcrypt.hash(password, 10);
+    const id = uuidv4();
+    await User.create({ id, username: uname, password: hashed });
+    const token = jwt.sign({ id, username: uname }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id, username: uname, avatar: null, displayName: uname, bio: '', status: '' } });
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
+    const user = await User.findOne({ username: username.trim() });
+    if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.status(401).json({ error: 'パスワードが違います' });
+    // ログイン履歴を記録
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+    const ua = req.headers['user-agent'] || '';
+    await User.findOneAndUpdate({ id: user.id }, { $push: { login_history: { $each: [{ ip, ua, at: new Date() }], $slice: -20 } } });
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '', pinEnabled: user.pin_enabled || false } });
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { password: 0 });
+    if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
+    res.json({ user: {
+      id: user.id, username: user.username, avatar: user.avatar,
+      coverImage: user.cover_image || '', displayName: user.display_name || user.username,
+      bio: user.bio || '', status: user.status || '',
+      mutedRooms: user.muted_rooms || [], bookmarks: user.bookmarked_messages || [],
+      avatarFrame: user.avatar_frame || 'none', soundTheme: user.sound_theme || 'default',
+      pinEnabled: user.pin_enabled || false, secretQuestion: user.secret_question || '',
+      blockedUsers: user.blocked_users || [],
+    }});
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+
+
 // ===== 下書き保存 =====
 app.put('/api/drafts/:roomId', async (req, res) => {
   try {
