@@ -17,6 +17,8 @@ export default function Timeline({ currentUser }) {
   const fileInputRef = useRef(null);
 
   const isAdmin = currentUser?.username === ADMIN_USERNAME;
+  // デバッグ用（確認後に削除可能）
+  console.log('[お知らせ] currentUser:', currentUser?.username, 'isAdmin:', isAdmin);
 
   const fetchPosts = useCallback(async () => {
     try { const res = await axios.get('/api/posts'); setPosts(res.data); }

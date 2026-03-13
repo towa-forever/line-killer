@@ -871,7 +871,20 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         </div>
       )}
       {showEventCal && <Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense>}
-          {showMiniGame && <Suspense fallback={null}><MiniGame onSendResult={text => { socket.emit('message:send', { roomId: selectedRoom.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense>}
+          {/* スタンプ自作 */}
+      {showStickerMaker && (
+        <Suspense fallback={null}>
+          <StickerMaker
+            onSend={(data) => {
+              if (socket && selectedRoom) {
+                socket.emit('message:send', { roomId: selectedRoom.id, content: data.content, type: 'image', fileData: data.fileData });
+              }
+            }}
+            onClose={() => setShowStickerMaker(false)}
+          />
+        </Suspense>
+      )}
+      {showMiniGame && <Suspense fallback={null}><MiniGame onSendResult={text => { socket.emit('message:send', { roomId: selectedRoom.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense>}
           {showFavorites && (
             <div className="modal-overlay" onClick={() => setShowFavorites(false)}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
