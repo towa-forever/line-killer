@@ -1508,7 +1508,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>➤</button>
             </div>
             {showInputMenu && (
-              <div className="input-menu-grid">
+              <div style={{
+                position:'fixed', left:0, right:0,
+                bottom: 'calc(env(safe-area-inset-bottom) + 56px)',
+                zIndex:300, background:'var(--surface)',
+                borderTop:'1px solid var(--border)',
+                display:'grid', gridTemplateColumns:'repeat(4,1fr)',
+                boxShadow:'0 -4px 16px rgba(0,0,0,0.12)',
+                animation:'menuSlideUp 0.2s ease',
+              }}>
                 {[
                   { icon:'📎', label:'ファイル', action: () => { fileInputRef.current?.click(); setShowInputMenu(false); } },
                   { icon:'🎤', label:'音声', action: () => { setShowVoice(v=>!v); setShowInputMenu(false); } },

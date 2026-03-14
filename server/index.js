@@ -2289,10 +2289,14 @@ app.post('/api/ai/assist', async (req, res) => {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
     });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      return res.status(500).json({ error: `AI APIエラー: ${err?.error?.message || response.status}` });
+    }
     const data = await response.json();
-    res.json({ result: data.content?.[0]?.text || 'エラーが発生したで' });
+    res.json({ result: data.content?.[0]?.text || 'AIからの返答が空やったで' });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
