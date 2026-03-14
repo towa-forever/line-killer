@@ -848,6 +848,9 @@ audio { max-width:100%; accent-color:var(--primary); }
   background: var(--surface);
   border-top: 1px solid var(--border);
   animation: menuSlideUp 0.2s ease;
+  /* スマホで画面外にならないよう最大高さを制限 */
+  max-height: 40vh;
+  overflow-y: auto;
 }
 @keyframes menuSlideUp {
   from { opacity: 0; transform: translateY(8px); }

@@ -401,6 +401,41 @@ const STAMP_SETS = [
     { emoji: '🎯', label: '完璧！' }, { emoji: '🌟', label: '最高！' },
     { emoji: '🎊', label: 'みんなありがとう！' }, { emoji: '💚', label: 'LINE Killer愛してる！' },
   ]},
+  { id: 41, name: 'ねこセット', icon: '🐱', stamps: [
+    { emoji: '🐱', label: 'にゃ〜！' }, { emoji: '😸', label: 'うれしいにゃ！' },
+    { emoji: '😹', label: 'わらえるにゃ！' }, { emoji: '😻', label: 'だいすきにゃ！' },
+    { emoji: '😿', label: 'かなしいにゃ…' }, { emoji: '🙀', label: 'びっくりにゃ！' },
+    { emoji: '😾', label: 'おこにゃ！' }, { emoji: '🐾', label: 'あしあとにゃ' },
+    { emoji: '🐟', label: 'おさかな！' }, { emoji: '🧶', label: 'あそびたいにゃ' },
+  ]},
+  { id: 42, name: 'いぬセット', icon: '🐶', stamps: [
+    { emoji: '🐶', label: 'わんわん！' }, { emoji: '🐕', label: 'おさんぽしたい！' },
+    { emoji: '🦴', label: 'ほねだ！' }, { emoji: '🐾', label: 'あしあと！' },
+    { emoji: '🐩', label: 'おしゃれ犬！' }, { emoji: '😊', label: 'しっぽふりふり' },
+    { emoji: '🎾', label: 'ボールなげて！' }, { emoji: '😴', label: 'ねてるわん' },
+    { emoji: '🍖', label: 'おやつほしい！' }, { emoji: '🏠', label: 'おうちかえろ！' },
+  ]},
+  { id: 43, name: 'ゆるふわセット', icon: '🌸', stamps: [
+    { emoji: '🌸', label: 'ふわふわ〜' }, { emoji: '🍡', label: 'あまいもの食べたい' },
+    { emoji: '🧸', label: 'くまのぬいぐるみ' }, { emoji: '🍰', label: 'ケーキ食べよ！' },
+    { emoji: '🌺', label: 'はなが咲いたよ' }, { emoji: '☁️', label: 'くもみたいにふわふわ' },
+    { emoji: '🦋', label: 'ちょうちょ〜' }, { emoji: '🍭', label: 'あめちゃん！' },
+    { emoji: '🌙', label: 'おやすみなさい' }, { emoji: '⭐', label: 'きらきら〜' },
+  ]},
+  { id: 44, name: '敬語・ビジネスセット', icon: '💼', stamps: [
+    { emoji: '🙇', label: 'よろしくお願いします' }, { emoji: '👔', label: 'お疲れ様です' },
+    { emoji: '📋', label: '確認しました' }, { emoji: '✅', label: '了解いたしました' },
+    { emoji: '🤝', label: 'お世話になります' }, { emoji: '📞', label: 'ご連絡ください' },
+    { emoji: '⏰', label: '少々お待ちください' }, { emoji: '🔔', label: 'ご報告します' },
+    { emoji: '📊', label: '資料を確認します' }, { emoji: '🙏', label: 'ありがとうございます' },
+  ]},
+  { id: 45, name: 'リアクション大全セット', icon: '🎭', stamps: [
+    { emoji: '🤣', label: '爆笑！！' }, { emoji: '😱', label: 'まじか！！' },
+    { emoji: '🥺', label: 'たのむ〜' }, { emoji: '😤', label: 'ぜったいやる！' },
+    { emoji: '🤔', label: 'うーん…' }, { emoji: '😎', label: 'かっこいい！' },
+    { emoji: '🥳', label: 'やったー！！' }, { emoji: '😭', label: 'もうだめだ…' },
+    { emoji: '🤯', label: '頭爆発！！' }, { emoji: '💪', label: 'がんばるで！' },
+  ]},
 ];
 
 // ===== 新機能エンドポイント（パスワードリセット・PIN・後で読む・ギフト・下書き） =====
@@ -472,6 +507,23 @@ app.post('/api/auth/pin/verify', async (req, res) => {
     if (!ok) return res.status(401).json({ error: 'PINが違います' });
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// ===== パスワード変更 =====
+app.post('/api/auth/change-password', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: '現在のパスワードと新しいパスワードを入力してください' });
+    if (newPassword.length < 6) return res.status(400).json({ error: '新しいパスワードは6文字以上にしてください' });
+    const user = await User.findOne({ id: decoded.id });
+    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    const ok = await bcrypt.compare(currentPassword, user.password);
+    if (!ok) return res.status(401).json({ error: '現在のパスワードが違います' });
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await User.findOneAndUpdate({ id: decoded.id }, { password: hashed });
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
 // ===== ログイン履歴 =====
@@ -1410,6 +1462,7 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
     res.json(msgs.map(m => ({
       id: m.id, room_id: m.room_id,
       senderId: m.sender_id, senderName: m.sender_name,
+      senderAvatar: m.sender_avatar || null,
       sender_id: m.sender_id, sender_name: m.sender_name, // 後方互換
       content: m.content, type: m.type || 'text',
       file_data: m.file_data, fileData: m.file_data,
@@ -1591,10 +1644,10 @@ io.on('connection', async (socket) => {
     const id = uuidv4();
     const msg = await Message.create({
       id, room_id: roomId, sender_id: socket.user.id, sender_name: socket.user.username,
+      sender_avatar: socket.user.avatar || null,
       content: typeof content === 'string' ? content.trim() : content,
       type, file_data: fileData || null, reply_to: replyTo || null, stamp_label: stampLabel || null,
       read_by: [socket.user.id], reactions: [],
-      // 秘密メッセージのexpiresAt対応
       expires_at: type === 'secret' && fileData?.timer ? new Date(Date.now() + fileData.timer * 1000) : null,
     });
     io.to(roomId).emit('message:receive', {
@@ -2236,7 +2289,7 @@ app.post('/api/ai/assist', async (req, res) => {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await response.json();
     res.json({ result: data.content?.[0]?.text || 'エラーが発生したで' });
@@ -2251,7 +2304,7 @@ app.post('/api/translate', async (req, res) => {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 300,
+      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 300,
         messages: [{ role: 'user', content: `次のテキストを${targetLang || '日本語'}に翻訳してください。翻訳結果だけ返してください。\n\n${text}` }] })
     });
     const data = await response.json();

@@ -89,6 +89,28 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
     finally { setSecSaving(false); }
   };
 
+  // パスワード変更
+  const [showPwForm, setShowPwForm] = useState(false);
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [newPw2, setNewPw2] = useState('');
+  const [pwMsg, setPwMsg] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+
+  const handleChangePw = async () => {
+    if (!currentPw || !newPw) { setPwMsg('全て入力してや'); return; }
+    if (newPw.length < 6) { setPwMsg('新しいパスワードは6文字以上にしてや'); return; }
+    if (newPw !== newPw2) { setPwMsg('新しいパスワードが一致してへんで'); return; }
+    setPwSaving(true); setPwMsg('');
+    try {
+      await axios.post('/api/auth/change-password', { currentPassword: currentPw, newPassword: newPw });
+      setPwMsg('パスワードを変更したで！');
+      setShowPwForm(false);
+      setCurrentPw(''); setNewPw(''); setNewPw2('');
+    } catch (e) { setPwMsg(e.response?.data?.error || '変更に失敗した...'); }
+    finally { setPwSaving(false); }
+  };
+
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -363,6 +385,24 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
       {/* ===== セキュリティ設定 ===== */}
       <div className="card" style={{ margin:10 }}>
         <div className="profile-section-title">🔐 セキュリティ</div>
+
+        {/* パスワード変更 */}
+        <div className="setting-row" onClick={() => setShowPwForm(v=>!v)} style={{ cursor:'pointer' }}>
+          <div>🔑 パスワード変更</div>
+          <span style={{ color:'var(--text2)', fontSize:18 }}>{showPwForm ? '∨' : '›'}</span>
+        </div>
+        {showPwForm && (
+          <div style={{ padding:'10px 0 4px', borderBottom:'1px solid var(--border)' }}>
+            <input className="form-input" type="password" placeholder="現在のパスワード" value={currentPw} onChange={e => setCurrentPw(e.target.value)} style={{ marginBottom:8 }} />
+            <input className="form-input" type="password" placeholder="新しいパスワード（6文字以上）" value={newPw} onChange={e => setNewPw(e.target.value)} style={{ marginBottom:8 }} />
+            <input className="form-input" type="password" placeholder="新しいパスワード（確認）" value={newPw2} onChange={e => setNewPw2(e.target.value)} style={{ marginBottom:8 }} />
+            {pwMsg && <div style={{ fontSize:12, color: pwMsg.includes('！') ? 'var(--primary)' : 'var(--danger)', marginBottom:6 }}>{pwMsg}</div>}
+            <button onClick={handleChangePw} disabled={pwSaving}
+              style={{ width:'100%', padding:10, borderRadius:10, background:'var(--primary)', color:'white', border:'none', fontSize:14, fontWeight:700, cursor:'pointer', marginBottom:8 }}>
+              {pwSaving ? '変更中...' : '変更する'}
+            </button>
+          </div>
+        )}
 
         {/* PIN設定 */}
         <div className="setting-row" onClick={onOpenPinSetup} style={{ cursor:'pointer' }}>

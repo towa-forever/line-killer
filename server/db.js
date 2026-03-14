@@ -65,6 +65,7 @@ const MessageSchema = new mongoose.Schema({
   room_id: String,
   sender_id: String,
   sender_name: String,
+  sender_avatar: { type: String, default: null },
   content: String,
   type: { type: String, default: 'text' },
   file_data: mongoose.Schema.Types.Mixed,

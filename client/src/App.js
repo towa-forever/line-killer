@@ -688,11 +688,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           {/* アカウントアイコン（クリックでサブアカ切替） */}
           <button onClick={() => setShowSubAccounts(true)}
             style={{ display:'flex', alignItems:'center', gap:8, background:'none', border:'none', cursor:'pointer', padding:'2px 4px', borderRadius:10 }}>
-            <div style={{ width:34, height:34, borderRadius:'50%', background:'rgba(255,255,255,0.25)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:700, overflow:'hidden', flexShrink:0 }}>
-              {currentUser?.avatar
-                ? <img src={currentUser.avatar.startsWith('http') ? currentUser.avatar : `${process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com'}${currentUser.avatar}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                : (currentUser?.displayName?.[0] || '?')}
-            </div>
+            <AvatarImg
+              src={currentUser?.avatar ? (currentUser.avatar.startsWith('http') ? currentUser.avatar : `${SERVER_URL}${currentUser.avatar}`) : null}
+              name={currentUser?.displayName || currentUser?.username}
+              size={34}
+              frame={currentUser?.avatarFrame || 'none'}
+            />
             <span style={{ color:'white', fontSize:18, fontWeight:800 }}>トーク</span>
           </button>
           <button className="icon-btn" onClick={() => setShowCreateRoom(true)} style={{ fontSize:22, color:'white' }}>✏️</button>
@@ -1752,47 +1753,39 @@ export default function App() {
   const tabVisible = (id) => ({ display: activeTab === id ? 'flex' : 'none', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 });
   const renderTabs = () => (
     <>
-      {/* チャット: 常にマウントしておく */}
+      {/* 全タブ常時マウント（タブ切替でstateリセットされないように） */}
       <div style={tabVisible('chat')}>
         <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} />
       </div>
-      {/* 以下はアクティブ時のみマウント（チャット以外はstate保持不要） */}
+      <div style={tabVisible('friends')}>
+        <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+          <Friends
+            currentUser={currentUser}
+            socket={socket}
+            onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))}
+            onStartChat={async (friend) => {
+              try {
+                await axios.post('/api/rooms/dm', { targetUserId: friend.id || friend._id });
+                setActiveTab('chat');
+              } catch (e) { console.error('DM失敗', e); }
+            }}
+          />
+        </Suspense></ErrorBoundary>
+      </div>
+      <div style={tabVisible('timeline')}>
+        <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+          <Timeline currentUser={currentUser} />
+        </Suspense></ErrorBoundary>
+      </div>
+      <div style={tabVisible('stampshop')}>
+        <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+          <StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} />
+        </Suspense></ErrorBoundary>
+      </div>
       {activeTab === 'dashboard' && (
         <div style={tabVisible('dashboard')}>
           <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
             <Dashboard currentUser={currentUser} onNavigateRoom={() => setActiveTab('chat')} />
-          </Suspense></ErrorBoundary>
-        </div>
-      )}
-      {activeTab === 'friends' && (
-        <div style={tabVisible('friends')}>
-          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-            <Friends
-              currentUser={currentUser}
-              socket={socket}
-              onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))}
-              onStartChat={async (friend) => {
-                try {
-                  await axios.post('/api/rooms/dm', { targetUserId: friend.id || friend._id });
-                  // room:newイベントがSocketで飛んでくるのでタブだけ切り替える
-                  setActiveTab('chat');
-                } catch (e) { console.error('DM失敗', e); }
-              }}
-            />
-          </Suspense></ErrorBoundary>
-        </div>
-      )}
-      {activeTab === 'timeline' && (
-        <div style={tabVisible('timeline')}>
-          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-            <Timeline currentUser={currentUser} />
-          </Suspense></ErrorBoundary>
-        </div>
-      )}
-      {activeTab === 'stampshop' && (
-        <div style={tabVisible('stampshop')}>
-          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-            <StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} />
           </Suspense></ErrorBoundary>
         </div>
       )}
