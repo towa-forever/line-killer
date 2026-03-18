@@ -221,6 +221,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [mentionSuggestions, setMentionSuggestions] = useState([]); // @補完候補
+  const [showExport, setShowExport] = useState(false); // チャットエクスポート
+  const [showScheduleList, setShowScheduleList] = useState(false); // スケジュール一覧
+  const [scheduleList, setScheduleList] = useState([]); // スケジュール済みメッセージ
+  const [searchSender, setSearchSender] = useState(''); // 検索：送信者フィルター
+  const [searchDate, setSearchDate] = useState(''); // 検索：日付フィルター
+  const [notifSettings, setNotifSettings] = useState(() => { // 通知設定
+    try { return JSON.parse(localStorage.getItem('notifSettings') || '{}'); } catch { return {}; }
+  });
+  const [showNotifSettings, setShowNotifSettings] = useState(false);
   const draftRef = useRef({}); // 下書き一時保存 { roomId: text }
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -666,9 +675,20 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           <div className="message-time">
             {isMine && (() => {
               const readCount = (msg.read_by || []).filter(id => id !== currentUser.id).length;
-              if (readCount === 0) return null;
+              if (readCount === 0) return <span style={{ fontSize:11, color:'var(--text2)', marginRight:4 }}>未読</span>;
               return (
-                <span style={{ fontSize:11, color:'#06c755', marginRight:4, fontWeight:600 }}>
+                <span
+                  style={{ fontSize:11, color:'#06c755', marginRight:4, fontWeight:600, cursor:'pointer' }}
+                  onClick={() => {
+                    // 既読した人の詳細を表示
+                    const readers = (msg.read_by || []).filter(id => id !== currentUser.id).map(id => {
+                      const member = selectedRoom?.memberDetails?.find(m => m.id === id);
+                      return member?.displayName || member?.username || id;
+                    });
+                    showToast?.(`既読: ${readers.join('、') || readCount + '人'}`, 'info');
+                  }}
+                  title="タップで詳細表示"
+                >
                   既読 {readCount > 1 ? readCount : ''}
                 </span>
               );
@@ -719,7 +739,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                       position:'absolute', bottom:0, right:0,
                       width:13, height:13, background:'#06c755',
                       border:'2px solid var(--surface)', borderRadius:'50%'
-                    }} />
+                    }} title="オンライン" />
                   )}
                   {unreadCounts[room.id] > 0 && (
                     <span style={{
@@ -788,6 +808,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   { icon:'📞', label:'音声通話', action: () => { const otherId = selectedRoom?.members?.find(m => m !== currentUser.id); setVoiceCall({ targetUser: otherId ? { id: otherId, displayName: selectedRoom.name } : null, isIncoming: false, roomId: selectedRoom?.id, callId: null }); } },
                   { icon:'🤖', label:'AIアシスタント', action: () => setShowAI(true) },
                   { icon:'🎨', label:'背景を変える', action: () => setShowBgPicker(true) },
+                  { icon:'📤', label:'チャットをエクスポート', action: () => setShowExport(true) },
+                  { icon:'⏰', label:'予約送信一覧', action: () => {
+                    axios.get('/api/rooms/' + selectedRoom.id + '/schedules').then(r => { setScheduleList(r.data || []); setShowScheduleList(true); }).catch(() => setShowScheduleList(true));
+                  }},
+                  { icon:'🔔', label:'通知設定', action: () => setShowNotifSettings(true) },
                 ].map(item => (
                   <button key={item.label} className="header-menu-item" onClick={item.action}>
                     <span className="header-menu-icon">{item.icon}</span>
@@ -1051,6 +1076,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   <button className="btn btn-primary" onClick={() => {
                     if (!scheduleText.trim() || !scheduleAt) return;
                     axios.post('/api/rooms/' + selectedRoom.id + '/schedule', { content: scheduleText.trim(), sendAt: scheduleAt })
+                      .then(() => showToast?.('予約送信を設定したで！⏰', 'success'))
                       .catch(e => console.error(e));
                     setShowSchedule(false); setScheduleText(''); setScheduleAt('');
                   }}>予約する</button>
@@ -1058,6 +1084,115 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               </div>
             </div>
           )}
+
+          {/* 予約送信一覧 */}
+          {showScheduleList && (
+            <div className="modal-overlay" onClick={() => setShowScheduleList(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflowY:'auto' }}>
+                <div className="modal-title">⏰ 予約送信一覧</div>
+                {scheduleList.length === 0
+                  ? <div style={{ textAlign:'center', color:'var(--text2)', padding:20 }}>予約中のメッセージはないで</div>
+                  : scheduleList.map(s => (
+                    <div key={s.id} style={{ padding:'12px 0', borderBottom:'1px solid var(--border)' }}>
+                      <div style={{ fontSize:13, color:'var(--primary)', marginBottom:4 }}>
+                        📅 {new Date(s.send_at || s.sendAt).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}
+                      </div>
+                      <div style={{ fontSize:14, color:'var(--text)' }}>{s.content}</div>
+                      <button onClick={() => {
+                        axios.delete('/api/schedules/' + s.id).then(() => {
+                          setScheduleList(prev => prev.filter(x => x.id !== s.id));
+                          showToast?.('予約を取り消したで', 'info');
+                        }).catch(() => {});
+                      }} style={{ marginTop:6, fontSize:12, color:'var(--danger)', background:'none', border:'none', cursor:'pointer', padding:0 }}>
+                        🗑️ キャンセル
+                      </button>
+                    </div>
+                  ))
+                }
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowScheduleList(false)}>閉じる</button>
+              </div>
+            </div>
+          )}
+
+          {/* チャットエクスポート */}
+          {showExport && (
+            <div className="modal-overlay" onClick={() => setShowExport(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-title">📤 チャットをエクスポート</div>
+                <div style={{ fontSize:13, color:'var(--text2)', marginBottom:16, lineHeight:1.6 }}>
+                  このトークの内容をテキストファイルとしてダウンロードできるで。
+                </div>
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setShowExport(false)}>キャンセル</button>
+                  <button className="btn btn-primary" onClick={() => {
+                    const lines = messages
+                      .filter(m => !m.deleted)
+                      .map(m => {
+                        const time = new Date(m.createdAt || m.created_at).toLocaleString('ja-JP');
+                        const type = m.type === 'image' ? '[画像]' : m.type === 'file' ? '[ファイル]' : m.type === 'stamp' ? '[スタンプ]' : m.content || '';
+                        return `[${time}] ${m.senderName}: ${type}`;
+                      });
+                    const text = `=== ${selectedRoom.name} ===\nエクスポート日時: ${new Date().toLocaleString('ja-JP')}\n\n` + lines.join('\n');
+                    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = `${selectedRoom.name}_${new Date().toISOString().slice(0,10)}.txt`;
+                    document.body.appendChild(a); a.click();
+                    document.body.removeChild(a); URL.revokeObjectURL(url);
+                    setShowExport(false);
+                    showToast?.('エクスポート完了！', 'success');
+                  }}>📥 ダウンロード</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 通知設定モーダル */}
+          {showNotifSettings && selectedRoom && (
+            <div className="modal-overlay" onClick={() => setShowNotifSettings(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-title">🔔 通知設定</div>
+                <div style={{ fontSize:14, color:'var(--text2)', marginBottom:16 }}>{selectedRoom.name} の通知設定</div>
+                {[
+                  { key: 'all', label: '🔔 全ての通知', desc: 'メッセージ受信時に通知' },
+                  { key: 'mention', label: '📣 メンション通知のみ', desc: '@メンションされた時だけ通知' },
+                  { key: 'mute', label: '🔕 通知オフ', desc: '通知を受け取らない' },
+                ].map(opt => {
+                  const current = notifSettings[selectedRoom.id] || 'all';
+                  return (
+                    <div key={opt.key} onClick={() => {
+                      const updated = { ...notifSettings, [selectedRoom.id]: opt.key };
+                      setNotifSettings(updated);
+                      localStorage.setItem('notifSettings', JSON.stringify(updated));
+                      if (opt.key === 'mute') {
+                        setMutedRooms(prev => new Set([...prev, selectedRoom.id]));
+                        axios.post('/api/rooms/' + selectedRoom.id + '/mute').catch(() => {});
+                      } else if (current === 'mute') {
+                        setMutedRooms(prev => { const n = new Set(prev); n.delete(selectedRoom.id); return n; });
+                        axios.delete('/api/rooms/' + selectedRoom.id + '/mute').catch(() => {});
+                      }
+                    }} style={{
+                      display:'flex', alignItems:'center', gap:12, padding:'14px 4px',
+                      borderBottom:'1px solid var(--border)', cursor:'pointer'
+                    }}>
+                      <div style={{
+                        width:22, height:22, borderRadius:'50%', border:'2px solid',
+                        borderColor: current === opt.key ? 'var(--primary)' : 'var(--border)',
+                        background: current === opt.key ? 'var(--primary)' : 'transparent',
+                        flexShrink:0
+                      }} />
+                      <div>
+                        <div style={{ fontWeight:600 }}>{opt.label}</div>
+                        <div style={{ fontSize:12, color:'var(--text2)' }}>{opt.desc}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:16 }} onClick={() => setShowNotifSettings(false)}>完了</button>
+              </div>
+            </div>
+          )}
+
           {showPollCreator && (
             <div className="modal-overlay" onClick={() => setShowPollCreator(false)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1341,25 +1476,61 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           )}
           {showSearch && (
             <div style={{ position:'fixed', inset:0, background:'var(--bg)', zIndex:2000, display:'flex', flexDirection:'column' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px', borderBottom:'1px solid var(--border)', background:'var(--surface)' }}>
-                <button onClick={() => setShowSearch(false)} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
-                <input
-                  autoFocus
-                  value={searchQuery}
-                  onChange={async (e) => {
-                    const q = e.target.value;
-                    setSearchQuery(q);
-                    if (!q.trim()) { setSearchResults([]); return; }
+              <div style={{ background:'var(--surface)', borderBottom:'1px solid var(--border)' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px' }}>
+                  <button onClick={() => { setShowSearch(false); setSearchSender(''); setSearchDate(''); }} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
+                  <input
+                    autoFocus
+                    value={searchQuery}
+                    onChange={async (e) => {
+                      const q = e.target.value;
+                      setSearchQuery(q);
+                      if (!q.trim() && !searchSender && !searchDate) { setSearchResults([]); return; }
+                      setSearchLoading(true);
+                      try {
+                        const params = new URLSearchParams();
+                        if (q.trim()) params.set('q', q);
+                        if (searchSender) params.set('sender', searchSender);
+                        if (searchDate) params.set('date', searchDate);
+                        const res = await axios.get(`/api/rooms/${selectedRoom.id}/search?${params}`);
+                        setSearchResults(res.data);
+                      } catch {}
+                      finally { setSearchLoading(false); }
+                    }}
+                    placeholder="メッセージを検索..."
+                    style={{ flex:1, padding:'8px 12px', borderRadius:20, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)', fontSize:15, outline:'none' }}
+                  />
+                </div>
+                {/* フィルター */}
+                <div style={{ display:'flex', gap:8, padding:'0 12px 10px', overflowX:'auto' }}>
+                  <input
+                    value={searchSender}
+                    onChange={e => setSearchSender(e.target.value)}
+                    placeholder="👤 送信者名"
+                    style={{ padding:'6px 10px', borderRadius:16, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)', fontSize:13, outline:'none', minWidth:100 }}
+                  />
+                  <input
+                    type="date"
+                    value={searchDate}
+                    onChange={e => setSearchDate(e.target.value)}
+                    style={{ padding:'6px 10px', borderRadius:16, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)', fontSize:13, outline:'none' }}
+                  />
+                  <button onClick={async () => {
+                    if (!searchQuery.trim() && !searchSender && !searchDate) return;
                     setSearchLoading(true);
                     try {
-                      const res = await axios.get(`/api/rooms/${selectedRoom.id}/search?q=${encodeURIComponent(q)}`);
+                      const params = new URLSearchParams();
+                      if (searchQuery.trim()) params.set('q', searchQuery);
+                      if (searchSender) params.set('sender', searchSender);
+                      if (searchDate) params.set('date', searchDate);
+                      const res = await axios.get(`/api/rooms/${selectedRoom.id}/search?${params}`);
                       setSearchResults(res.data);
                     } catch {}
                     finally { setSearchLoading(false); }
-                  }}
-                  placeholder="メッセージを検索..."
-                  style={{ flex:1, padding:'8px 12px', borderRadius:20, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)', fontSize:15, outline:'none' }}
-                />
+                  }} style={{ padding:'6px 14px', borderRadius:16, background:'var(--primary)', color:'white', border:'none', fontSize:13, fontWeight:700, cursor:'pointer', flexShrink:0 }}>
+                    検索
+                  </button>
+                </div>
               </div>
               <div style={{ flex:1, overflowY:'auto', padding:8 }}>
                 {searchLoading && <div style={{ textAlign:'center', padding:20, color:'var(--text2)' }}>検索中...</div>}

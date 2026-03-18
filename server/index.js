@@ -1480,15 +1480,21 @@ app.get('/api/rooms/:roomId/search', async (req, res) => {
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
     if (!room) return res.status(403).json({ error: '権限なし' });
     const q = req.query.q || '';
-    const query = {
-      room_id: req.params.roomId, deleted: false,
-      $or: [
-        { content: new RegExp(q, 'i') },
-        { sender_name: new RegExp(q, 'i') },
-      ]
-    };
-    const msgs = await Message.find(query).sort({ created_at: 1 }).limit(50);
-    res.json(msgs.map(m => ({
+    const sender = req.query.sender || '';
+    const date = req.query.date || '';
+    const query = { room_id: req.params.roomId, deleted: false };
+    // テキスト検索
+    if (q) query.content = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    // 送信者フィルター
+    if (sender) query.sender_name = new RegExp(sender.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    // 日付フィルター
+    if (date) {
+      const start = new Date(date); start.setHours(0, 0, 0, 0);
+      const end = new Date(date); end.setHours(23, 59, 59, 999);
+      query.created_at = { $gte: start, $lte: end };
+    }
+    const msgs = await Message.find(query).sort({ created_at: -1 }).limit(100);
+    res.json(msgs.reverse().map(m => ({
       id: m.id, content: m.content, type: m.type,
       senderId: m.sender_id, senderName: m.sender_name,
       createdAt: m.created_at, roomId: m.room_id,
@@ -2331,11 +2337,27 @@ app.post('/api/rooms/:roomId/schedule', async (req, res) => {
     res.json(msg);
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
+// スケジュール一覧（/schedules エイリアス）
+app.get('/api/rooms/:roomId/schedules', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const msgs = await ScheduledMessage.find({ room_id: req.params.roomId, sender_id: decoded.id, sent: false }).sort({ send_at: 1 });
+    res.json(msgs);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
 app.get('/api/rooms/:roomId/scheduled', async (req, res) => {
   try {
     const decoded = auth(req);
     const msgs = await ScheduledMessage.find({ room_id: req.params.roomId, sender_id: decoded.id, sent: false }).sort({ send_at: 1 });
     res.json(msgs);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+// スケジュールキャンセル（/schedules エイリアス）
+app.delete('/api/schedules/:id', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await ScheduledMessage.deleteOne({ id: req.params.id, sender_id: decoded.id });
+    res.json({ ok: true });
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 app.delete('/api/scheduled/:id', async (req, res) => {
