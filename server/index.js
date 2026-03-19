@@ -1033,6 +1033,7 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
       update.secret_answer = await bcrypt.hash(secretAnswer.trim().toLowerCase(), 10);
     }
     const user = await User.findOneAndUpdate({ id: decoded.id }, update, { new: true, projection: { password: 0 } });
+    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
     const userRes = {
       id: user.id, username: user.username, avatar: user.avatar || null,
       coverImage: user.cover_image || '',
@@ -1050,7 +1051,7 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
     };
     io.emit('user:updated', userRes);
     res.json(userRes);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // 友だち申請
@@ -1428,7 +1429,11 @@ app.post('/api/rooms/:roomId/members', async (req, res) => {
       { $addToSet: { members: { $each: memberIds } } }, { new: true }
     );
     if (!room) return res.status(403).json({ error: '権限なし' });
-    memberIds.forEach(mid => io.to('user_' + mid).emit('room:new', room));
+    // memberDetailsを含めてroom:newを送信
+    const memberUsers = await User.find({ id: { $in: room.members } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
+    const memberDetails = memberUsers.map(u => ({ id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar }));
+    const roomObj = { id: room.id, name: room.name, icon: room.icon, members: room.members, memberDetails, pinned_message_id: room.pinned_message_id, lastMessage: null };
+    memberIds.forEach(mid => io.to('user_' + mid).emit('room:new', roomObj));
     io.to(req.params.roomId).emit('room:members_updated', { roomId: req.params.roomId, members: room.members });
     res.json({ members: room.members });
   } catch { res.status(401).json({ error: '認証エラー' }); }
