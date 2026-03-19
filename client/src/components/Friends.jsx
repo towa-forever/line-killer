@@ -65,7 +65,13 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
   };
 
   const acceptRequest = async (requestId) => {
-    try { await axios.post(`/api/friend-requests/${requestId}/accept`); showMsg('友達になりました！🎉'); fetchRequests(); fetchFriends(); } catch {}
+    try {
+      await axios.post(`/api/friend-requests/${requestId}/accept`);
+      showMsg('友達になりました！🎉');
+      fetchRequests();
+      fetchFriends();
+      setTimeout(() => setTab('list'), 1000); // 1秒後に友達タブに移動
+    } catch {}
   };
 
   const rejectRequest = async (requestId) => {
@@ -173,7 +179,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
         <div className="friends-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}><span>友達</span></div>
         <div style={{ display:'flex' }}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'list') fetchFriends(); if (t.id === 'requests') fetchRequests(); }}
               style={{ flex:1, padding:'8px 0 10px', background:'none', border:'none', color: tab===t.id ? 'white' : 'rgba(255,255,255,0.65)', fontSize:11, fontWeight: tab===t.id ? 700 : 400, cursor:'pointer', position:'relative',
                 borderBottom: tab===t.id ? '2.5px solid white' : '2.5px solid transparent', transition:'all 0.15s' }}>
               <div style={{ fontSize:20, marginBottom:2 }}>{t.icon}</div>

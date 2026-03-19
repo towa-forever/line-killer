@@ -1815,14 +1815,11 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('call:start', async ({ roomId, offer, to }) => {
-    console.log(`[call:start] from:${socket.user.username} to:${to} roomId:${roomId} offer:${!!offer}`);
-    if (!offer) { console.error('[call:start] offerがない！'); return; }
+    try {
+    if (!offer) return;
     if (to) {
-      // user_<id> ルームに送信
-      const sockets = await io.in('user_' + to).allSockets();
-      console.log(`[call:start] user_${to} のsocket数: ${sockets.size}`);
       io.to('user_' + to).emit('call:incoming', { from: socket.user.id, fromName: socket.user.username, offer, roomId });
-    } else {
+    } else if (roomId) {
       socket.to(roomId).emit('call:incoming', { from: socket.user.id, fromName: socket.user.username, offer, roomId });
     }
     if (roomId) {
@@ -1836,6 +1833,7 @@ io.on('connection', async (socket) => {
         io.to(roomId).emit('message:receive', { id: msg.id, roomId: msg.room_id, senderId: msg.sender_id, senderName: msg.sender_name, content: msg.content, type: msg.type, createdAt: msg.created_at, read_by: msg.read_by || [], reactions: [] });
       } catch (_) {}
     }
+    } catch (e) { console.error('call:start error:', e); }
   });
 
   socket.on('call:answer', ({ answer, to }) => {
