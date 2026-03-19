@@ -1664,9 +1664,10 @@ io.on('connection', async (socket) => {
   myRooms.forEach(r => socket.join(r.id));
 
   socket.on('room:join', async (roomId) => {
-    // 自分がメンバーのルームのみjoin許可
-    const room = await Room.findOne({ id: roomId, members: socket.user.id });
-    if (room) socket.join(roomId);
+    try {
+      const room = await Room.findOne({ id: roomId, members: socket.user.id });
+      if (room) socket.join(roomId);
+    } catch (e) { console.error('room:join error:', e); }
   });
 
   // メッセージ送信レートリミット（10秒間に20件まで）
@@ -1686,11 +1687,6 @@ io.on('connection', async (socket) => {
     if (content && content.length > 4000) return;
     const room = await Room.findOne({ id: roomId, members: socket.user.id });
     if (!room) return;
-    if (room.members.length === 2) {
-      const otherId = room.members.find(m => m !== socket.user.id);
-      const isFriend = await Friend.findOne({ user_id: socket.user.id, friend_id: otherId });
-      if (!isFriend) return;
-    }
     const id = uuidv4();
     const msg = await Message.create({
       id, room_id: roomId, sender_id: socket.user.id, sender_name: socket.user.username,
