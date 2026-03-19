@@ -340,7 +340,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         return prev;
       });
     });
-    socket.on('room:new', (room) => setRooms((prev) => [room, ...prev]));
+    socket.on('room:new', (room) => {
+      setRooms((prev) => prev.find(r => r.id === room.id) ? prev : [room, ...prev]);
+      // 新しいルームのsocketルームにjoinしてリアルタイムでメッセージを受け取れるようにする
+      if (room.id) socket.emit('room:join', room.id);
+    });
     socket.on('room:updated', ({ roomId, name, icon }) => {
       setRooms((prev) => prev.map(r => r.id === roomId ? { ...r, ...(name && { name }), ...(icon && { icon }) } : r));
       setSelectedRoom((prev) => prev?.id === roomId ? { ...prev, ...(name && { name }), ...(icon && { icon }) } : prev);
