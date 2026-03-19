@@ -523,9 +523,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     const cursor = ta.selectionStart;
     const textBefore = val.slice(0, cursor);
     const atMatch = textBefore.match(/@(\S*)$/);
-    if (atMatch && selectedRoom?.members?.length > 0) {
+    if (atMatch && selectedRoom?.memberDetails?.length > 0) {
       const q = atMatch[1].toLowerCase();
-      const members = selectedRoom.members.filter(m =>
+      const members = (selectedRoom.memberDetails || []).filter(m =>
         m.id !== currentUser.id &&
         (m.username?.toLowerCase().includes(q) || m.displayName?.toLowerCase().includes(q))
       ).slice(0, 5);
@@ -815,6 +815,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             {showHeaderMenu && (
               <div className="header-menu-dropdown" onClick={() => setShowHeaderMenu(false)}>
                 {[
+                  { icon:'🔍', label:'全体検索', action: () => { setShowGlobalSearch(true); setShowHeaderMenu(false); } },
+                  { icon:'⭐', label:'お気に入り', action: () => {
+                    axios.get('/api/favorites').then(r => { setFavoritesList(r.data); setShowFavorites(true); }).catch(() => {});
+                  }},
                   { icon:'📊', label:'チャット統計', action: () => setShowStats(true) },
                   { icon:'🔖', label:'ブックマーク', action: () => { axios.get('/api/bookmarks').then(r => { setBookmarkedMsgs(r.data); setShowBookmarks(true); }).catch(() => {}); } },
                   { icon: mutedRooms.has(selectedRoom.id)?'🔕':'🔔', label: mutedRooms.has(selectedRoom.id)?'ミュート解除':'ミュート', action: () => {
@@ -1298,15 +1302,22 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <div className="modal-title">👥 メンバー管理</div>
                 <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12 }}>{selectedRoom.members?.length}人</div>
                 {selectedRoom.members?.map(mid => {
+                  // memberDetailsから詳細情報を取得
+                  const detail = selectedRoom.memberDetails?.find(d => d.id === mid);
                   const friend = friendsList.find(f => (f.id || f._id) === mid);
-                  const name = friend ? (friend.display_name || friend.username) : mid === currentUser.id ? (currentUser.displayName || currentUser.username) : '(不明なユーザー)';
+                  const name = detail?.displayName || detail?.username || friend?.display_name || friend?.username
+                    || (mid === currentUser.id ? (currentUser.displayName || currentUser.username) : '(不明なユーザー)');
+                  const avatar = detail?.avatar || friend?.avatar;
                   const isCreator = mid === selectedRoom.creator_id;
                   const isMe = mid === currentUser.id;
                   const amCreator = currentUser.id === selectedRoom.creator_id;
                   return (
                     <div key={mid} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
-                      <div style={{ width:40, height:40, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700, flexShrink:0 }}>
-                        {name?.[0] || '?'}
+                      <div style={{ width:40, height:40, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700, flexShrink:0, overflow:'hidden' }}>
+                        {avatar
+                          ? <img src={avatar.startsWith('http') ? avatar : `${SERVER_URL}${avatar}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                          : name?.[0] || '?'
+                        }
                       </div>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:14, fontWeight: isCreator ? 700 : 400 }}>{name}{isMe ? ' (自分)' : ''}</div>
