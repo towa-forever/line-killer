@@ -1,15 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 
-export default function CreateRoom({ currentUser, friendsList = [], onClose, onCreated }) {
+export default function CreateRoom({ currentUser, friendsList: initialFriends = [], onClose, onCreated, onOpen }) {
   const [tab, setTab] = useState('dm');
-  const [friends] = useState(friendsList);
+  const [friends, setFriends] = useState(initialFriends);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [groupName, setGroupName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // マウント時に最新の友達リストを取得
+  useEffect(() => {
+    setLoading(true);
+    axios.get('/api/friends')
+      .then(res => { setFriends(Array.isArray(res.data) ? res.data : []); })
+      .catch(() => { setFriends(Array.isArray(initialFriends) ? initialFriends : []); })
+      .finally(() => setLoading(false));
+    if (onOpen) onOpen();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleUser = (userId) => {
     setSelectedUsers((prev) =>
@@ -59,7 +70,9 @@ export default function CreateRoom({ currentUser, friendsList = [], onClose, onC
         )}
 
         <div style={{ maxHeight: 280, overflowY: 'auto', margin: '10px 0' }}>
-          {friends.length === 0 ? (
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text2)' }}>読み込み中...</div>
+          ) : friends.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 24, color: 'var(--text2)', fontSize: 14 }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>👥</div>
               友達を追加してからトークを作成できます

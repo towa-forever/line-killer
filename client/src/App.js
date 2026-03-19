@@ -1739,8 +1739,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         </Suspense>
       )}
       {showCreateRoom && (
-        <ErrorBoundary><Suspense fallback={null}><CreateRoom currentUser={currentUser} friendsList={friendsList} onClose={() => setShowCreateRoom(false)}
-          onCreated={(room) => { setRooms((prev) => [room, ...prev]); setSelectedRoom(room); setShowCreateRoom(false); }} /></Suspense></ErrorBoundary>
+        <ErrorBoundary><Suspense fallback={null}><CreateRoom
+          currentUser={currentUser}
+          friendsList={friendsList}
+          onOpen={() => { /* friendsList はCreateRoom内でAPIから自動取得 */ }}
+          onClose={() => setShowCreateRoom(false)}
+          onCreated={(room) => { setRooms((prev) => prev.find(r => r.id === room.id) ? prev : [room, ...prev]); setSelectedRoom(room); setShowCreateRoom(false); }}
+        /></Suspense></ErrorBoundary>
       )}
     </div>
   );
@@ -1849,7 +1854,11 @@ export default function App() {
       showToast(`${data.from_name} から友達申請が届きました`);
       setNotifications((prev) => ({ ...prev, friends: prev.friends + 1 }));
     });
-    s.on('friend:accepted', (data) => showToast(`${data.by_name} と友達になりました！`, 'success'));
+    s.on('friend:accepted', (data) => {
+      showToast(`${data.by_name} と友達になりました！`, 'success');
+      // 友達リストを自動更新
+      axios.get('/api/friends').then(res => setFriendsList(res.data)).catch(() => {});
+    });
     // message:edited / message:deleted はChatScreen内のuseEffectで処理
     s.on('user:online', ({ userId }) => setOnlineUsers(prev => new Set([...prev, userId])));
     s.on('user:offline', ({ userId }) => setOnlineUsers(prev => { const n = new Set(prev); n.delete(userId); return n; }));
@@ -1979,8 +1988,12 @@ export default function App() {
             onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))}
             onStartChat={async (friend) => {
               try {
-                await axios.post('/api/rooms/dm', { targetUserId: friend.id || friend._id });
-                setActiveTab('chat');
+                const res = await axios.post('/api/rooms/dm', { targetUserId: friend.id || friend._id });
+                if (res.data) {
+                  // friendsListも更新
+                  axios.get('/api/friends').then(r => setFriendsList(r.data)).catch(() => {});
+                  setActiveTab('chat');
+                }
               } catch (e) { console.error('DM失敗', e); }
             }}
           />

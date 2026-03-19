@@ -81,7 +81,8 @@ const MessageSchema = new mongoose.Schema({
 
 const FriendSchema = new mongoose.Schema({
   user_id: String,
-  friend_id: String
+  friend_id: String,
+  created_at: { type: Date, default: Date.now }
 });
 
 const FriendRequestSchema = new mongoose.Schema({

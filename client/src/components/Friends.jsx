@@ -19,13 +19,18 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
 
   const showMsg = (text, type = 'success') => { setMessage(text); setMessageType(type); setTimeout(() => setMessage(''), 3000); };
 
-  const fetchFriends  = useCallback(async () => { try { const r = await axios.get('/api/friends'); setFriends(Array.isArray(r.data) ? r.data : []); } catch {} }, []);
-  const fetchRequests = useCallback(async () => { try { const r = await axios.get('/api/friend-requests'); setRequests(r.data); } catch {} }, []);
+  const fetchFriends  = useCallback(async () => {
+    try { const r = await axios.get('/api/friends'); setFriends(Array.isArray(r.data) ? r.data : []); }
+    catch { setFriends(prev => prev); /* エラー時は現状維持 */ }
+  }, []);
+  const fetchRequests = useCallback(async () => { try { const r = await axios.get('/api/friend-requests'); setRequests(Array.isArray(r.data) ? r.data : []); } catch {} }, []);
   const fetchOnline   = useCallback(async () => { try { const r = await axios.get('/api/users/online'); setOnlineUsers(r.data || []); } catch {} }, []);
 
   useEffect(() => {
     fetchFriends(); fetchRequests(); fetchOnline();
     if (onClearNotif) onClearNotif();
+    const timer = setInterval(() => { fetchFriends(); fetchOnline(); }, 30000);
+    return () => clearInterval(timer);
   }, [fetchFriends, fetchRequests, fetchOnline, onClearNotif]);
 
   useEffect(() => {

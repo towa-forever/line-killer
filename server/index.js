@@ -549,7 +549,13 @@ app.post('/api/auth/register', async (req, res) => {
     const id = uuidv4();
     await User.create({ id, username: uname, password: hashed });
     const token = jwt.sign({ id, username: uname }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id, username: uname, avatar: null, displayName: uname, bio: '', status: '' } });
+    res.json({ token, user: {
+      id, username: uname, avatar: null, displayName: uname,
+      coverImage: '', bio: '', status: '',
+      avatarFrame: 'none', soundTheme: 'default',
+      pinEnabled: false, secretQuestion: '', blockedUsers: [],
+      mutedRooms: [], bookmarks: [], coins: 100, parentAccountId: null,
+    }});
   } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
@@ -566,7 +572,21 @@ app.post('/api/auth/login', async (req, res) => {
     const ua = req.headers['user-agent'] || '';
     await User.findOneAndUpdate({ id: user.id }, { $push: { login_history: { $each: [{ ip, ua, at: new Date() }], $slice: -20 } } });
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, displayName: user.display_name || user.username, bio: user.bio || '', status: user.status || '', pinEnabled: user.pin_enabled || false } });
+    res.json({ token, user: {
+      id: user.id, username: user.username, avatar: user.avatar || null,
+      displayName: user.display_name || user.username,
+      coverImage: user.cover_image || '',
+      bio: user.bio || '', status: user.status || '',
+      avatarFrame: user.avatar_frame || 'none',
+      soundTheme: user.sound_theme || 'default',
+      pinEnabled: user.pin_enabled || false,
+      secretQuestion: user.secret_question || '',
+      blockedUsers: user.blocked_users || [],
+      mutedRooms: user.muted_rooms || [],
+      bookmarks: user.bookmarked_messages || [],
+      coins: user.coins || 0,
+      parentAccountId: user.parent_account_id || null,
+    }});
   } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
@@ -584,6 +604,24 @@ app.get('/api/auth/me', async (req, res) => {
       pinEnabled: user.pin_enabled || false, secretQuestion: user.secret_question || '',
       blockedUsers: user.blocked_users || [],
     }});
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
+// /api/users/me のエイリアス（GETのみ）
+app.get('/api/users/me', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { password: 0 });
+    if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
+    res.json({
+      id: user.id, username: user.username, avatar: user.avatar,
+      coverImage: user.cover_image || '', displayName: user.display_name || user.username,
+      bio: user.bio || '', status: user.status || '',
+      mutedRooms: user.muted_rooms || [], bookmarks: user.bookmarked_messages || [],
+      avatarFrame: user.avatar_frame || 'none', soundTheme: user.sound_theme || 'default',
+      pinEnabled: user.pin_enabled || false, secretQuestion: user.secret_question || '',
+      blockedUsers: user.blocked_users || [], coins: user.coins || 0,
+    });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
@@ -996,7 +1034,7 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
     }
     const user = await User.findOneAndUpdate({ id: decoded.id }, update, { new: true, projection: { password: 0 } });
     const userRes = {
-      id: user.id, username: user.username, avatar: user.avatar,
+      id: user.id, username: user.username, avatar: user.avatar || null,
       coverImage: user.cover_image || '',
       displayName: user.display_name || user.username,
       bio: user.bio || '', status: user.status || '',
@@ -1004,6 +1042,11 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
       soundTheme: user.sound_theme || 'default',
       secretQuestion: user.secret_question || '',
       pinEnabled: user.pin_enabled || false,
+      blockedUsers: user.blocked_users || [],
+      mutedRooms: user.muted_rooms || [],
+      bookmarks: user.bookmarked_messages || [],
+      coins: user.coins || 0,
+      parentAccountId: user.parent_account_id || null,
     };
     io.emit('user:updated', userRes);
     res.json(userRes);

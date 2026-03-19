@@ -6,12 +6,12 @@ const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-serv
 
 export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccount, darkMode, onToggleDark, darkAutoMode, onToggleAuto, onContact, onOpenPinSetup }) {
   const [editing, setEditing] = useState(false);
-  const [displayName, setDisplayName] = useState(currentUser.displayName || '');
-  const [bio, setBio] = useState(currentUser.bio || '');
+  const [displayName, setDisplayName] = useState(currentUser?.displayName || '');
+  const [bio, setBio] = useState(currentUser?.bio || '');
   const [saving, setSaving] = useState(false);
-  const [selectedFrame, setSelectedFrame] = useState(currentUser.avatarFrame || 'none');
-  const [selectedSound, setSelectedSound] = useState(currentUser.soundTheme || 'default');
-  const [statusText, setStatusText] = useState(currentUser.status || '');
+  const [selectedFrame, setSelectedFrame] = useState(currentUser?.avatarFrame || 'none');
+  const [selectedSound, setSelectedSound] = useState(currentUser?.soundTheme || 'default');
+  const [statusText, setStatusText] = useState(currentUser?.status || '');
   const [message, setMessage] = useState('');
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [avatarFile, setAvatarFile] = useState(null);
@@ -58,8 +58,8 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   const loadBlockedUsers = async () => {
     setLoadingBlocked(true);
     try {
-      const res = await axios.get('/api/users/me');
-      setBlockedUsers(res.data.blockedUsers || []);
+      const res = await axios.get('/api/auth/me');
+      setBlockedUsers(res.data.user?.blockedUsers || []);
     } catch { setBlockedUsers([]); }
     finally { setLoadingBlocked(false); }
   };
@@ -194,8 +194,8 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
     qrInputRef.current?.click();
   };
 
-  const avatarSrc  = avatarPreview  || (currentUser.avatar     ? (currentUser.avatar.startsWith('http') ? currentUser.avatar : `${SERVER_URL}${currentUser.avatar}`) : null);
-  const coverSrc   = coverPreview   || (currentUser.coverImage ? (currentUser.coverImage.startsWith('http') ? currentUser.coverImage : `${SERVER_URL}${currentUser.coverImage}`) : null);
+  const avatarSrc  = avatarPreview  || (currentUser?.avatar     ? (currentUser?.avatar?.startsWith('http') ? currentUser?.avatar : `${SERVER_URL}${currentUser?.avatar}`) : null);
+  const coverSrc   = coverPreview   || (currentUser?.coverImage ? (currentUser?.coverImage?.startsWith('http') ? currentUser?.coverImage : `${SERVER_URL}${currentUser?.coverImage}`) : null);
 
   const FRAMES = [{id:'none',label:'なし'},{id:'gold',label:'✨ ゴールド'},{id:'rainbow',label:'🌈 レインボー'},{id:'heart',label:'💗 ハート'},{id:'blue',label:'💙 ブルー'},{id:'glow',label:'💚 グロー'}];
   const SOUNDS = [
@@ -246,7 +246,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
             {avatarSrc ? (
               <img src={avatarSrc} alt="avatar" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'3px solid var(--surface)' }} />
             ) : (
-              <div className="profile-avatar">{currentUser.displayName?.[0] || currentUser.username?.[0] || '?'}</div>
+              <div className="profile-avatar">{currentUser?.displayName?.[0] || currentUser?.username?.[0] || '?'}</div>
             )}
             {editing && (
               <button onClick={() => fileInputRef.current?.click()} style={{
@@ -269,9 +269,9 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
             </>
           ) : (
             <>
-              <div className="profile-name">{currentUser.displayName || currentUser.username}</div>
-              <div className="profile-username">@{currentUser.username}</div>
-              {currentUser.bio && <div className="profile-bio">{currentUser.bio}</div>}
+              <div className="profile-name">{currentUser?.displayName || currentUser?.username}</div>
+              <div className="profile-username">@{currentUser?.username}</div>
+              {currentUser?.bio && <div className="profile-bio">{currentUser?.bio}</div>}
               <button className="btn btn-secondary" style={{ marginTop:12 }} onClick={() => setEditing(true)}>✏️ 編集</button>
             </>
           )}
@@ -283,7 +283,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
       <div className="card" style={{ margin:10, textAlign:'center' }}>
         <div className="profile-section-title">マイQRコード</div>
         <div style={{ display:'inline-block', padding:12, background:'white', borderRadius:8, marginTop:8 }}>
-          <QRCode value={`linekiller://add/${currentUser.username}`} size={150} level="H" />
+          <QRCode value={`linekiller://add/${currentUser?.username}`} size={150} level="H" />
         </div>
         <p style={{ marginTop:8, fontSize:12, color:'var(--text2)' }}>QRを読み取って友達追加</p>
         <div style={{ display:'flex', gap:8, justifyContent:'center', marginTop:8 }}>
@@ -408,7 +408,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
         <div className="setting-row" onClick={onOpenPinSetup} style={{ cursor:'pointer' }}>
           <div>
             <div>🔒 2段階認証（PIN）</div>
-            <div style={{ fontSize:11, color:'var(--text2)' }}>{currentUser.pinEnabled ? '設定済み ✅' : '未設定'}</div>
+            <div style={{ fontSize:11, color:'var(--text2)' }}>{currentUser?.pinEnabled ? '設定済み ✅' : '未設定'}</div>
           </div>
           <span style={{ color:'var(--text2)', fontSize:18 }}>›</span>
         </div>
@@ -417,7 +417,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
         <div className="setting-row" onClick={() => setShowSecForm(v=>!v)} style={{ cursor:'pointer' }}>
           <div>
             <div>❓ 秘密の質問</div>
-            <div style={{ fontSize:11, color:'var(--text2)' }}>{currentUser.secretQuestion ? `設定済み: ${currentUser.secretQuestion}` : '未設定（パスワードリセット用）'}</div>
+            <div style={{ fontSize:11, color:'var(--text2)' }}>{currentUser?.secretQuestion ? `設定済み: ${currentUser?.secretQuestion}` : '未設定（パスワードリセット用）'}</div>
           </div>
           <span style={{ color:'var(--text2)', fontSize:18 }}>{showSecForm ? '∨' : '›'}</span>
         </div>
@@ -593,7 +593,7 @@ function SubAccountSection({ currentUser, subAccounts, setSubAccounts, showSubMo
 
   const switchToParent = async () => {
     try {
-      const res = await axios.post(`/api/sub-accounts/${currentUser.id}/switch`);
+      const res = await axios.post(`/api/sub-accounts/${currentUser?.id}/switch`);
       onSwitchAccount?.(res.data.token, res.data.user);
     } catch {}
   };
