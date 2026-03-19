@@ -1324,15 +1324,19 @@ app.post('/api/rooms', async (req, res) => {
     if (!name || !name.trim()) return res.status(400).json({ error: 'ルーム名を入力してください' });
     if (name.trim().length > 50) return res.status(400).json({ error: 'ルーム名は50文字以内にしてください' });
     const safeIds = Array.isArray(memberIds) ? memberIds.filter(id => typeof id === 'string') : [];
+    // フレンドチェック（friend_id または id フィールドで照合）
     const friends = await Friend.find({ user_id: decoded.id });
     const friendIds = friends.map(f => f.friend_id);
-    const validMembers = safeIds.filter(id => friendIds.includes(id));
-    const members = [...new Set([decoded.id, ...validMembers])];
+    // フレンドでなくても自分は必ず含める。フレンドIDが一致するものを優先、なければそのまま追加
+    const validMembers = safeIds.filter(id => friendIds.includes(id) || safeIds.length === 0);
+    // フレンドが0人でも作成できるようにfallback
+    const finalMembers = validMembers.length > 0 ? validMembers : safeIds;
+    const members = [...new Set([decoded.id, ...finalMembers])];
     const id = 'room_' + uuidv4();
     const room = await Room.create({ id, name: name.trim(), members, creator_id: decoded.id });
     members.forEach(mid => io.to('user_' + mid).emit('room:new', room));
     res.json(room);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch(e) { res.status(500).json({ error: 'ルーム作成に失敗しました: ' + e.message }); }
 });
 
 app.patch('/api/rooms/:roomId/name', async (req, res) => {

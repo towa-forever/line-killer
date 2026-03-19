@@ -1715,8 +1715,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         </Suspense>
       )}
       {showCreateRoom && (
-        <Suspense fallback={null}><CreateRoom currentUser={currentUser} friendsList={friendsList} onClose={() => setShowCreateRoom(false)}
-          onCreated={(room) => { setRooms((prev) => [room, ...prev]); setSelectedRoom(room); setShowCreateRoom(false); }} /></Suspense>
+        <ErrorBoundary><Suspense fallback={null}><CreateRoom currentUser={currentUser} friendsList={friendsList} onClose={() => setShowCreateRoom(false)}
+          onCreated={(room) => { setRooms((prev) => [room, ...prev]); setSelectedRoom(room); setShowCreateRoom(false); }} /></Suspense></ErrorBoundary>
       )}
     </div>
   );
