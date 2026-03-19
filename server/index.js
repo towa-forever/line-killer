@@ -1318,6 +1318,8 @@ app.get('/api/rooms', async (req, res) => {
         pinned_message_id: r.pinned_message_id,
         announcement: r.announcement || null,
         creator_id: r.creator_id || null,
+        theme_color: r.theme_color || '',
+        invite_code: r.invite_code || null,
         lastMessage: lastMsg ? {
           content: lastMsg.content, type: lastMsg.type,
           senderName: lastMsg.sender_name, createdAt: lastMsg.created_at

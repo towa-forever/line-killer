@@ -9,8 +9,8 @@ export default function SecretMessage({ socket, roomId, currentUser, onSent, onC
   const send = () => {
     if (!text.trim()) return;
     socket?.emit('message:send', {
-      roomId, senderId: currentUser.id,
-      senderName: currentUser.display_name || currentUser.username,
+      roomId, senderId: currentUser?.id,
+      senderName: currentUser?.display_name || currentUser?.username,
       content: text.trim(), type: 'secret',
       fileData: { timer, label: '🔐 秘密メッセージ' },
       expiresAt: new Date(Date.now() + timer * 1000).toISOString(),

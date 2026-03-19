@@ -24,8 +24,8 @@ export default function TaskPanel({ room, currentUser, socket, onClose }) {
     if (!title.trim()) return;
     await axios.post('/api/rooms/' + room.id + '/tasks', {
       title: title.trim(),
-      assigneeId: assigneeId || currentUser.id,
-      assigneeName: currentUser.username, // 自分のみ選択可能なので常にcurrentUser.username
+      assigneeId: assigneeId || currentUser?.id,
+      assigneeName: currentUser?.username, // 自分のみ選択可能なので常にcurrentUser?.username
       due: due || null
     });
     setTitle(''); setAssigneeId(''); setDue('');
@@ -84,7 +84,7 @@ function TaskItem({ task, onToggle, onDelete, currentUser }) {
           {task.due && ` · ${overdue ? '⚠️ ' : ''}${new Date(task.due).toLocaleDateString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}`}
         </div>
       </div>
-      {(task.creator_id === currentUser.id) && (
+      {(task.creator_id === currentUser?.id) && (
         <button onClick={() => onDelete(task)} style={{ color:'var(--danger)', fontSize:16, padding:4, cursor:'pointer', background:'none', border:'none' }}>🗑️</button>
       )}
     </div>

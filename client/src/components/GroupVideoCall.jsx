@@ -14,7 +14,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
   const [facingMode, setFacingMode] = useState('user'); // 'user'=内カメ / 'environment'=外カメ
   const [showLeaveMenu, setShowLeaveMenu] = useState(false);
   const screenTrackRef = useRef(null);
-  const isCreator = currentUser.id === members[0]; // 最初のメンバーがホスト
+  const isCreator = currentUser?.id === members[0]; // 最初のメンバーがホスト
 
   let ICE = {
     iceServers: [
@@ -73,11 +73,11 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
     if (isInitiator) {
       pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
         .then(offer => pc.setLocalDescription(offer))
-        .then(() => socket?.emit('gcall:offer', { offer: pc.localDescription, to: targetId, roomId, fromName: currentUser.username }))
+        .then(() => socket?.emit('gcall:offer', { offer: pc.localDescription, to: targetId, roomId, fromName: currentUser?.username }))
         .catch(e => console.error('gcall offer error:', e));
     }
     return pc;
-  }, [socket, roomId, currentUser.username, addRemoteStream, removeRemoteStream]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [socket, roomId, currentUser?.username, addRemoteStream, removeRemoteStream]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // カメラ取得（切り替え対応）
   const getLocalStream = useCallback(async (facing = 'user') => {
@@ -105,7 +105,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
         const stream = await getLocalStream(facingMode);
         if (!mounted || !stream) return;
         setStatus('active');
-        socket?.emit('gcall:join', { roomId, name: currentUser.username });
+        socket?.emit('gcall:join', { roomId, name: currentUser?.username });
       } catch(e) {
         setError('カメラ/マイクの取得に失敗したで: ' + e.message);
       }
@@ -227,7 +227,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
   };
 
   const allStreams = [
-    { userId: 'local', name: currentUser.username + '（自分）', isLocal: true },
+    { userId: 'local', name: currentUser?.username + '（自分）', isLocal: true },
     ...Object.entries(remoteStreams).map(([id, { stream, name }]) => ({ userId: id, name, stream, isLocal: false })),
   ];
   const count = allStreams.length;

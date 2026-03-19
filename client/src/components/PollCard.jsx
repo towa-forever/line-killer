@@ -13,7 +13,7 @@ export default function PollCard({ pollId, initialPoll, currentUser }) {
   if (!poll) return <div style={{ fontSize:13, color:'var(--text2)' }}>📊 投票を読み込み中...</div>;
 
   const totalVotes = poll.options.reduce((s, o) => s + o.voters.length, 0);
-  const myVotes = poll.options.filter(o => o.voters.includes(currentUser.id)).map(o => o.id);
+  const myVotes = poll.options.filter(o => o.voters.includes(currentUser?.id)).map(o => o.id);
 
   const vote = async (optId) => {
     if (poll.closed) return;
@@ -52,7 +52,7 @@ export default function PollCard({ pollId, initialPoll, currentUser }) {
           </div>
         );
       })}
-      {poll.creator_id === currentUser.id && !poll.closed && (
+      {poll.creator_id === currentUser?.id && !poll.closed && (
         <button onClick={close} style={{
           marginTop:8, fontSize:12, color:'var(--danger)', background:'none', border:'none', cursor:'pointer', padding:0
         }}>投票を締め切る</button>

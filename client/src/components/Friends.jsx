@@ -50,8 +50,8 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
     setSearching(true); setSearchResults([]);
     try {
       const res = await axios.get(`/api/users/search?q=${encodeURIComponent(q)}`);
-      setSearchResults(res.data.filter(u => u.id !== currentUser.id));
-      if (res.data.filter(u => u.id !== currentUser.id).length === 0) showMsg('ユーザーが見つかりませんでした', 'error');
+      setSearchResults(res.data.filter(u => u.id !== currentUser?.id));
+      if (res.data.filter(u => u.id !== currentUser?.id).length === 0) showMsg('ユーザーが見つかりませんでした', 'error');
     } catch { showMsg('検索に失敗しました', 'error'); }
     finally { setSearching(false); }
   };
@@ -332,9 +332,9 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
             <div style={{ fontWeight:700, fontSize:15, marginBottom:4 }}>🔗 招待リンクで追加</div>
             <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12 }}>マイリンクをシェアして友達に追加してもらおう</div>
             <div style={{ background:'var(--bg)', borderRadius:12, padding:'10px 14px', fontSize:13, color:'var(--text2)', marginBottom:10, wordBreak:'break-all' }}>
-              {`${window.location.origin}/invite/user/${currentUser.username}`}
+              {`${window.location.origin}/invite/user/${currentUser?.username}`}
             </div>
-            <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/invite/user/${currentUser.username}`); showMsg('リンクをコピーしました！'); }}
+            <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/invite/user/${currentUser?.username}`); showMsg('リンクをコピーしました！'); }}
               style={{ width:'100%', padding:'12px 0', borderRadius:24, background:'#06c755', color:'white', border:'none', fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 3px 10px rgba(6,199,85,0.3)' }}>
               📋 リンクをコピー
             </button>
@@ -350,12 +350,12 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
             <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>マイQRコード</div>
             <div style={{ fontSize:12, color:'var(--text2)', marginBottom:16 }}>このQRコードを読み取ってもらうと友達追加できます</div>
             <div style={{ display:'inline-block', padding:16, background:'white', borderRadius:16, boxShadow:'0 2px 12px rgba(0,0,0,0.1)', marginBottom:16 }}>
-              <QRCode value={`linekiller://add/${currentUser.username}`} size={190} level="H"
+              <QRCode value={`linekiller://add/${currentUser?.username}`} size={190} level="H"
                 imageSettings={{ src:'', x:undefined, y:undefined, height:0, width:0, excavate:false }} />
             </div>
-            <div style={{ fontSize:18, fontWeight:800, marginBottom:2 }}>{currentUser.displayName || currentUser.username}</div>
+            <div style={{ fontSize:18, fontWeight:800, marginBottom:2 }}>{currentUser?.displayName || currentUser?.username}</div>
             <div style={{ fontSize:13, color:'var(--text2)', background:'var(--bg)', display:'inline-block', padding:'4px 14px', borderRadius:20, marginTop:4 }}>
-              ID: {currentUser.username}
+              ID: {currentUser?.username}
             </div>
           </div>
 

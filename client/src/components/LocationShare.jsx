@@ -10,8 +10,8 @@ export default function LocationShare({ socket, roomId, currentUser, onSent, onC
       ({ coords }) => {
         const { latitude: lat, longitude: lng } = coords;
         socket?.emit('message:send', {
-          roomId, senderId: currentUser.id,
-          senderName: currentUser.display_name || currentUser.username,
+          roomId, senderId: currentUser?.id,
+          senderName: currentUser?.display_name || currentUser?.username,
           content: `📍 現在地を共有`,
           type: 'location',
           fileData: { lat, lng, label: '現在地' },

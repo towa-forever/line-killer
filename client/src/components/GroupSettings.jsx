@@ -62,13 +62,13 @@ export default function GroupSettings({ room, currentUser, onClose, onUpdate }) 
   const handleLeave = () => {
     setConfirmDialog({ text: 'このグループを退出しますか？', onOk: async () => {
       try {
-        await axios.delete(`/api/rooms/${roomId}/members/${currentUser.id}`);
+        await axios.delete(`/api/rooms/${roomId}/members/${currentUser?.id}`);
         onClose?.();
       } catch (err) { console.error(err); }
     }});
   };
 
-  const isAdmin = room?.creator_id === currentUser.id;
+  const isAdmin = room?.creator_id === currentUser?.id;
 
   return (
     <>
@@ -107,7 +107,7 @@ export default function GroupSettings({ room, currentUser, onClose, onUpdate }) 
           <label className="form-label">メンバー ({room?.members?.length || 0})</label>
           {room?.members?.map((member) => {
             const memberId = member.id || member._id || member;
-            const isMe = memberId === currentUser.id;
+            const isMe = memberId === currentUser?.id;
             const isCreator = memberId === room.creator_id;
             return (
               <div key={memberId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>

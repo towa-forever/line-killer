@@ -92,7 +92,7 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
       form.append('file', audioBlob, `voice_${Date.now()}.webm`);
       const res = await axios.post('/api/upload', form);
       socket?.emit('message:send', {
-        roomId, senderId: currentUser.id, senderName: currentUser.display_name || currentUser.username,
+        roomId, senderId: currentUser?.id, senderName: currentUser?.display_name || currentUser?.username,
         content: `🎤 音声メッセージ (${duration}秒)`,
         type: 'voice', fileData: { url: res.data.url, name: 'voice', duration },
       });
