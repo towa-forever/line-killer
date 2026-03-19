@@ -845,7 +845,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               </div>
             )}
           </div>
-          {showNote {showNote && <Suspense fallback={null}><Note{showNote && <Suspense fallback={null}><Note <ErrorBoundary><Suspense fallback={null}><Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} /></Suspense></ErrorBoundary>}
+          {showNote && <ErrorBoundary><Suspense fallback={null}><Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} /></Suspense></ErrorBoundary>}
           {showRoomSettings && (
             <div className="modal-overlay" onClick={() => setShowRoomSettings(false)}>
               <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -1003,7 +1003,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           </div>
         </div>
       )}
-      {showEventCal {showEventCal && <Suspense fallback={null}><EventCalendar{showEventCal && <Suspense fallback={null}><EventCalendar <ErrorBoundary><Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense></ErrorBoundary>}
+      {showEventCal && <ErrorBoundary><Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense></ErrorBoundary>}
       {/* スタンプ自作 */}
       {showStickerMaker && (
         <Suspense fallback={null}>
@@ -1017,7 +1017,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           />
         </Suspense>
       )}
-      {showMiniGame {showMiniGame && <Suspense fallback={null}><MiniGame{showMiniGame && <Suspense fallback={null}><MiniGame <ErrorBoundary><Suspense fallback={null}><MiniGame onSendResult={text => { socket.emit('message:send', { roomId: selectedRoom.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense></ErrorBoundary>}
+      {showMiniGame && <ErrorBoundary><Suspense fallback={null}><MiniGame onSendResult={text => { socket.emit('message:send', { roomId: selectedRoom.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense></ErrorBoundary>}
           {showFavorites && (
             <div className="modal-overlay" onClick={() => setShowFavorites(false)}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
