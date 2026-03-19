@@ -281,18 +281,40 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   useEffect(() => {
     if (!socket) return;
     socket.on('message:receive', (msg) => {
-      if (msg.roomId === selectedRoom?.id) {
-        setMessages((prev) => { const next = [...prev, msg]; return next.length > 500 ? next.slice(-500) : next; });
-        if (msg.senderId !== currentUser.id) {
-          socket.emit('message:read', { messageId: msg.id, roomId: msg.roomId });
+      // message:newも同じ処理（通話終了・スケジュール送信など）
+      const roomId = msg.roomId || msg.room_id;
+      const senderId = msg.senderId || msg.sender_id;
+      const normalizedMsg = { ...msg, roomId, senderId };
+      if (roomId === selectedRoom?.id) {
+        setMessages((prev) => { const next = [...prev, normalizedMsg]; return next.length > 500 ? next.slice(-500) : next; });
+        if (senderId !== currentUser.id) {
+          socket.emit('message:read', { messageId: msg.id, roomId });
           sounds.receive(soundTheme);
         }
-      } else if (msg.senderId !== currentUser.id) {
-        // 別のルームのメッセージは未読カウントを増やす
-        setUnreadCounts((prev) => ({ ...prev, [msg.roomId]: (prev[msg.roomId] || 0) + 1 }));
+      } else if (senderId !== currentUser.id) {
+        setUnreadCounts((prev) => ({ ...prev, [roomId]: (prev[roomId] || 0) + 1 }));
       }
       setRooms((prev) =>
-        prev.map((r) => r.id === msg.roomId ? { ...r, lastMessage: msg, lastActivity: msg.createdAt } : r)
+        prev.map((r) => r.id === roomId ? { ...r, lastMessage: normalizedMsg, lastActivity: normalizedMsg.createdAt || normalizedMsg.created_at } : r)
+          .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0))
+      );
+    });
+    // message:new は message:receive と同じ処理（サーバーが両方使ってるため）
+    socket.on('message:new', (msg) => {
+      const roomId = msg.roomId || msg.room_id;
+      const senderId = msg.senderId || msg.sender_id;
+      const normalizedMsg = { ...msg, roomId, senderId, createdAt: msg.createdAt || msg.created_at };
+      if (roomId === selectedRoom?.id) {
+        setMessages((prev) => {
+          if (prev.some(m => m.id === normalizedMsg.id)) return prev;
+          const next = [...prev, normalizedMsg];
+          return next.length > 500 ? next.slice(-500) : next;
+        });
+      } else if (senderId !== currentUser.id) {
+        setUnreadCounts((prev) => ({ ...prev, [roomId]: (prev[roomId] || 0) + 1 }));
+      }
+      setRooms((prev) =>
+        prev.map((r) => r.id === roomId ? { ...r, lastMessage: normalizedMsg, lastActivity: normalizedMsg.createdAt } : r)
           .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0))
       );
     });
@@ -350,7 +372,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       );
     });
     return () => {
-      socket.off('message:receive'); socket.off('message:read_update');
+      socket.off('message:receive'); socket.off('message:new'); socket.off('message:read_update');
       socket.off('message:reacted'); socket.off('room:new'); socket.off('room:updated');
       socket.off('message:edited'); socket.off('message:deleted');
       socket.off('room:pinned'); socket.off('poll:updated');

@@ -1794,7 +1794,7 @@ io.on('connection', async (socket) => {
           sender_id: socket.user.id, sender_name: socket.user.username,
           content: '📞 通話を開始しました', type: 'call_start',
         });
-        io.to(roomId).emit('message:new', msg);
+        io.to(roomId).emit('message:receive', { id: msg.id, roomId: msg.room_id, senderId: msg.sender_id, senderName: msg.sender_name, content: msg.content, type: msg.type, createdAt: msg.created_at, read_by: msg.read_by || [], reactions: [] });
       } catch (_) {}
     }
   });
@@ -1827,7 +1827,7 @@ io.on('connection', async (socket) => {
           sender_id: socket.user.id, sender_name: socket.user.username,
           content, type: 'call_end',
         });
-        io.to(roomId).emit('message:new', msg);
+        io.to(roomId).emit('message:receive', { id: msg.id, roomId: msg.room_id, senderId: msg.sender_id, senderName: msg.sender_name, content: msg.content, type: msg.type, createdAt: msg.created_at, read_by: msg.read_by || [], reactions: [] });
       } catch (_) {}
     }
   });
@@ -1943,7 +1943,7 @@ function formatDuration(seconds) {
           sender_id: socket.user.id, sender_name: socket.user.username,
           content: '📵 通話を拒否しました', type: 'call_end',
         });
-        io.to(roomId).emit('message:new', msg);
+        io.to(roomId).emit('message:receive', { id: msg.id, roomId: msg.room_id, senderId: msg.sender_id, senderName: msg.sender_name, content: msg.content, type: msg.type, createdAt: msg.created_at, read_by: msg.read_by || [], reactions: [] });
       } catch (_) {}
     }
   });
