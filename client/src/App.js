@@ -1834,6 +1834,17 @@ export default function App() {
     s.on('call:incoming', (data) => {
       setIncomingCall(data);
     });
+    // 音声通話着信
+    s.on('voice:incoming', (data) => {
+      // { from: {id, username, avatar}, offer, callId, roomId }
+      window.__voiceOffer = data.offer;
+      setVoiceCall({
+        targetUser: { id: data.from.id, displayName: data.from.username, avatar: data.from.avatar },
+        isIncoming: true,
+        callId: data.callId,
+        roomId: data.roomId,
+      });
+    });
     // メンション通知
     s.on('mention:new', (data) => {
       setMentions(prev => [data, ...prev].slice(0, 20));

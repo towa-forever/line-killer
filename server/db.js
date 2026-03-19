@@ -206,21 +206,6 @@ const StorySchema = new mongoose.Schema({
   text: String,
   expires_at: { type: Date, default: () => new Date(Date.now() + 24*60*60*1000) },
   created_at: { type: Date, default: Date.now },
-  // パスワードリセット用
-  secret_question: { type: String, default: '' },
-  secret_answer: { type: String, default: '' }, // bcryptハッシュ
-  // 2段階認証
-  pin_code: { type: String, default: '' }, // bcryptハッシュ
-  pin_enabled: { type: Boolean, default: false },
-  // ログイン履歴（最新10件）
-  login_history: { type: [{ ip: String, ua: String, at: Date }], default: [] },
-  // 下書き保存 { roomId: content }
-  drafts: { type: mongoose.Schema.Types.Mixed, default: {} },
-  // 後で読む（メッセージIDリスト）
-  read_later: { type: [String], default: [] },
-  // ギフト履歴
-  gift_sent: { type: Number, default: 0 },
-  gift_received: { type: Number, default: 0 },
 });
 
 // ===== パフォーマンス向上のためのインデックス =====

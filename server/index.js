@@ -736,29 +736,6 @@ app.get('/api/ice-servers', (req, res) => {
 });
 
 
-async function sendAdminMail({ subject, html }) {
-  const to = 'towa08062026@outlook.jp';
-  const transporter = createMailTransporter();
-  if (!transporter) {
-    console.log(`[メール未送信 - 環境変数未設定]
-To: ${to}
-Subject: ${subject}`);
-    return false;
-  }
-  try {
-    await transporter.sendMail({
-      from: process.env.MAIL_USER,
-      to,
-      subject,
-      html,
-    });
-    console.log(`[メール送信成功] ${subject}`);
-    return true;
-  } catch (e) {
-    console.error('[メール送信失敗]', e.message);
-    return false;
-  }
-}
 
 
 // ===== グループ招待リンク =====
@@ -1004,7 +981,7 @@ app.get('/api/users', async (req, res) => {
 app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
   try {
     const decoded = auth(req);
-    const { status, displayName, bio, avatarFrame, soundTheme } = req.body;
+    const { status, displayName, bio, avatarFrame, soundTheme, secretQuestion, secretAnswer } = req.body;
     const update = {};
     if (req.files?.avatar?.[0]) update.avatar = getFileUrl({ file: req.files.avatar[0] });
     if (req.files?.cover?.[0])  update.cover_image = getFileUrl({ file: req.files.cover[0] });
@@ -1013,6 +990,10 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
     if (bio !== undefined)         update.bio = bio;
     if (avatarFrame !== undefined) update.avatar_frame = avatarFrame;
     if (soundTheme !== undefined)  update.sound_theme = soundTheme;
+    if (secretQuestion !== undefined) update.secret_question = secretQuestion;
+    if (secretAnswer !== undefined && secretAnswer.trim()) {
+      update.secret_answer = await bcrypt.hash(secretAnswer.trim().toLowerCase(), 10);
+    }
     const user = await User.findOneAndUpdate({ id: decoded.id }, update, { new: true, projection: { password: 0 } });
     const userRes = {
       id: user.id, username: user.username, avatar: user.avatar,
@@ -1021,6 +1002,8 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
       bio: user.bio || '', status: user.status || '',
       avatarFrame: user.avatar_frame || 'none',
       soundTheme: user.sound_theme || 'default',
+      secretQuestion: user.secret_question || '',
+      pinEnabled: user.pin_enabled || false,
     };
     io.emit('user:updated', userRes);
     res.json(userRes);
@@ -1282,8 +1265,12 @@ app.get('/api/rooms', async (req, res) => {
     const roomsWithLast = await Promise.all(rooms.map(async r => {
       const lastMsg = await Message.findOne({ room_id: r.id, deleted: false })
         .sort({ created_at: -1 }).select('content type sender_name created_at');
+      // メンバー詳細（名前・アバター）を取得
+      const memberUsers = await User.find({ id: { $in: r.members } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
+      const memberDetails = memberUsers.map(u => ({ id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar }));
       return {
         id: r.id, name: r.name, icon: r.icon, members: r.members,
+        memberDetails,
         pinned_message_id: r.pinned_message_id,
         announcement: r.announcement || null,
         creator_id: r.creator_id || null,
@@ -1829,6 +1816,43 @@ io.on('connection', async (socket) => {
         io.to(roomId).emit('message:new', msg);
       } catch (_) {}
     }
+  });
+
+  // ===== 音声通話シグナリング =====
+  socket.on('voice:start', ({ to, from, offer, callId, roomId }) => {
+    io.to('user_' + to).emit('voice:incoming', {
+      from: { id: socket.user.id, username: socket.user.username, avatar: socket.user.avatar },
+      offer, callId, roomId
+    });
+  });
+
+  socket.on('voice:answer', ({ to, answer, callId }) => {
+    io.to('user_' + to).emit('voice:answer', { answer, from: socket.user.id, callId });
+  });
+
+  socket.on('voice:reject', ({ to, callId }) => {
+    io.to('user_' + to).emit('voice:reject', { from: socket.user.id, callId });
+  });
+
+  socket.on('voice:end', async ({ to, callId, duration, roomId }) => {
+    io.to('user_' + to).emit('voice:end', { from: socket.user.id, callId });
+    // 音声通話終了メッセージ
+    if (roomId) {
+      try {
+        const { v4: uuidv4 } = require('uuid');
+        const dur = duration > 0 ? formatDuration(duration) : null;
+        const content = dur ? `📵 音声通話終了（${dur}）` : '📵 音声通話（応答なし）';
+        await Message.create({
+          id: uuidv4(), room_id: roomId,
+          sender_id: socket.user.id, sender_name: socket.user.username,
+          content, type: 'call_end',
+        });
+      } catch (_) {}
+    }
+  });
+
+  socket.on('voice:ice', ({ to, candidate, callId }) => {
+    io.to('user_' + to).emit('call:ice', { candidate, from: socket.user.id, callId });
   });
 
 

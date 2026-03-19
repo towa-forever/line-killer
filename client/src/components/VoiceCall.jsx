@@ -42,7 +42,15 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
   const createPC = useCallback(() => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
     pcRef.current = pc;
-    pc.onicecandidate = e => { if (e.candidate) socket.emit('call:ice', { to: targetUser.id, candidate: e.candidate, callId: callIdRef.current }); };
+    pc.onicecandidate = e => { if (e.candidate) socket.emit('voice:ice', { to: targetUser.id, candidate: e.candidate, callId: callIdRef.current }); };
+    // リモート音声受信（発信側・着信側共通）
+    pc.ontrack = e => {
+      if (e.streams?.[0]) {
+        const audio = new Audio();
+        audio.srcObject = e.streams[0];
+        audio.play().catch(() => {});
+      }
+    };
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') { setStatus('active'); startTimer(); }
       if (['disconnected','failed','closed'].includes(pc.connectionState)) onClose();
@@ -100,12 +108,6 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       localStream.current = stream;
       const pc = createPC();
       stream.getTracks().forEach(t => pc.addTrack(t, stream));
-      // リモートトラックを再生
-      pc.ontrack = e => {
-        const audio = new Audio();
-        audio.srcObject = e.streams[0];
-        audio.play().catch(() => {});
-      };
       await pc.setRemoteDescription(new RTCSessionDescription(window.__voiceOffer));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
