@@ -24,15 +24,19 @@ export default function CreateRoom({ currentUser, friendsList = [], onClose, onC
     try {
       let res;
       if (tab === 'dm') {
-        // DM作成は専用エンドポイント
         res = await axios.post('/api/rooms/dm', { targetUserId: selectedUsers[0] });
       } else {
-        // グループ作成
         res = await axios.post('/api/rooms', { memberIds: selectedUsers, name: groupName.trim() });
+      }
+      if (!res.data || !res.data.id) {
+        setError('サーバーからルーム情報が返ってきませんでした');
+        return;
       }
       onCreated(res.data);
     } catch (err) {
-      setError('エラー: ' + (err.response?.data?.error || err.message || '作成に失敗しました'));
+      const msg = err.response?.data?.error || err.response?.data?.message || err.message || '作成に失敗しました';
+      setError('エラー: ' + msg);
+      console.error('[CreateRoom]', err.response?.status, err.response?.data, err.message);
     } finally { setCreating(false); }
   };
 

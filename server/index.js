@@ -1299,7 +1299,11 @@ app.post('/api/rooms/dm', async (req, res) => {
     const existing = await Room.findOne({
       members: { $all: [decoded.id, targetUserId], $size: 2 }
     });
-    if (existing) return res.json(existing);
+    if (existing) {
+      const memberUsers = await User.find({ id: { $in: existing.members } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
+      const memberDetails = memberUsers.map(u => ({ id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar }));
+      return res.json({ ...existing.toObject(), id: existing.id, memberDetails });
+    }
 
     // なければ作成
     const targetUser = await User.findOne({ id: targetUserId });
@@ -1312,9 +1316,12 @@ app.post('/api/rooms/dm', async (req, res) => {
       members: [decoded.id, targetUserId],
       creator_id: decoded.id,
     });
-    [decoded.id, targetUserId].forEach(mid => io.to('user_' + mid).emit('room:new', room));
-    res.json(room);
-  } catch (e) { res.status(401).json({ error: '認証エラー' }); }
+    const memberUsers = await User.find({ id: { $in: room.members } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
+    const memberDetails = memberUsers.map(u => ({ id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar }));
+    const roomObj = { id: room.id, name: room.name, icon: room.icon, members: room.members, memberDetails, pinned_message_id: null, lastMessage: null };
+    [decoded.id, targetUserId].forEach(mid => io.to('user_' + mid).emit('room:new', roomObj));
+    res.json(roomObj);
+  } catch (e) { res.status(500).json({ error: 'DM作成に失敗しました: ' + e.message }); }
 });
 
 app.post('/api/rooms', async (req, res) => {
@@ -1334,8 +1341,11 @@ app.post('/api/rooms', async (req, res) => {
     const members = [...new Set([decoded.id, ...finalMembers])];
     const id = 'room_' + uuidv4();
     const room = await Room.create({ id, name: name.trim(), members, creator_id: decoded.id });
-    members.forEach(mid => io.to('user_' + mid).emit('room:new', room));
-    res.json(room);
+    const memberUsers = await User.find({ id: { $in: members } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
+    const memberDetails = memberUsers.map(u => ({ id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar }));
+    const roomObj = { id: room.id, name: room.name, icon: room.icon, members: room.members, memberDetails, pinned_message_id: null, lastMessage: null };
+    members.forEach(mid => io.to('user_' + mid).emit('room:new', roomObj));
+    res.json(roomObj);
   } catch(e) { res.status(500).json({ error: 'ルーム作成に失敗しました: ' + e.message }); }
 });
 
