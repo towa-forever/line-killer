@@ -11,7 +11,9 @@ const QUESTIONS = [
   '親友の名前は？',
 ];
 
-export default function PasswordReset({ onClose, onSuccess }) {
+export default function PasswordReset({ onClose, onSuccess, onBack }) {
+  // onBackがあればonCloseとして使う
+  const handleClose = onBack || onClose || (() => {});
   const [step, setStep]       = useState('username'); // username → question → reset → done
   const [username, setUsername] = useState('');
   const [question, setQuestion] = useState('');
@@ -50,7 +52,7 @@ export default function PasswordReset({ onClose, onSuccess }) {
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
-      onClick={onClose}>
+      onClick={handleClose}>
       <div style={{ background:'var(--surface)', borderRadius:20, padding:28, width:'100%', maxWidth:360 }}
         onClick={e => e.stopPropagation()}>
 
@@ -59,7 +61,7 @@ export default function PasswordReset({ onClose, onSuccess }) {
             <div style={{ fontSize:56, marginBottom:12 }}>✅</div>
             <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>パスワードを変更しました</div>
             <div style={{ fontSize:13, color:'var(--text2)', marginBottom:24 }}>新しいパスワードでログインしてください</div>
-            <button onClick={onSuccess} style={{ width:'100%', padding:14, borderRadius:24, background:'#06c755', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer' }}>
+            <button onClick={handleClose} style={{ width:'100%', padding:14, borderRadius:24, background:'#06c755', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer' }}>
               ログインへ
             </button>
           </div>
@@ -70,7 +72,7 @@ export default function PasswordReset({ onClose, onSuccess }) {
                 <button onClick={() => { setStep('username'); setError(''); }} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'var(--text2)', padding:'0 4px' }}>←</button>
               )}
               <div style={{ fontSize:18, fontWeight:800, flex:1 }}>🔑 パスワードを忘れた</div>
-              <button onClick={onClose} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'var(--text2)' }}>✕</button>
+              <button onClick={handleClose} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'var(--text2)' }}>✕</button>
             </div>
 
             {step === 'username' && (
