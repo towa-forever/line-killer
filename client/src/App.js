@@ -755,11 +755,20 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           )}
           {rooms.map((room) => {
             const lastMsg = room.lastMessage;
+            // DMの場合は相手のアバターを表示
+            const isDM = room.members?.length === 2;
+            const otherMember = isDM ? room.memberDetails?.find(m => m.id !== currentUser?.id) : null;
+            const roomAvatar = room.icon
+              ? `${SERVER_URL}${room.icon}`
+              : (isDM && otherMember?.avatar
+                ? (otherMember.avatar.startsWith('http') ? otherMember.avatar : `${SERVER_URL}${otherMember.avatar}`)
+                : null);
+            const roomName = isDM && otherMember ? (otherMember.displayName || otherMember.username || room.name) : room.name;
             return (
               <div key={room.id} className={`room-item ${selectedRoom?.id === room.id ? 'active' : ''}`}
                 onClick={() => setSelectedRoom(room)}>
                 <div style={{ position:'relative' }}>
-                  <AvatarImg src={room.icon ? `${SERVER_URL}${room.icon}` : null} name={room.name} size={40} frame="none" />
+                  <AvatarImg src={roomAvatar} name={roomName} size={40} frame="none" />
                   {/* オンラインドット */}
                   {room.members?.some(mid => mid !== currentUser.id && onlineUsers.has(mid)) && (
                     <span style={{
@@ -781,12 +790,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <div className="room-info">
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                     <div className={`room-name ${unreadCounts[room.id] > 0 ? 'unread' : ''}`}>
-                      {room.name}
+                      {roomName}
                       {mutedRooms.has(room.id) && <span style={{ fontSize:11, color:'var(--text2)', marginLeft:4 }}>🔕</span>}
                     </div>
-                    {room.members?.length === 2 && room.memberStatus && (
-                      <div className="status-badge">{room.memberStatus}</div>
-                    )}
                     {lastMsg?.createdAt && <div style={{ fontSize:11, color:'var(--text2)' }}>{new Date(lastMsg.createdAt).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}</div>}
                   </div>
                   <div className={`room-last-msg ${unreadCounts[room.id] > 0 ? 'unread' : ''}`}>
