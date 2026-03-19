@@ -18,8 +18,8 @@ export function StoryBar({ currentUser, friendsList, socket }) { // eslint-disab
     if (!byUser[s.user_id]) byUser[s.user_id] = { name: s.user_name, avatar: s.user_avatar, items: [] };
     byUser[s.user_id].items.push(s);
   });
-  const myStories = byUser[currentUser.id];
-  const others = Object.entries(byUser).filter(([id]) => id !== currentUser.id);
+  const myStories = byUser[currentUser?.id];
+  const others = Object.entries(byUser).filter(([id]) => id !== currentUser?.id);
 
   const openStory = (userId, items) => setViewing({ userId, items, idx: 0 });
 
@@ -67,7 +67,7 @@ export function StoryBar({ currentUser, friendsList, socket }) { // eslint-disab
       </div>
 
       {/* ストーリービューワー */}
-      {viewing && <StoryViewer data={viewing} onClose={() => setViewing(null)} currentUserId={currentUser.id} onDeleted={() => { load(); setViewing(null); }} />}
+      {viewing && <StoryViewer data={viewing} onClose={() => setViewing(null)} currentUserId={currentUser?.id} onDeleted={() => { load(); setViewing(null); }} />}
     </>
   );
 }

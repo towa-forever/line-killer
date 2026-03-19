@@ -29,7 +29,7 @@ export default function Dashboard({ currentUser, onNavigateRoom }) {
       {/* ヘッダー */}
       <div style={{ marginBottom:16 }}>
         <div style={{ fontSize:22, fontWeight:800, color:'var(--text)' }}>
-          おはよう、{currentUser.displayName || currentUser.username}👋
+          おはよう、{currentUser?.displayName || currentUser?.username}👋
         </div>
         <div style={{ fontSize:13, color:'var(--text2)', marginTop:4 }}>
           {new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'long' })}
