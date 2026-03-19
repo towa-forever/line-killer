@@ -38,6 +38,7 @@ const Profile = lazy(() => import('./components/Profile'));
 
 const CreateRoom = lazy(() => import('./components/CreateRoom'));
 const Note = lazy(() => import('./components/Note'));
+const UserProfile = lazy(() => import('./components/UserProfile'));
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 axios.defaults.baseURL = SERVER_URL;
@@ -635,7 +636,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         onTouchEnd={() => clearTimeout(longPressTimer.current)}
         onTouchMove={() => clearTimeout(longPressTimer.current)}>
         <div className="message-avatar" style={{ cursor:'pointer', flexShrink:0, background: isMine ? 'var(--primary)' : 'var(--surface2)' }}
-          onClick={() => setShowUserProfile({ id: msg.senderId, name: msg.senderName, avatar: msg.senderAvatar })}>
+          onClick={() => setShowUserProfile({ id: msg.senderId, name: msg.senderName, username: msg.senderName, avatar: msg.senderAvatar })}>
           {msg.senderAvatar
             ? <img src={msg.senderAvatar.startsWith('http') ? msg.senderAvatar : `${SERVER_URL}${msg.senderAvatar}`} alt="" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} />
             : <span style={{fontSize:15,fontWeight:700,color:isMine?'#fff':'var(--text)',display:'flex',alignItems:'center',justifyContent:'center',height:'100%'}}>{msg.senderName?.[0] || '?'}</span>}
@@ -1252,19 +1253,20 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
           {/* ユーザープロフィールモーダル */}
           {showUserProfile && (
-            <div className="modal-overlay" onClick={() => setShowUserProfile(null)}>
-              <div className="modal" onClick={e => e.stopPropagation()} style={{ textAlign:'center' }}>
-                <div style={{ width:80, height:80, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, fontWeight:700, margin:'0 auto 12px', overflow:'hidden' }}>
-                  {showUserProfile.avatar
-                    ? <img src={showUserProfile.avatar.startsWith('http') ? showUserProfile.avatar : `${process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com'}${showUserProfile.avatar}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                    : showUserProfile.name?.[0]
-                  }
-                </div>
-                <div style={{ fontSize:20, fontWeight:700, marginBottom:4 }}>{showUserProfile.name}</div>
-                {showUserProfile.status && <div style={{ fontSize:13, color:'var(--text2)', marginBottom:16, fontStyle:'italic' }}>{showUserProfile.status}</div>}
-                <button className="btn btn-secondary" style={{ width:'100%' }} onClick={() => setShowUserProfile(null)}>閉じる</button>
-              </div>
-            </div>
+            <Suspense fallback={null}>
+              <UserProfile
+                username={showUserProfile.name}
+                currentUser={currentUser}
+                onClose={() => setShowUserProfile(null)}
+                onStartChat={async (user) => {
+                  const res = await axios.post('/api/rooms/dm', { targetUserId: user.id || showUserProfile.id }).catch(() => null);
+                  if (res?.data) { setRooms(prev => prev.find(r => r.id === res.data.id) ? prev : [res.data, ...prev]); setSelectedRoom(res.data); }
+                  setShowUserProfile(null);
+                }}
+                onCall={(user) => { onCall({ roomId: null, targetUserId: user.id || showUserProfile.id, isCaller: true, offer: null }); setShowUserProfile(null); }}
+                onVoiceCall={(user) => { setVoiceCall({ targetUser: user, isIncoming: false, callId: null, roomId: null }); setShowUserProfile(null); }}
+              />
+            </Suspense>
           )}
 
           {/* グループメンバー管理モーダル */}
