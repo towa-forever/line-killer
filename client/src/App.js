@@ -1306,7 +1306,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   const detail = selectedRoom.memberDetails?.find(d => d.id === mid);
                   const friend = friendsList.find(f => (f.id || f._id) === mid);
                   const name = detail?.displayName || detail?.username || friend?.display_name || friend?.username
-                    || (mid === currentUser.id ? (currentUser.displayName || currentUser.username) : '(不明なユーザー)');
+                    || (mid === currentUser?.id ? (currentUser?.displayName || currentUser?.username) : '(不明なユーザー)');
                   const avatar = detail?.avatar || friend?.avatar;
                   const isCreator = mid === selectedRoom.creator_id;
                   const isMe = mid === currentUser.id;
