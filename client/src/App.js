@@ -365,15 +365,20 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         setMessages(prev => [...prev, sysMsg]);
       }
     });
-    socket.on('message:edited', ({ messageId, content: newContent }) => {
+    socket.on('message:edited', ({ messageId, content: newContent, roomId: editRoomId }) => {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: newContent, edited: true } : m));
-      if (messagesCache.current[selectedRoom?.id])
-        messagesCache.current[selectedRoom.id] = messagesCache.current[selectedRoom.id].map(m => m.id === messageId ? { ...m, content: newContent, edited: true } : m);
+      // 全キャッシュを更新（どのルームのメッセージかに関わらず）
+      Object.keys(messagesCache.current).forEach(rid => {
+        if (Array.isArray(messagesCache.current[rid]))
+          messagesCache.current[rid] = messagesCache.current[rid].map(m => m.id === messageId ? { ...m, content: newContent, edited: true } : m);
+      });
     });
-    socket.on('message:deleted', ({ messageId }) => {
+    socket.on('message:deleted', ({ messageId, roomId: delRoomId }) => {
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, deleted: true, content: '' } : m));
-      if (messagesCache.current[selectedRoom?.id])
-        messagesCache.current[selectedRoom.id] = messagesCache.current[selectedRoom.id].map(m => m.id === messageId ? { ...m, deleted: true, content: '' } : m);
+      Object.keys(messagesCache.current).forEach(rid => {
+        if (Array.isArray(messagesCache.current[rid]))
+          messagesCache.current[rid] = messagesCache.current[rid].map(m => m.id === messageId ? { ...m, deleted: true, content: '' } : m);
+      });
     });
     // タイピングインジケーター
     socket.on('typing:update', ({ username, isTyping }) => {
