@@ -214,7 +214,7 @@ a { text-decoration: none; color: var(--accent); }
   flex-shrink: 0; overflow: hidden;
 }
 .room-info { flex: 1; min-width: 0; }
-.room-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-name { font-weight: 600;  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .room-last-msg { font-size: 13px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
 .room-name.unread { font-weight: 700; }
 .room-last-msg.unread { color: var(--text); font-weight: 500; }
@@ -273,7 +273,7 @@ a { text-decoration: none; color: var(--accent); }
   width: 34px; height: 34px; border-radius: 50%;
   background: var(--surface2);
   display: flex; align-items: center; justify-content: center;
-  font-size: 15px; flex-shrink: 0; overflow: hidden;
+   flex-shrink: 0; overflow: hidden;
 }
 .message-body {
   display: flex; flex-direction: column;
@@ -285,7 +285,7 @@ a { text-decoration: none; color: var(--accent); }
   padding: 9px 13px;
   border-radius: 18px;
   word-break: break-word;
-  font-size: 15px; line-height: 1.5;
+   line-height: 1.5;
 }
 .message.mine .message-bubble {
   background: var(--bubble-mine);
@@ -396,7 +396,7 @@ a { text-decoration: none; color: var(--accent); }
 /* ===== BUTTONS ===== */
 .btn {
   padding: 12px 20px; border-radius: 12px;
-  font-size: 15px; font-weight: 600;
+   font-weight: 600;
   transition: opacity 0.15s; cursor: pointer;
   display: inline-block; text-align: center;
   -webkit-tap-highlight-color: transparent;
@@ -825,7 +825,7 @@ audio { max-width:100%; accent-color:var(--primary); }
 /* メッセージバブル：幅を広げてテキストが読みやすく */
 .message-body { max-width: 78%; }
 .message-bubble {
-  font-size: 15px;
+  
   line-height: 1.55;
   padding: 10px 14px;
 }
@@ -922,7 +922,7 @@ audio { max-width:100%; accent-color:var(--primary); }
 /* ルーム一覧のアバター少し大きく */
 .room-avatar { width: 50px; height: 50px; font-size: 21px; }
 .room-item { min-height: 72px; padding: 12px 16px; gap: 14px; }
-.room-name { font-size: 15px; }
+.room-name {  }
 .room-last-msg { font-size: 13px; }
 
 /* 入力エリアの行（ボタン少ないので整列しやすく） */
@@ -1090,7 +1090,7 @@ body.dark .input-menu-grid {
   gap: 14px;
   width: 100%;
   padding: 15px 20px;
-  font-size: 15px;
+  
   font-weight: 500;
   border-bottom: 1px solid var(--border);
   -webkit-tap-highlight-color: transparent;
@@ -1165,7 +1165,7 @@ body.dark .message.theirs .message-bubble {
   border: 1px solid var(--border);
   border-radius: 22px;
   padding: 9px 14px;
-  font-size: 15px;
+  
   color: var(--text);
   resize: none; outline: none;
   max-height: 120px;
@@ -1290,13 +1290,13 @@ body.dark .room-item:active { background: #2c2c2e; }
 }
 
 /* メッセージバブル改善 */
-.message-bubble { font-size: 15px; line-height: 1.55; padding: 10px 14px; }
+.message-bubble {  line-height: 1.55; padding: 10px 14px; }
 .message.mine .message-bubble  { border-radius: 18px 18px 4px 18px; }
 .message.theirs .message-bubble { border-radius: 18px 18px 18px 4px; }
 
 /* 入力エリア改善 */
 .input-area { gap: 6px; padding: 8px 10px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
-.message-input { border-radius: 22px; padding: 9px 16px; font-size: 15px; min-height: 40px; }
+.message-input { border-radius: 22px; padding: 9px 16px;  min-height: 40px; }
 .send-btn { width: 42px; height: 42px; font-size: 20px; }
 
 /* タブバー改善 */
@@ -1322,7 +1322,7 @@ body.dark .page-header { background: #1c1c1e; }
   border-radius: 12px;
   background: var(--bg);
   color: var(--text);
-  font-size: 15px;
+  
   outline: none;
   font-family: inherit;
   box-sizing: border-box;
@@ -1332,7 +1332,7 @@ body.dark .page-header { background: #1c1c1e; }
 .form-input:focus { border-color: #06c755; }
 
 /* ボタン改善 */
-.btn { border: none; cursor: pointer; font-size: 15px; font-weight: 700; padding: 12px 20px; border-radius: 14px; transition: opacity 0.15s, transform 0.1s; font-family: inherit; }
+.btn { border: none; cursor: pointer;  font-weight: 700; padding: 12px 20px; border-radius: 14px; transition: opacity 0.15s, transform 0.1s; font-family: inherit; }
 .btn:active { opacity: 0.8; transform: scale(0.97); }
 .btn-primary { background: #06c755; color: white; }
 .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
@@ -1402,7 +1402,7 @@ body.dark .page-header { background: #1c1c1e; }
 .form-input {
   border-radius: 12px;
   padding: 11px 14px;
-  font-size: 15px;
+  
   border: 1.5px solid var(--border);
   transition: border-color 0.2s;
 }
@@ -1596,7 +1596,7 @@ body.dark .chat-header { background: #1c1c1e; }
   border: 1.5px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  font-size: 15px;
+  
   outline: none;
   box-sizing: border-box;
   transition: border-color 0.2s;
@@ -1696,7 +1696,7 @@ button, a, .room-item, .tab-btn {
   /* メッセージバブル改善 */
   .message-body { max-width: 78%; }
   .message-bubble {
-    font-size: 15px;
+    
     padding: 9px 13px;
     line-height: 1.5;
   }
