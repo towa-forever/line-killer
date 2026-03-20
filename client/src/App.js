@@ -151,7 +151,7 @@ function AvatarImg({ src, name, size = 40, frame = 'none' }) {
   );
 }
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -849,6 +849,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <div className="header-menu-dropdown" onClick={() => setShowHeaderMenu(false)}>
                 {[
                   { icon:'🔍', label:'全体検索', action: () => { setShowGlobalSearch(true); setShowHeaderMenu(false); } },
+                  { icon:'📊', label:'ダッシュボード', action: () => { onNavigate?.('dashboard'); setShowHeaderMenu(false); } },
+                  { icon:'📷', label:'アルバム', action: () => { onNavigate?.('album'); setShowHeaderMenu(false); } },
                   { icon:'⭐', label:'お気に入り', action: () => {
                     axios.get('/api/favorites').then(r => { setFavoritesList(r.data); setShowFavorites(true); }).catch(() => {});
                   }},
@@ -1799,11 +1801,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
 function TabBar({ activeTab, setActiveTab, notifications }) {
   const tabs = [
-    { id: 'chat', label: 'トーク', icon: '💬' },
-    { id: 'friends', label: '友達', icon: '👥' },
-    { id: 'timeline', label: 'お知らせ', icon: '📢' },
-    { id: 'stampshop', label: 'ショップ', icon: '🎫' },
-    { id: 'profile', label: 'プロフィール', icon: '👤' },
+    { id: 'chat',      label: 'トーク',       icon: '💬' },
+    { id: 'friends',   label: '友達',         icon: '👥' },
+    { id: 'timeline',  label: 'お知らせ',      icon: '📢' },
+    { id: 'stampshop', label: 'ショップ',      icon: '🎫' },
+    { id: 'profile',   label: 'プロフィール',  icon: '👤' },
   ];
   return (
     <nav className="tab-bar">
@@ -2024,7 +2026,7 @@ export default function App() {
     <>
       {/* 全タブ常時マウント（タブ切替でstateリセットされないように） */}
       <div style={tabVisible('chat')}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} onNavigate={setActiveTab} />
       </div>
       <div style={tabVisible('friends')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
