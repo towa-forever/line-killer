@@ -568,6 +568,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     socket.emit('message:send', { roomId: selectedRoom.id, content: inputText, type: 'text', replyTo: replyTo ? { id: replyTo.id, content: replyTo.content, senderName: replyTo.senderName } : null });
     setInputText('');
     setReplyTo(null);
+    // 下書きをクリア
+    if (selectedRoom?.id) {
+      draftRef.current[selectedRoom.id] = '';
+      axios.put('/api/drafts/' + selectedRoom.id, { content: '' }).catch(() => {});
+    }
     // textareaの高さをリセット
     const ta = document.querySelector('.message-input');
     if (ta) { ta.style.height = 'auto'; }
