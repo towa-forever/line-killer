@@ -294,6 +294,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       } else if (senderId !== currentUser.id) {
         setUnreadCounts((prev) => ({ ...prev, [roomId]: (prev[roomId] || 0) + 1 }));
       }
+      // キャッシュにも追加（バックグラウンドのルームのメッセージも保存）
+      if (messagesCache.current[roomId]) {
+        const cached = messagesCache.current[roomId];
+        if (!cached.some(m => m.id === normalizedMsg.id)) {
+          messagesCache.current[roomId] = [...cached, normalizedMsg].slice(-500);
+        }
+      }
       setRooms((prev) =>
         prev.map((r) => r.id === roomId ? { ...r, lastMessage: normalizedMsg, lastActivity: normalizedMsg.createdAt || normalizedMsg.created_at } : r)
           .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0))

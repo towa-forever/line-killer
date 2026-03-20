@@ -1517,8 +1517,11 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
       sender_id: m.sender_id, sender_name: m.sender_name, // 後方互換
       content: m.content, type: m.type || 'text',
       file_data: m.file_data, fileData: m.file_data,
+      stamp_label: m.stamp_label, stampLabel: m.stamp_label,
       reply_to: m.reply_to, replyTo: m.reply_to,
       edited: m.edited, deleted: m.deleted,
+      forwarded: m.forwarded || false,
+      expires_at: m.expires_at || null,
       read_by: m.read_by, reactions: m.reactions,
       created_at: m.created_at, createdAt: m.created_at,
     })));
