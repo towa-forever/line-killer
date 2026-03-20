@@ -2069,13 +2069,6 @@ export default function App() {
           </Suspense></ErrorBoundary>
         </div>
       )}
-      {activeTab === 'album' && (
-        <div style={tabVisible('album')}>
-          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-            <Album currentUser={currentUser} />
-          </Suspense></ErrorBoundary>
-        </div>
-      )}
       {activeTab === 'profile' && (
         <div style={tabVisible('profile')}>
           <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
