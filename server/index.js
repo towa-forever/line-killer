@@ -1004,7 +1004,7 @@ app.get('/api/users/search', async (req, res) => {
     if (!q) return res.json([]);
     const users = await User.find(
       { username: { $regex: q, $options: 'i' }, id: { $ne: decoded.id } },
-      { password: 0 }
+      { id: 1, username: 1, display_name: 1, avatar: 1, status: 1, bio: 1, is_official: 1 }
     ).limit(20);
     res.json(users);
   } catch { res.status(401).json({ error: 'unauthorized' }); }
@@ -1012,9 +1012,10 @@ app.get('/api/users/search', async (req, res) => {
 
 app.get('/api/users', async (req, res) => {
   try {
-    const users = await User.find({}, { password: 0 });
+    auth(req); // 認証必須
+    const users = await User.find({}, { id: 1, username: 1, display_name: 1, avatar: 1, status: 1, is_official: 1 });
     res.json(users);
-  } catch (e) { res.status(500).json({ error: 'サーバーエラー' }); }
+  } catch (e) { res.status(401).json({ error: '認証エラー' }); }
 });
 
 app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
