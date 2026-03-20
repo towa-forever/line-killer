@@ -22,17 +22,19 @@ export default function TaskPanel({ room, currentUser, socket, onClose }) {
 
   const addTask = async () => {
     if (!title.trim()) return;
-    await axios.post('/api/rooms/' + room.id + '/tasks', {
-      title: title.trim(),
-      assigneeId: assigneeId || currentUser?.id,
-      assigneeName: currentUser?.username, // 自分のみ選択可能なので常にcurrentUser?.username
-      due: due || null
-    });
-    setTitle(''); setAssigneeId(''); setDue('');
+    try {
+      await axios.post('/api/rooms/' + room.id + '/tasks', {
+        title: title.trim(),
+        assigneeId: assigneeId || currentUser?.id,
+        assigneeName: currentUser?.username,
+        due: due || null
+      });
+      setTitle(''); setAssigneeId(''); setDue('');
+    } catch (e) { console.error('タスク追加エラー:', e); }
   };
 
-  const toggle = (task) => axios.patch('/api/tasks/' + task.id, { done: !task.done });
-  const del = (task) => axios.delete('/api/tasks/' + task.id);
+  const toggle = (task) => axios.patch('/api/tasks/' + task.id, { done: !task.done }).catch(() => {});
+  const del = (task) => axios.delete('/api/tasks/' + task.id).catch(() => {});
 
   const pending = tasks.filter(t => !t.done);
   const done = tasks.filter(t => t.done);
