@@ -1863,7 +1863,7 @@ function TabBar({ activeTab, setActiveTab, notifications, onClearNotif }) {
   const tabs = [
     { id: 'chat',      label: 'トーク',       icon: '💬' },
     { id: 'friends',   label: '友達',         icon: '👥' },
-    { id: 'album',     label: 'アルバム',      icon: '📷' },
+    { id: 'timeline',  label: 'お知らせ',      icon: '📢' },
     { id: 'stampshop', label: 'ショップ',      icon: '🎫' },
     { id: 'profile',   label: 'プロフィール',  icon: '👤' },
   ];
