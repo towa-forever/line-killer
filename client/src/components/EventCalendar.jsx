@@ -106,7 +106,7 @@ export default function EventCalendar({ room, currentUser, socket, onClose }) {
           ) : events.length === 0 ? (
             <div style={{ textAlign:'center', color:'var(--text2)', padding:20, fontSize:14 }}>イベントがまだないで！</div>
           ) : events.map(evt => {
-            const myAttend = evt.attendees?.find(a => a.user_id === currentUser.id);
+            const myAttend = evt.attendees?.find(a => a.user_id === currentUser?.id);
             const goingCount = evt.attendees?.filter(a => a.status === 'going').length || 0;
             return (
               <div key={evt.id} style={{ background:'var(--surface2)', borderRadius:14, padding:14, marginBottom:10 }}>
