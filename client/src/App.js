@@ -1704,9 +1704,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               </div>
             )}
             {/* 音声メッセージ */}
-            {showVoice && <VoiceMessage roomId={selectedRoom.id} currentUser={currentUser} socket={socket} onSent={() => setShowVoice(false)} onCancel={() => setShowVoice(false)} />}
+            {showVoice && <ErrorBoundary><VoiceMessage roomId={selectedRoom.id} currentUser={currentUser} socket={socket} onSent={() => setShowVoice(false)} onCancel={() => setShowVoice(false)} /></ErrorBoundary>}
             {/* 位置情報 */}
-            {showLocation && <LocationShare socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowLocation(false)} onCancel={() => setShowLocation(false)} />}
+            {showLocation && <ErrorBoundary><LocationShare socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowLocation(false)} onCancel={() => setShowLocation(false)} /></ErrorBoundary>}
             {/* 秘密メッセージ */}
             {showSecret && <ErrorBoundary><Suspense fallback={null}><SecretMessage socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowSecret(false)} onCancel={() => setShowSecret(false)} /></Suspense></ErrorBoundary>}
             {/* 文字スタイルパネル */}
