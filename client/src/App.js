@@ -151,7 +151,7 @@ function AvatarImg({ src, name, size = 40, frame = 'none' }) {
   );
 }
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -840,6 +840,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     else { axios.post('/api/rooms/'+selectedRoom.id+'/mute'); setMutedRooms(prev=>new Set([...prev,selectedRoom.id])); }
                   }},
                   { icon:'📝', label:'ノート', action: () => setShowNote(true) },
+                  { icon:'🔖', label:'後で読む一覧', action: () => setShowReadLater(true) },
                   { icon:'🖼️', label:'画像・動画', action: () => setShowMediaList(true) },
                   { icon:'📅', label:'カレンダー', action: () => setShowEventCal(true) },
                   { icon:'✅', label:'タスク', action: () => setShowTaskPanel(true) },
@@ -2003,7 +2004,7 @@ export default function App() {
     <>
       {/* 全タブ常時マウント（タブ切替でstateリセットされないように） */}
       <div style={tabVisible('chat')}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} />
       </div>
       <div style={tabVisible('friends')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
@@ -2146,19 +2147,19 @@ export default function App() {
 
         {/* 後で読む */}
         {showReadLater && (
-          <Suspense fallback={null}>
+          <ErrorBoundary><Suspense fallback={null}>
             <ReadLater currentUser={currentUser} onClose={() => setShowReadLater(false)} />
-          </Suspense>
+          </Suspense></ErrorBoundary>
         )}
 
         {/* お問い合わせ */}
         {showContact && (
-          <Suspense fallback={null}>
+          <ErrorBoundary><Suspense fallback={null}>
             <ContactForm currentUser={currentUser} onClose={() => setShowContact(false)} />
-          </Suspense>
+          </Suspense></ErrorBoundary>
         )}
 
-        {/* 音声通話 */}}
+        {/* 音声通話 */}
         {voiceCall && (
           <Suspense fallback={null}>
             <VoiceCall
