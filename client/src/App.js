@@ -564,7 +564,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           {!isMine && <div className="message-avatar">{msg.senderName?.[0] || '?'}</div>}
           <div className="message-body">
             {!isMine && <div className="message-sender">{msg.senderName}</div>}
-            <Suspense fallback={<div style={{fontSize:13,color:'var(--text2)'}}>📊...</div>}><PollCard pollId={pollId} initialPoll={pollData} currentUser={currentUser} /></Suspense>
+            <ErrorBoundary><Suspense fallback={<div style={{fontSize:13,color:'var(--text2)'}}>📊...</div>}><PollCard pollId={pollId} initialPoll={pollData} currentUser={currentUser} /></Suspense></ErrorBoundary>
           </div>
         </div>
       );
@@ -1294,7 +1294,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
           {/* ユーザープロフィールモーダル */}
           {showUserProfile && (
-            <Suspense fallback={null}>
+            <ErrorBoundary><Suspense fallback={null}>
               <UserProfile
                 username={showUserProfile.name}
                 currentUser={currentUser}
@@ -1307,7 +1307,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 onCall={(user) => { onCall({ roomId: null, targetUserId: user.id || showUserProfile.id, isCaller: true, offer: null }); setShowUserProfile(null); }}
                 onVoiceCall={(user) => { setVoiceCall({ targetUser: user, isIncoming: false, callId: null, roomId: null }); setShowUserProfile(null); }}
               />
-            </Suspense>
+            </Suspense></ErrorBoundary>
           )}
 
           {/* グループメンバー管理モーダル */}
@@ -1760,9 +1760,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       </div>
 
       {showStats && selectedRoom && (
-        <Suspense fallback={null}>
+        <ErrorBoundary><Suspense fallback={null}>
           <ChatStats roomId={selectedRoom.id} roomName={selectedRoom.name} onClose={() => setShowStats(false)} />
-        </Suspense>
+        </Suspense></ErrorBoundary>
       )}
       {showCreateRoom && (
         <ErrorBoundary><Suspense fallback={null}><CreateRoom
@@ -2068,12 +2068,12 @@ export default function App() {
       <div className={`app ${darkMode ? 'dark' : ''}`}>
 {/* LINEはタブごとにヘッダーを持つためグローバルヘッダーは非表示 */}
         <main className="app-main">
-          <Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',fontSize:24}}>⏳</div>}>
+          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',fontSize:24}}>⏳</div>}>
             <Routes>
               <Route path="/videocall/:roomId/:targetUserId" element={<VideoCall currentUser={currentUser} socket={socket} />} />
               <Route path="*" element={renderTabs()} />
             </Routes>
-          </Suspense>
+          </Suspense></ErrorBoundary>
         </main>
         <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} />
         {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
