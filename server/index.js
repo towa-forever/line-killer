@@ -1598,7 +1598,7 @@ app.put('/api/rooms/:roomId/note/shared', async (req, res) => {
       { upsert: true, new: true }
     );
     // リアルタイムで他メンバーに通知
-    req.app.get('io').to(req.params.roomId).emit('note:updated', { roomId: req.params.roomId, type: 'shared', content: note.content, updatedBy: decoded.username });
+    io.to(req.params.roomId).emit('note:updated', { roomId: req.params.roomId, type: 'shared', content: note.content, updatedBy: decoded.username });
     res.json({ content: note.content, updatedBy: decoded.username, updatedAt: note.updated_at });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
