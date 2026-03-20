@@ -221,15 +221,19 @@ const StorySchema = new mongoose.Schema({
 MessageSchema.index({ room_id: 1, created_at: -1 }); // ルームのメッセージ取得（最多クエリ）
 MessageSchema.index({ sender_id: 1 });                // 統計・検索
 MessageSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 }); // 期限切れメッセージを自動削除
+MessageSchema.index({ type: 1, room_id: 1 });         // 画像・動画一覧取得
 RoomSchema.index({ members: 1 });                     // ユーザーのルーム一覧取得
 FriendSchema.index({ user_id: 1 });                   // 友達一覧取得
+FriendSchema.index({ user_id: 1, friend_id: 1 }, { unique: true }); // 重複防止
 FriendRequestSchema.index({ to_id: 1, status: 1 });  // 申請一覧取得
+FriendRequestSchema.index({ from_id: 1, to_id: 1 }); // 重複申請防止
 TaskSchema.index({ room_id: 1, done: 1 });            // ルームのタスク取得
 EventSchema.index({ room_id: 1, start_at: 1 });       // ルームのイベント取得
 ScheduledMessageSchema.index({ send_at: 1, sent: 1 }); // スケジュール送信チェック
 StorySchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 }); // 期限切れストーリーを自動削除
 GameScoreSchema.index({ game: 1, score: -1 });         // ゲームランキング取得
 FavoriteSchema.index({ user_id: 1 });                  // お気に入り一覧取得
+UserSchema.index({ username: 1 }, { unique: true });   // ユーザー名検索（既にschemaでuniqueだがindex明示）
 
 const PushSubscriptionSchema = new mongoose.Schema({
   user_id: { type: String, required: true, unique: true },
