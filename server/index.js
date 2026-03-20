@@ -2681,3 +2681,11 @@ const PORT = process.env.PORT || 4000;
 })();
 
 httpServer.listen(PORT, '0.0.0.0', () => console.log('Server: http://localhost:' + PORT));
+
+// 未処理のPromise拒否でサーバーが落ちないように
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
