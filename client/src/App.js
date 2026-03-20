@@ -1701,7 +1701,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             {/* 位置情報 */}
             {showLocation && <LocationShare socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowLocation(false)} onCancel={() => setShowLocation(false)} />}
             {/* 秘密メッセージ */}
-            {showSecret && <Suspense fallback={null}><SecretMessage socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowSecret(false)} onCancel={() => setShowSecret(false)} /></Suspense>}
+            {showSecret && <ErrorBoundary><Suspense fallback={null}><SecretMessage socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowSecret(false)} onCancel={() => setShowSecret(false)} /></Suspense></ErrorBoundary>}
             {/* 文字スタイルパネル */}
             {showStylePicker && (
               <div style={{ padding:'10px 12px', background:'var(--surface2)', borderTop:'1px solid var(--border)', display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
@@ -2104,7 +2104,7 @@ export default function App() {
         )}
         {/* サブアカウント切り替え */}
         {showSubAccounts && (
-          <Suspense fallback={null}>
+          <ErrorBoundary><Suspense fallback={null}>
             <SubAccounts
               currentUser={currentUser}
               onSwitch={(user) => {
@@ -2114,35 +2114,35 @@ export default function App() {
               }}
               onClose={() => setShowSubAccounts(false)}
             />
-          </Suspense>
+          </Suspense></ErrorBoundary>
         )}
 
         {/* PIN認証（未確認の場合） */}
         {currentUser && !pinVerified && (
-          <Suspense fallback={null}>
+          <ErrorBoundary><Suspense fallback={null}>
             <PinVerify
               onSuccess={() => setPinVerified(true)}
               onCancel={() => { setCurrentUser(null); setPinVerified(false); }}
             />
-          </Suspense>
+          </Suspense></ErrorBoundary>
         )}
 
         {/* PIN設定 */}
         {showPinSetup && (
-          <Suspense fallback={null}>
+          <ErrorBoundary><Suspense fallback={null}>
             <PinSetup enabled={!!currentUser?.pinEnabled} onClose={() => setShowPinSetup(false)} />
-          </Suspense>
+          </Suspense></ErrorBoundary>
         )}
 
         {/* ギフト送信 */}
         {showGift && (
-          <Suspense fallback={null}>
+          <ErrorBoundary><Suspense fallback={null}>
             <GiftModal
               targetUser={showGift}
               currentUser={currentUser}
               onClose={() => setShowGift(null)}
             />
-          </Suspense>
+          </Suspense></ErrorBoundary>
         )}
 
         {/* 後で読む */}
@@ -2161,7 +2161,7 @@ export default function App() {
 
         {/* 音声通話 */}
         {voiceCall && (
-          <Suspense fallback={null}>
+          <ErrorBoundary><Suspense fallback={null}>
             <VoiceCall
               socket={socket}
               currentUser={currentUser}
@@ -2171,7 +2171,7 @@ export default function App() {
               callId={voiceCall.callId}
               onClose={() => setVoiceCall(null)}
             />
-          </Suspense>
+          </Suspense></ErrorBoundary>
         )}
 
         {incomingCall && (
