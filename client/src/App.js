@@ -2078,29 +2078,33 @@ export default function App() {
         <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} />
         {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
         {groupCall && (
-          <GroupVideoCall
-            socket={socket}
-            currentUser={currentUser}
-            roomId={groupCall.roomId}
-            members={groupCall.members}
-            roomName={groupCall.roomName}
-            onEnd={() => { setGroupCall(null); setCallMinimized(false); }}
-            minimized={callMinimized}
-            onToggleMinimize={() => setCallMinimized(m => !m)}
-          />
+          <ErrorBoundary><Suspense fallback={null}>
+            <GroupVideoCall
+              socket={socket}
+              currentUser={currentUser}
+              roomId={groupCall.roomId}
+              members={groupCall.members}
+              roomName={groupCall.roomName}
+              onEnd={() => { setGroupCall(null); setCallMinimized(false); }}
+              minimized={callMinimized}
+              onToggleMinimize={() => setCallMinimized(m => !m)}
+            />
+          </Suspense></ErrorBoundary>
         )}
         {activeCall && (
-          <VideoCall
-            currentUser={currentUser}
-            socket={socket}
-            roomId={activeCall.roomId}
-            targetUserId={activeCall.targetUserId}
-            isCaller={activeCall.isCaller}
-            incomingOffer={activeCall.offer}
-            onEnd={() => { setActiveCall(null); setCallMinimized(false); }}
-            minimized={callMinimized}
-            onToggleMinimize={() => setCallMinimized(m => !m)}
-          />
+          <ErrorBoundary>
+            <VideoCall
+              currentUser={currentUser}
+              socket={socket}
+              roomId={activeCall.roomId}
+              targetUserId={activeCall.targetUserId}
+              isCaller={activeCall.isCaller}
+              incomingOffer={activeCall.offer}
+              onEnd={() => { setActiveCall(null); setCallMinimized(false); }}
+              minimized={callMinimized}
+              onToggleMinimize={() => setCallMinimized(m => !m)}
+            />
+          </ErrorBoundary>
         )}
         {/* サブアカウント切り替え */}
         {showSubAccounts && (
