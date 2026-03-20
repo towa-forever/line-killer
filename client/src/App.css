@@ -1596,7 +1596,8 @@ body.dark .chat-header { background: #1c1c1e; }
   border: 1.5px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  
+  font-size: 16px;
+  font-family: inherit;
   outline: none;
   box-sizing: border-box;
   transition: border-color 0.2s;
