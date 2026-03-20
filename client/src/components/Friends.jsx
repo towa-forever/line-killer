@@ -249,13 +249,15 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
               <div style={{ padding:'10px 16px 6px', fontSize:12, color:'var(--text2)', fontWeight:600, background:'var(--bg)' }}>
                 承認待ち ({requests.length}件)
               </div>
-              {requests.map(req => (
+              {requests.map(req => {
+                const avatarSrc = req.from_avatar ? (req.from_avatar.startsWith('http') ? req.from_avatar : `${SERVER_URL}${req.from_avatar}`) : null;
+                return (
                 <div key={req.id||req._id} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderBottom:'0.5px solid var(--border)', background:'var(--surface)' }}>
-                  <div style={{ width:52, height:52, borderRadius:'50%', background:'linear-gradient(135deg,#06c755,#03a040)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, fontWeight:700, flexShrink:0 }}>
-                    {req.from_name?.[0]?.toUpperCase() || '?'}
+                  <div style={{ width:52, height:52, borderRadius:'50%', background:'linear-gradient(135deg,#06c755,#03a040)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, fontWeight:700, flexShrink:0, overflow:'hidden' }}>
+                    {avatarSrc ? <img src={avatarSrc} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : (req.from_name?.[0]?.toUpperCase() || '?')}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontWeight:700, fontSize:15, marginBottom:2 }}>{req.from_name}</div>
+                    <div style={{ fontWeight:700, fontSize:15, marginBottom:2 }}>{req.from_display_name || req.from_name}</div>
                     <div style={{ fontSize:12, color:'var(--text2)' }}>@{req.from_name} から友達申請</div>
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
@@ -269,7 +271,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
                     </button>
                   </div>
                 </div>
-              ))}
+              )})}
             </>
           )}
         </div>

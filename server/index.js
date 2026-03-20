@@ -1062,7 +1062,12 @@ app.get('/api/friend-requests', async (req, res) => {
   try {
     const decoded = auth(req);
     const requests = await FriendRequest.find({ to_id: decoded.id, status: 'pending' });
-    res.json(requests);
+    // 申請者のアバターも付与
+    const withAvatar = await Promise.all(requests.map(async r => {
+      const fromUser = await User.findOne({ id: r.from_id }, { avatar: 1, display_name: 1 });
+      return { ...r.toObject(), from_avatar: fromUser?.avatar || null, from_display_name: fromUser?.display_name || r.from_name };
+    }));
+    res.json(withAvatar);
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
