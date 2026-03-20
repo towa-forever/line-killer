@@ -540,8 +540,9 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
-    const uname = username.trim();
-    if (uname.length < 2 || uname.length > 20) return res.status(400).json({ error: 'ユーザー名は2〜20文字にしてください' });
+    const uname = username.trim().toLowerCase();
+    if (uname.length < 3 || uname.length > 20) return res.status(400).json({ error: 'ユーザー名は3〜20文字にしてください' });
+    if (!/^[a-z0-9_\-.]+$/.test(uname)) return res.status(400).json({ error: 'ユーザー名は英小文字・数字・_ ・- ・. のみ使えます' });
     if (password.length < 6) return res.status(400).json({ error: 'パスワードは6文字以上にしてください' });
     const exists = await User.findOne({ username: uname });
     if (exists) return res.status(400).json({ error: 'このユーザー名は既に使われてます' });

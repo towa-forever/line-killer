@@ -60,6 +60,7 @@ function AuthScreen({ onLogin }) {
     if (!username.trim()) { setError('IDを入力してください'); return; }
     if (password.length < 6) { setError('パスワードは6文字以上にしてください'); return; }
     if (!isLogin && username.length < 3) { setError('IDは3文字以上にしてください'); return; }
+    if (!isLogin && !/^[a-z0-9_\-.]+$/i.test(username.trim())) { setError('IDは英字・数字・_・-・.のみ使えます'); return; }
     setLoading(true); setError('');
     try {
       const res = await axios.post(isLogin ? '/api/auth/login' : '/api/auth/register', { username: username.trim(), password });
