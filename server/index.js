@@ -2397,13 +2397,18 @@ app.post('/api/ai/assist', async (req, res) => {
     const { type, messages: msgs, text, targetLang } = req.body;
     let prompt = '';
     if (type === 'summary') {
-      const chatText = msgs.map(m => `${m.senderName}: ${m.content}`).join('\n');
+      const chatText = (msgs || []).map(m => `${m.senderName}: ${m.content}`).join('\n');
+      if (!chatText.trim()) return res.status(400).json({ error: 'メッセージがありません' });
       prompt = `以下のチャット会話を日本語で3〜5行に要約してください。\n\n${chatText}`;
     } else if (type === 'translate') {
+      if (!text?.trim()) return res.status(400).json({ error: '翻訳するテキストがありません' });
       prompt = `次のテキストを${targetLang || '英語'}に翻訳してください。翻訳結果だけ返してください。\n\n${text}`;
     } else if (type === 'suggest') {
-      const chatText = msgs.slice(-10).map(m => `${m.senderName}: ${m.content}`).join('\n');
+      const chatText = (msgs || []).slice(-10).map(m => `${m.senderName}: ${m.content}`).join('\n');
+      if (!chatText.trim()) return res.status(400).json({ error: 'メッセージがありません' });
       prompt = `以下の会話の流れを読んで、自然な返信案を3つ提案してください。番号付きリストで返してください。\n\n${chatText}`;
+    } else {
+      return res.status(400).json({ error: '不正なタイプです' });
     }
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
