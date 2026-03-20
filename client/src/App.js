@@ -109,6 +109,57 @@ function AuthScreen({ onLogin }) {
   );
 }
 
+function MediaListModal({ roomId, serverUrl, onClose }) {
+  const [photos, setPhotos] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [lightbox, setLightbox] = React.useState(null);
+  React.useEffect(() => {
+    if (!roomId) return;
+    axios.get(`/api/rooms/${roomId}/album`)
+      .then(r => setPhotos(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [roomId]);
+  const getUrl = (photo) => {
+    const u = photo.file_data?.url || photo.fileData?.url || photo.url;
+    if (!u) return '';
+    return u.startsWith('http') ? u : `${serverUrl}${u}`;
+  };
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'85vh' }}>
+        <div className="modal-title">🖼️ 画像・動画 ({photos.length})</div>
+        {loading ? (
+          <div style={{ textAlign:'center', color:'var(--text2)', padding:'20px 0' }}>読み込み中...</div>
+        ) : (
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:4, maxHeight:'65vh', overflowY:'auto' }}>
+            {photos.length === 0
+              ? <div style={{ gridColumn:'1/-1', textAlign:'center', color:'var(--text2)', padding:'20px 0' }}>画像・動画がまだないで</div>
+              : photos.map((p, i) => {
+                const url = getUrl(p);
+                if (!url) return null;
+                return (
+                  <div key={p._id || p.id || i} style={{ aspectRatio:'1', overflow:'hidden', borderRadius:8, cursor:'pointer' }}
+                    onClick={() => setLightbox(url)}>
+                    <img src={url} alt="" loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  </div>
+                );
+              })
+            }
+          </div>
+        )}
+        <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={onClose}>閉じる</button>
+        {lightbox && (
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.9)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}
+            onClick={() => setLightbox(null)}>
+            <img src={lightbox} alt="" style={{ maxWidth:'95vw', maxHeight:'90vh', objectFit:'contain', borderRadius:8 }} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function RoomNameEditor({ room, onClose }) {
   const [name, setName] = React.useState(room.name || '');
   const [saving, setSaving] = React.useState(false);
@@ -1394,23 +1445,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
           {/* メディア一覧モーダル */}
           {showMediaList && (
-            <div className="modal-overlay" onClick={() => setShowMediaList(false)}>
-              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'85vh' }}>
-                <div className="modal-title">🖼️ 画像・動画</div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:4, maxHeight:'65vh', overflowY:'auto' }}>
-                  {messages.filter(m => m.type === 'image' && m.fileData?.url).length === 0
-                    ? <div style={{ gridColumn:'1/-1', textAlign:'center', color:'var(--text2)', padding:'20px 0' }}>画像・動画がまだないで</div>
-                    : messages.filter(m => m.type === 'image' && m.fileData?.url).map(m => (
-                      <div key={m.id} style={{ aspectRatio:'1', overflow:'hidden', borderRadius:8, cursor:'pointer' }}
-                        onClick={() => window.open(m.fileData.url?.startsWith('http') ? m.fileData.url : `${SERVER_URL}${m.fileData.url}`, '_blank')}>
-                        <img src={m.fileData.url?.startsWith('http') ? m.fileData.url : `${SERVER_URL}${m.fileData.url}`} alt="" loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                      </div>
-                    ))
-                  }
-                </div>
-                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowMediaList(false)}>閉じる</button>
-              </div>
-            </div>
+            <MediaListModal
+              roomId={selectedRoom?.id}
+              serverUrl={SERVER_URL}
+              onClose={() => setShowMediaList(false)}
+            />
           )}
           {showAnnounce && (
             <div className="modal-overlay" onClick={() => setShowAnnounce(false)}>
