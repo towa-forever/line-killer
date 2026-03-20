@@ -1962,6 +1962,13 @@ export default function App() {
       showToast(`${data.from_name} から友達申請が届きました`);
       setNotifications((prev) => ({ ...prev, friends: prev.friends + 1 }));
     });
+    // 未読メッセージをチャットタブバッジに反映
+    s.on('message:receive', (msg) => {
+      const senderId = msg.senderId || msg.sender_id;
+      if (senderId !== currentUser?.id) {
+        setNotifications(prev => ({ ...prev, chat: (prev.chat || 0) + 1 }));
+      }
+    });
     s.on('friend:accepted', (data) => {
       showToast(`${data.by_name} と友達になりました！`, 'success');
       // 友達リストを自動更新
