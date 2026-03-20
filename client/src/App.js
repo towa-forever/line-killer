@@ -1212,12 +1212,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <input type="datetime-local" className="form-input" value={scheduleAt} onChange={e => setScheduleAt(e.target.value)} />
                 <div className="modal-actions">
                   <button className="btn btn-secondary" onClick={() => setShowSchedule(false)}>キャンセル</button>
-                  <button className="btn btn-primary" onClick={() => {
-                    if (!scheduleText.trim() || !scheduleAt) return;
-                    axios.post('/api/rooms/' + selectedRoom.id + '/schedule', { content: scheduleText.trim(), sendAt: scheduleAt })
-                      .then(() => showToast?.('予約送信を設定したで！⏰', 'success'))
-                      .catch(e => console.error(e));
-                    setShowSchedule(false); setScheduleText(''); setScheduleAt('');
+                  <button className="btn btn-primary" onClick={async () => {
+                    if (!scheduleText.trim() || !scheduleAt) { showToast?.('メッセージと送信日時を入力してね', 'error'); return; }
+                    const sendTime = new Date(scheduleAt);
+                    if (sendTime <= new Date()) { showToast?.('送信日時は未来の日時を指定してね', 'error'); return; }
+                    try {
+                      await axios.post('/api/rooms/' + selectedRoom.id + '/schedule', { content: scheduleText.trim(), sendAt: scheduleAt });
+                      showToast?.('予約送信を設定したで！⏰', 'success');
+                      setShowSchedule(false); setScheduleText(''); setScheduleAt('');
+                    } catch(e) { showToast?.('予約の設定に失敗した...', 'error'); }
                   }}>予約する</button>
                 </div>
               </div>

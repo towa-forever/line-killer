@@ -2440,12 +2440,18 @@ app.post('/api/rooms/:roomId/schedule', async (req, res) => {
   try {
     const decoded = auth(req);
     const { content, sendAt } = req.body;
-    
+    if (!content?.trim()) return res.status(400).json({ error: 'メッセージを入力してください' });
+    if (!sendAt) return res.status(400).json({ error: '送信日時を指定してください' });
+    const sendTime = new Date(sendAt);
+    if (isNaN(sendTime.getTime())) return res.status(400).json({ error: '日時の形式が正しくありません' });
+    if (sendTime <= new Date()) return res.status(400).json({ error: '送信日時は未来の日時を指定してください' });
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    if (!room) return res.status(403).json({ error: '権限なし' });
     const user = await User.findOne({ id: decoded.id });
     const msg = await ScheduledMessage.create({
       id: 'sched_' + uuidv4(), room_id: req.params.roomId,
       sender_id: decoded.id, sender_name: user.display_name || user.username,
-      content, send_at: new Date(sendAt)
+      content: content.trim(), send_at: sendTime
     });
     res.json(msg);
   } catch(e) { res.status(400).json({ error: e.message }); }
