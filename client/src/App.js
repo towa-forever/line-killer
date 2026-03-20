@@ -1859,7 +1859,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   );
 }
 
-function TabBar({ activeTab, setActiveTab, notifications }) {
+function TabBar({ activeTab, setActiveTab, notifications, onClearNotif }) {
   const tabs = [
     { id: 'chat',      label: 'トーク',       icon: '💬' },
     { id: 'friends',   label: '友達',         icon: '👥' },
@@ -1871,7 +1871,7 @@ function TabBar({ activeTab, setActiveTab, notifications }) {
     <nav className="tab-bar">
       {tabs.map((tab) => (
         <button key={tab.id} className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-          onClick={() => setActiveTab(tab.id)}>
+          onClick={() => { setActiveTab(tab.id); onClearNotif?.(tab.id); }}>
           <span className="tab-icon">{tab.icon}</span>
           {notifications?.[tab.id] > 0 && <span className="tab-badge">{notifications[tab.id]}</span>}
           <span className="tab-label">{tab.label}</span>
@@ -2157,7 +2157,7 @@ export default function App() {
             </Routes>
           </Suspense></ErrorBoundary>
         </main>
-        <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} />
+        <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} onClearNotif={(tabId) => setNotifications(p => ({ ...p, [tabId]: 0 }))} />
         {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
         {groupCall && (
           <ErrorBoundary><Suspense fallback={null}>
