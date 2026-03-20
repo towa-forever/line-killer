@@ -26,7 +26,7 @@ const useCloudinary = !!(process.env.CLOUDINARY_CLOUD_NAME);
 const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
-const { v4: uuidv4 } = require('uuid');
+
 const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription } = require('./db');
 
 const app = express();
@@ -634,8 +634,6 @@ app.get('/api/users/me', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-
-
 // ===== 下書き保存 =====
 app.put('/api/drafts/:roomId', async (req, res) => {
   try {
@@ -713,7 +711,6 @@ app.get('/api/users/me/coins', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-
 // Push通知API
 app.get('/api/push/vapid-key', (req, res) => {
   res.json({ publicKey: VAPID_PUBLIC_KEY });
@@ -782,9 +779,6 @@ app.get('/api/ice-servers', (req, res) => {
   res.json({ iceServers });
 });
 
-
-
-
 // ===== グループ招待リンク =====
 app.post('/api/rooms/:roomId/invite', async (req, res) => {
   try {
@@ -792,7 +786,7 @@ app.post('/api/rooms/:roomId/invite', async (req, res) => {
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
     if (!room) return res.status(403).json({ error: '権限なし' });
     if (!room.invite_code) {
-      const { v4: uuidv4 } = require('uuid');
+      
       room.invite_code = uuidv4().replace(/-/g, '').slice(0, 12);
       await room.save();
     }
@@ -848,7 +842,6 @@ app.patch('/api/rooms/:roomId/theme', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-
 // ===== サブアカウント =====
 
 // サブアカ一覧取得
@@ -881,7 +874,7 @@ app.post('/api/sub-accounts', async (req, res) => {
     const exists = await User.findOne({ username });
     if (exists) return res.status(400).json({ error: 'このIDはすでに使われています' });
 
-    const id = require('uuid').v4();
+    const id = uuidv4();
     const hashed = await bcrypt.hash(password, 10);
     const sub = await User.create({
       id, username, password: hashed,
@@ -952,7 +945,7 @@ app.post('/api/contact', async (req, res) => {
     const { category, title, body } = req.body;
     if (!category || !title?.trim() || !body?.trim()) return res.status(400).json({ error: '必須項目を入力してください' });
     if (body.trim().length < 10) return res.status(400).json({ error: '内容を10文字以上入力してください' });
-    const { v4: uuidv4 } = require('uuid');
+    
     await Contact.create({ id: uuidv4(), user_id: decoded.id, username: decoded.username, category, title: title.trim(), body: body.trim() });
     // 管理者に通知
     io.emit('admin:contact_new', { username: decoded.username, category, title });
@@ -996,7 +989,7 @@ app.post('/api/friends/by-qr', async (req, res) => {
     if (target.id === decoded.id) return res.status(400).json({ error: '自分自身には送れません' });
     const already = await Friend.findOne({ user_id: decoded.id, friend_id: target.id });
     if (already) return res.json({ ok: true, message: 'すでに友達です' });
-    const { v4: uuidv4 } = require('uuid');
+    
     const id = uuidv4();
     await FriendRequest.create({ id, from_id: decoded.id, from_name: decoded.username, to_id: target.id });
     io.to('user_' + target.id).emit('friend:request', { id, from_id: decoded.id, from_name: decoded.username });
@@ -1350,7 +1343,6 @@ app.get('/api/rooms', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
-
 // ===== DM: 友達とのトークルームを取得または作成 =====
 app.post('/api/rooms/dm', async (req, res) => {
   try {
@@ -1594,7 +1586,7 @@ app.put('/api/rooms/:roomId/note/shared', async (req, res) => {
     if (!room) return res.status(403).json({ error: '権限なし' });
     const note = await Note.findOneAndUpdate(
       { room_id: req.params.roomId, user_id: null },
-      { content: req.body.content, updated_by: decoded.username, updated_at: new Date(), $setOnInsert: { id: require('uuid').v4() } },
+      { content: req.body.content, updated_by: decoded.username, updated_at: new Date(), $setOnInsert: { id: uuidv4() } },
       { upsert: true, new: true }
     );
     // リアルタイムで他メンバーに通知
@@ -1622,7 +1614,7 @@ app.put('/api/rooms/:roomId/note/mine', async (req, res) => {
     if (!room) return res.status(403).json({ error: '権限なし' });
     await Note.findOneAndUpdate(
       { room_id: req.params.roomId, user_id: decoded.id },
-      { content: req.body.content, updated_at: new Date(), $setOnInsert: { id: require('uuid').v4() } },
+      { content: req.body.content, updated_at: new Date(), $setOnInsert: { id: uuidv4() } },
       { upsert: true }
     );
     res.json({ ok: true });
@@ -1667,7 +1659,6 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
-
 
 // Socket.io
 io.use(async (socket, next) => {
@@ -1870,7 +1861,7 @@ io.on('connection', async (socket) => {
     }
     if (roomId) {
       try {
-        const { v4: uuidv4 } = require('uuid');
+        
         const msg = await Message.create({
           id: uuidv4(), room_id: roomId,
           sender_id: socket.user.id, sender_name: socket.user.username,
@@ -1901,7 +1892,7 @@ io.on('connection', async (socket) => {
     // 通話終了メッセージをチャットに保存
     if (roomId) {
       try {
-        const { v4: uuidv4 } = require('uuid');
+        
         const dur = duration > 0 ? formatDuration(duration) : null;
         const content = dur ? `📵 通話終了（${dur}）` : '📵 通話終了（応答なし）';
         const msg = await Message.create({
@@ -1935,7 +1926,7 @@ io.on('connection', async (socket) => {
     // 音声通話終了メッセージ
     if (roomId) {
       try {
-        const { v4: uuidv4 } = require('uuid');
+        
         const dur = duration > 0 ? formatDuration(duration) : null;
         const content = dur ? `📵 音声通話終了（${dur}）` : '📵 音声通話（応答なし）';
         await Message.create({
@@ -1950,7 +1941,6 @@ io.on('connection', async (socket) => {
   socket.on('voice:ice', ({ to, candidate, callId }) => {
     io.to('user_' + to).emit('call:ice', { candidate, from: socket.user.id, callId });
   });
-
 
 // 通話時間フォーマット
 function formatDuration(seconds) {
@@ -2019,7 +2009,7 @@ function formatDuration(seconds) {
     io.to('user_' + to).emit('call:rejected', { from: socket.user.id });
     if (roomId) {
       try {
-        const { v4: uuidv4 } = require('uuid');
+        
         const msg = await Message.create({
           id: uuidv4(), room_id: roomId,
           sender_id: socket.user.id, sender_name: socket.user.username,
@@ -2111,7 +2101,7 @@ app.post('/api/favorites', async (req, res) => {
   try {
     const decoded = auth(req);
     const { messageId, roomId, content, senderName } = req.body;
-    const { v4: uuidv4 } = require('uuid');
+    
     const existing = await Favorite.findOne({ user_id: decoded.id, message_id: messageId });
     if (existing) { await Favorite.deleteOne({ _id: existing._id }); return res.json({ removed: true }); }
     const fav = await Favorite.create({ id: 'fav_' + uuidv4(), user_id: decoded.id, message_id: messageId, room_id: roomId, content, sender_name: senderName });
@@ -2130,7 +2120,7 @@ app.get('/api/favorites', async (req, res) => {
 app.post('/api/rooms/:roomId/events', async (req, res) => {
   try {
     const decoded = auth(req);
-    const { v4: uuidv4 } = require('uuid');
+    
     const { title, description, startAt, endAt } = req.body;
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
     if (!room) return res.status(403).json({ error: '権限なし' });
@@ -2165,7 +2155,6 @@ app.patch('/api/events/:eventId/attend', async (req, res) => {
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 
-
 // ===== チャット統計API =====
 app.get('/api/rooms/:roomId/stats', async (req, res) => {
   try {
@@ -2195,8 +2184,6 @@ app.get('/api/rooms/:roomId/stats', async (req, res) => {
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 
-
-
 // ===== ストーリーAPI =====
 app.get('/api/stories', async (req, res) => {
   try {
@@ -2212,7 +2199,7 @@ app.post('/api/stories', async (req, res) => {
     if (!req.body.url) return res.status(400).json({ error: 'URLが必要です' });
     const user = await User.findOne({ id: decoded.id });
     const story = await Story.create({
-      id: 'st_' + require('uuid').v4(),
+      id: 'st_' + uuidv4(),
       user_id: decoded.id,
       user_name: user?.display_name || user?.username,
       user_avatar: user?.avatar,
@@ -2269,7 +2256,7 @@ app.post('/api/game/score', async (req, res) => {
     if (!VALID_GAMES.includes(game)) return res.status(400).json({ error: '不正なゲーム名' });
     const user = await User.findOne({ id: decoded.id });
     const coinsEarned = Math.min(Math.floor(score / 100), 100); // 1回最大100コインまで  // 100点ごとに1コイン
-    const id = 'gs_' + require('uuid').v4();
+    const id = 'gs_' + uuidv4();
     await GameScore.create({
       id, user_id: decoded.id,
       username: user?.display_name || user?.username,
@@ -2324,7 +2311,7 @@ app.post('/api/game/shop/buy', async (req, res) => {
     const existing = await GameItem.findOne({ user_id: decoded.id, item_id: itemId });
     if (existing) return res.status(400).json({ error: '既に持ってるで' });
     await GameCoin.findOneAndUpdate({ user_id: decoded.id }, { $inc: { coins: -price }, updated_at: new Date() });
-    const item = await GameItem.create({ id: 'gi_' + require('uuid').v4(), user_id: decoded.id, item_type: itemType, item_id: itemId });
+    const item = await GameItem.create({ id: 'gi_' + uuidv4(), user_id: decoded.id, item_type: itemType, item_id: itemId });
     // アバターフレーム購入の場合はUserにも反映
     if (itemType === 'avatar_frame') await User.findOneAndUpdate({ id: decoded.id }, { avatar_frame: itemId });
     res.json({ ok: true, item, remainingCoins: wallet.coins - price });
@@ -2453,7 +2440,7 @@ app.post('/api/rooms/:roomId/schedule', async (req, res) => {
   try {
     const decoded = auth(req);
     const { content, sendAt } = req.body;
-    const { v4: uuidv4 } = require('uuid');
+    
     const user = await User.findOne({ id: decoded.id });
     const msg = await ScheduledMessage.create({
       id: 'sched_' + uuidv4(), room_id: req.params.roomId,
@@ -2498,7 +2485,7 @@ app.delete('/api/scheduled/:id', async (req, res) => {
 app.post('/api/rooms/:roomId/polls', async (req, res) => {
   try {
     const decoded = auth(req);
-    const { v4: uuidv4 } = require('uuid');
+    
     const { question, options, multi } = req.body;
     const poll = await Poll.create({
       id: 'poll_' + uuidv4(), room_id: req.params.roomId,
@@ -2507,9 +2494,9 @@ app.post('/api/rooms/:roomId/polls', async (req, res) => {
     });
     // メッセージとして送信
     const user = await User.findOne({ id: decoded.id });
-    const { v4: uuid2 } = require('uuid');
+    
     const msg = await Message.create({
-      id: 'msg_' + uuid2(), room_id: req.params.roomId,
+      id: 'msg_' + uuidv4(), room_id: req.params.roomId,
       sender_id: decoded.id, sender_name: user.display_name || user.username,
       type: 'poll', content: poll.question,
       file_data: { pollId: poll.id },
@@ -2564,7 +2551,7 @@ app.post('/api/polls/:pollId/close', async (req, res) => {
 app.post('/api/rooms/:roomId/tasks', async (req, res) => {
   try {
     const decoded = auth(req);
-    const { v4: uuidv4 } = require('uuid');
+    
     const { title, assigneeId, assigneeName, due } = req.body;
     const task = await Task.create({
       id: 'task_' + uuidv4(), room_id: req.params.roomId,
@@ -2609,7 +2596,7 @@ app.delete('/api/tasks/:taskId', async (req, res) => {
 app.post('/api/rooms/:roomId/ephemeral', async (req, res) => {
   try {
     const decoded = auth(req);
-    const { v4: uuidv4 } = require('uuid');
+    
     const { content, ttlSeconds } = req.body;
     const user = await User.findOne({ id: decoded.id });
     const expiresAt = new Date(Date.now() + (ttlSeconds || 30) * 1000);
@@ -2639,7 +2626,7 @@ setInterval(async () => {
     const now = new Date();
     const due = await ScheduledMessage.find({ sent: false, send_at: { $lte: now } });
     for (const sm of due) {
-      const { v4: uuidv4 } = require('uuid');
+      
       const msg = await Message.create({
         id: 'msg_' + uuidv4(), room_id: sm.room_id,
         sender_id: sm.sender_id, sender_name: sm.sender_name,
@@ -2654,7 +2641,6 @@ setInterval(async () => {
     }
   } catch(e) { console.error('スケジュール送信エラー:', e); }
 }, 60000);
-
 
 const clientBuild = join(__dirname, '../client/build');
 
