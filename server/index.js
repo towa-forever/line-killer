@@ -1764,8 +1764,11 @@ io.on('connection', async (socket) => {
 
   socket.on('message:read', async ({ messageId, roomId }) => {
     try {
-      await Message.findOneAndUpdate({ id: messageId }, { $addToSet: { read_by: socket.user.id } });
-      const msg = await Message.findOne({ id: messageId });
+      const msg = await Message.findOneAndUpdate(
+        { id: messageId },
+        { $addToSet: { read_by: socket.user.id } },
+        { new: true }
+      );
       if (!msg) return;
       const readers = await User.find({ id: { $in: msg.read_by } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
       const readByDetail = readers.map(u => ({ id: u.id, name: u.display_name || u.username, avatar: u.avatar }));
@@ -1779,16 +1782,16 @@ io.on('connection', async (socket) => {
       const msg = await Message.findOne({ id: messageId });
       if (!msg) return;
       const existing = msg.reactions.find(r => r.user_id === socket.user.id);
+      let updated;
       if (existing) {
         if (existing.emoji === emoji) {
-          await Message.findOneAndUpdate({ id: messageId }, { $pull: { reactions: { user_id: socket.user.id } } });
+          updated = await Message.findOneAndUpdate({ id: messageId }, { $pull: { reactions: { user_id: socket.user.id } } }, { new: true });
         } else {
-          await Message.findOneAndUpdate({ id: messageId, 'reactions.user_id': socket.user.id }, { $set: { 'reactions.$.emoji': emoji } });
+          updated = await Message.findOneAndUpdate({ id: messageId, 'reactions.user_id': socket.user.id }, { $set: { 'reactions.$.emoji': emoji } }, { new: true });
         }
       } else {
-        await Message.findOneAndUpdate({ id: messageId }, { $push: { reactions: { emoji, user_id: socket.user.id } } });
+        updated = await Message.findOneAndUpdate({ id: messageId }, { $push: { reactions: { emoji, user_id: socket.user.id } } }, { new: true });
       }
-      const updated = await Message.findOne({ id: messageId });
       if (!updated) return;
       io.to(roomId).emit('message:reacted', { messageId, reactions: updated.reactions, roomId });
     } catch(e) { console.error('message:react error:', e); }
