@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
 
 const GAMES = [
   { id:'reflex',  emoji:'⚡', name:'反射神経テスト',   desc:'画面が変わったら即タップ！' },
@@ -320,7 +321,14 @@ function shuffle(arr) { return [...arr].sort(() => Math.random()-0.5); }
 export default function MiniGame({ onSendResult, onClose }) {
   const [game, setGame] = useState(null);
 
-  const share = (text) => { onSendResult(text); onClose(); };
+  const share = (text, scoreData) => {
+    // スコアをAPIに送信（ゲームIDとスコアがある場合）
+    if (scoreData?.game && typeof scoreData.score === 'number') {
+      axios.post('/api/game/score', scoreData).catch(() => {});
+    }
+    onSendResult(text);
+    onClose();
+  };
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000 }}

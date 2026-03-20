@@ -2252,7 +2252,7 @@ app.post('/api/game/score', async (req, res) => {
     if (!game || typeof score !== 'number' || score < 0 || score > 999999) {
       return res.status(400).json({ error: 'スコアが不正です' });
     }
-    const VALID_GAMES = ['puzzle', 'memory', 'quiz', 'runner', 'match'];
+    const VALID_GAMES = ['puzzle', 'memory', 'quiz', 'runner', 'match', 'reflex', 'number', 'type', 'color', 'math'];
     if (!VALID_GAMES.includes(game)) return res.status(400).json({ error: '不正なゲーム名' });
     const user = await User.findOne({ id: decoded.id });
     const coinsEarned = Math.min(Math.floor(score / 100), 100); // 1回最大100コインまで  // 100点ごとに1コイン
