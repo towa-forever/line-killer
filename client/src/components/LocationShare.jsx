@@ -45,7 +45,7 @@ export function LocationBubble({ msg, isMine }) {
   const data = msg.fileData || msg.file_data;
   if (!data?.lat) return null;
   const { lat, lng, label } = data;
-  const mapUrl = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}&zoom=15`;
+  const mapUrl = `https://www.google.com/maps?q=${lat},${lng}`;
   const imgUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=14&size=280x140&markers=${lat},${lng},red`;
   return (
     <div style={{ borderRadius:14, overflow:'hidden', cursor:'pointer' }} onClick={() => window.open(mapUrl, '_blank')}>
