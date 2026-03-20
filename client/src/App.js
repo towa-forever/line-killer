@@ -1658,7 +1658,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                       {msg.sender_name} · {new Date(msg.created_at).toLocaleDateString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}
                     </div>
                     <div style={{ fontSize:14, color:'var(--text)' }}>
-                      {msg.content?.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) =>
+                      {msg.content?.split(new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')).map((part, i) =>
                         part.toLowerCase() === searchQuery.toLowerCase()
                           ? <mark key={i} style={{ background:'#ffeb3b', color:'#000', borderRadius:2 }}>{part}</mark>
                           : part
