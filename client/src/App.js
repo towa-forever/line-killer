@@ -232,7 +232,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showMediaList, setShowMediaList] = useState(false);
   const [showMemberMgr, setShowMemberMgr] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(null); // { id, name, avatar, status }
-  const [, setReadByDetailMap] = useState({}); // msgId -> [{id,name,avatar}]
+  const [readByDetailMap, setReadByDetailMap] = useState({}); // msgId -> [{id,name,avatar}]
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [bookmarkedMsgs, setBookmarkedMsgs] = useState([]);
   const [showAnnounce, setShowAnnounce] = useState(false);
@@ -773,17 +773,22 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           <div className="message-time">
             {isMine && (() => {
               const readCount = (msg.read_by || []).filter(id => id !== currentUser.id).length;
-              if (readCount === 0) return null; // 未読は表示しない（LINEと同じ挙動）
+              if (readCount === 0) return null;
               return (
                 <span
                   style={{ fontSize:11, color:'#06c755', marginRight:4, fontWeight:600, cursor:'pointer' }}
                   onClick={() => {
-                    // 既読した人の詳細を表示
-                    const readers = (msg.read_by || []).filter(id => id !== currentUser.id).map(id => {
-                      const member = selectedRoom?.memberDetails?.find(m => m.id === id);
-                      return member?.displayName || member?.username || id;
-                    });
-                    showToast?.(`既読: ${readers.join('、') || readCount + '人'}`, 'info');
+                    const detail = readByDetailMap[msg.id];
+                    if (detail && detail.length > 0) {
+                      const readers = detail.filter(r => r.id !== currentUser.id);
+                      setShowReadDetail({ msgId: msg.id, readers });
+                    } else {
+                      const readers = (msg.read_by || []).filter(id => id !== currentUser.id).map(id => {
+                        const member = selectedRoom?.memberDetails?.find(m => m.id === id);
+                        return { id, name: member?.displayName || member?.username || id, avatar: member?.avatar };
+                      });
+                      setShowReadDetail({ msgId: msg.id, readers });
+                    }
                   }}
                   title="タップで詳細表示"
                 >
