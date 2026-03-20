@@ -2166,6 +2166,7 @@ app.get('/api/stories', async (req, res) => {
 app.post('/api/stories', async (req, res) => {
   try {
     const decoded = auth(req);
+    if (!req.body.url) return res.status(400).json({ error: 'URLが必要です' });
     const user = await User.findOne({ id: decoded.id });
     const story = await Story.create({
       id: 'st_' + require('uuid').v4(),

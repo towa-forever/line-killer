@@ -702,7 +702,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           <div className="message-time">
             {isMine && (() => {
               const readCount = (msg.read_by || []).filter(id => id !== currentUser.id).length;
-              if (readCount === 0) return <span style={{ fontSize:11, color:'var(--text2)', marginRight:4 }}>未読</span>;
+              if (readCount === 0) return null; // 未読は表示しない（LINEと同じ挙動）
               return (
                 <span
                   style={{ fontSize:11, color:'#06c755', marginRight:4, fontWeight:600, cursor:'pointer' }}
@@ -743,7 +743,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             />
             <span style={{ color:'white', fontSize:18, fontWeight:800 }}>トーク</span>
           </button>
-          <button className="icon-btn" onClick={() => setShowCreateRoom(true)} style={{ fontSize:22, color:'white' }}>✏️</button>
+          <div style={{ display:'flex', gap:4 }}>
+            <button className="icon-btn" onClick={() => setShowGlobalSearch(true)} style={{ fontSize:20, color:'white' }} title="全体検索">🔍</button>
+            <button className="icon-btn" onClick={() => setShowCreateRoom(true)} style={{ fontSize:22, color:'white' }} title="新しいトーク">✏️</button>
+          </div>
         </div>
         <StoryBar currentUser={currentUser} friendsList={friendsList} socket={socket} />
         <div className="room-items">
@@ -1020,18 +1023,19 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       {showEventCal && <ErrorBoundary><Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense></ErrorBoundary>}
       {/* スタンプ自作 */}
       {showStickerMaker && (
-        <Suspense fallback={null}>
+        <ErrorBoundary><Suspense fallback={null}>
           <StickerMaker
             onSend={(data) => {
               if (socket && selectedRoom) {
                 socket.emit('message:send', { roomId: selectedRoom.id, content: data.content, type: 'image', fileData: data.fileData });
+                setShowStickerMaker(false);
               }
             }}
             onClose={() => setShowStickerMaker(false)}
           />
-        </Suspense>
+        </Suspense></ErrorBoundary>
       )}
-      {showMiniGame && <ErrorBoundary><Suspense fallback={null}><MiniGame onSendResult={text => { socket.emit('message:send', { roomId: selectedRoom.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense></ErrorBoundary>}
+      {showMiniGame && <ErrorBoundary><Suspense fallback={null}><MiniGame onSendResult={text => { socket?.emit('message:send', { roomId: selectedRoom?.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense></ErrorBoundary>}
           {showFavorites && (
             <div className="modal-overlay" onClick={() => setShowFavorites(false)}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
