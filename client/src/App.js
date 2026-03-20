@@ -252,7 +252,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     catch (err) { console.error(err); }
   }, []);
 
-  useEffect(() => { fetchRooms(); }, [fetchRooms]);
+  useEffect(() => {
+    fetchRooms();
+    // 起動時に未読カウントを取得
+    axios.get('/api/dashboard').then(res => {
+      const unread = {};
+      (res.data.unread || []).forEach(r => { unread[r.roomId] = r.count; });
+      setUnreadCounts(unread);
+    }).catch(() => {});
+  }, [fetchRooms]);
 
   // タイピングタイムアウトのクリーンアップ
   useEffect(() => {
