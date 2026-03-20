@@ -1198,28 +1198,6 @@ app.get('/api/bookmarks', async (req, res) => {
   } catch { res.status(400).json({ error: 'エラー' }); }
 });
 
-app.post('/api/bookmarks/:messageId', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    await User.findOneAndUpdate(
-      { id: decoded.id },
-      { $addToSet: { bookmarked_messages: req.params.messageId } }
-    );
-    res.json({ ok: true });
-  } catch { res.status(400).json({ error: 'エラー' }); }
-});
-
-app.delete('/api/bookmarks/:messageId', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    await User.findOneAndUpdate(
-      { id: decoded.id },
-      { $pull: { bookmarked_messages: req.params.messageId } }
-    );
-    res.json({ ok: true });
-  } catch { res.status(400).json({ error: 'エラー' }); }
-});
-
 // アナウンス設定・取得
 app.post('/api/rooms/:roomId/announcement', async (req, res) => {
   try {
