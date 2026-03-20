@@ -1926,6 +1926,8 @@ export default function App() {
   const [darkAutoMode, setDarkAutoMode] = useState(() => localStorage.getItem('darkAutoMode') === 'true');
 
   const toastTimerRef = useRef(null);
+  const activeTabRef = useRef('chat');
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -1965,7 +1967,8 @@ export default function App() {
     // 未読メッセージをチャットタブバッジに反映
     s.on('message:receive', (msg) => {
       const senderId = msg.senderId || msg.sender_id;
-      if (senderId !== currentUser?.id) {
+      // チャットタブ表示中・自分のメッセージはバッジを増やさない
+      if (senderId !== currentUser?.id && activeTab !== 'chat') {
         setNotifications(prev => ({ ...prev, chat: (prev.chat || 0) + 1 }));
       }
     });
