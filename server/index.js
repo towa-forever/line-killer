@@ -1993,13 +1993,17 @@ function formatDuration(seconds) {
   });
 
   socket.on('disconnect', () => {
-    console.log('切断:', socket.user.username);
     if (io.onlineUsers) {
       io.onlineUsers.delete(socket.user.id);
-      // 最終オンライン時刻を更新
       User.findOneAndUpdate({ id: socket.user.id }, { last_seen: new Date() }).catch(() => {});
       io.emit('user:offline', { userId: socket.user.id, lastSeen: Date.now() });
     }
+    // 入力中インジケーターをクリア（参加してた全ルームに通知）
+    socket.rooms.forEach(roomId => {
+      if (roomId !== socket.id) {
+        socket.to(roomId).emit('typing:update', { username: socket.user.username, isTyping: false });
+      }
+    });
     // グループ通話から自動退出
     if (io.gcallRooms) {
       for (const [roomId, members] of Object.entries(io.gcallRooms)) {

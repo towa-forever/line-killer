@@ -1,9 +1,16 @@
 const mongoose = require('mongoose');
 const MONGO_URI = process.env.MONGO_URI;
 if (!MONGO_URI) { console.error('MONGO_URI環境変数が設定されてへん！'); process.exit(1); }
-mongoose.connect(MONGO_URI)
+mongoose.connect(MONGO_URI, {
+  serverSelectionTimeoutMS: 10000,
+  socketTimeoutMS: 45000,
+  maxPoolSize: 10,
+})
   .then(() => console.log('MongoDB接続成功'))
-  .catch(err => console.error('MongoDB接続失敗', err));
+  .catch(err => { console.error('MongoDB接続失敗', err); process.exit(1); });
+
+mongoose.connection.on('disconnected', () => console.warn('MongoDB切断 - 自動再接続を試みます'));
+mongoose.connection.on('error', err => console.error('MongoDB接続エラー:', err));
 
 const UserSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
@@ -76,6 +83,7 @@ const MessageSchema = new mongoose.Schema({
   read_by: [String],
   reactions: [{ emoji: String, user_id: String }],
   forwarded: { type: Boolean, default: false },
+  stamp_label: { type: String, default: null },
   created_at: { type: Date, default: Date.now }
 });
 
