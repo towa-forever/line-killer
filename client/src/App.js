@@ -1967,8 +1967,7 @@ export default function App() {
     // 未読メッセージをチャットタブバッジに反映
     s.on('message:receive', (msg) => {
       const senderId = msg.senderId || msg.sender_id;
-      // チャットタブ表示中・自分のメッセージはバッジを増やさない
-      if (senderId !== currentUser?.id && activeTab !== 'chat') {
+      if (senderId !== currentUser?.id && activeTabRef.current !== 'chat') {
         setNotifications(prev => ({ ...prev, chat: (prev.chat || 0) + 1 }));
       }
     });
