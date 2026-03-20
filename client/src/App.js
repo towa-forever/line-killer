@@ -2057,6 +2057,11 @@ export default function App() {
           <StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} />
         </Suspense></ErrorBoundary>
       </div>
+      <div style={tabVisible('album')}>
+        <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+          <Album currentUser={currentUser} />
+        </Suspense></ErrorBoundary>
+      </div>
       {activeTab === 'dashboard' && (
         <div style={tabVisible('dashboard')}>
           <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
