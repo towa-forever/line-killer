@@ -297,6 +297,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showNotifSettings, setShowNotifSettings] = useState(false);
   const draftRef = useRef({}); // 下書き一時保存 { roomId: text }
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const isAtBottomRef = useRef(true); // スクロール最下部にいるかどうか
@@ -546,6 +547,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     const oldest = messages[0];
     if (!oldest) return;
     loadingMoreRef.current = true;
+    // スクロール位置を保持するためにcontainerのscrollHeightを記録
+    const container = messagesContainerRef.current;
+    const prevScrollHeight = container?.scrollHeight || 0;
     try {
       const res = await axios.get(`/api/rooms/${selectedRoom.id}/messages?limit=50&before=${encodeURIComponent(oldest.createdAt || oldest.created_at)}`);
       if (res.data.length === 0) {
@@ -557,6 +561,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         const existIds = new Set(prev.map(m => m.id));
         const newMsgs = res.data.filter(m => !existIds.has(m.id));
         return [...newMsgs, ...prev];
+      });
+      // スクロール位置を補正（新メッセージ分だけ下にずらす）
+      requestAnimationFrame(() => {
+        if (container) {
+          const diff = container.scrollHeight - prevScrollHeight;
+          container.scrollTop += diff;
+        }
       });
     } catch (e) { console.error(e); }
     finally { loadingMoreRef.current = false; }
@@ -592,6 +603,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file || !selectedRoom) return;
+    // ファイルサイズ制限（50MB）
+    if (file.size > 50 * 1024 * 1024) {
+      showToast?.('ファイルサイズは50MB以下にしてや', 'error');
+      e.target.value = '';
+      return;
+    }
     const formData = new FormData();
     formData.append('file', file);
     try {
@@ -602,7 +619,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         type: res.data.isImage ? 'image' : 'file',
         fileData: res.data
       });
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error(err); showToast?.('ファイルのアップロードに失敗したで', 'error'); }
     e.target.value = '';
   };
 
@@ -1709,6 +1726,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
           )}
           <div className="messages-container"
+            ref={messagesContainerRef}
             onScroll={(e) => {
               const el = e.currentTarget;
               isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
