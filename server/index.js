@@ -1238,7 +1238,6 @@ app.post('/api/posts', upload.single('image'), async (req, res) => {
     const user = await User.findOne({ id: decoded.id });
     if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません。ログインし直してください' });
     const actualUsername = user.username;
-    console.log('[投稿API] DBusername:', actualUsername, 'ADMIN:', ADMIN_USERNAME);
     // 管理者のみ投稿可能
     if (actualUsername.trim().toLowerCase() !== ADMIN_USERNAME.trim().toLowerCase()) {
       return res.status(403).json({ error: `お知らせの投稿は管理者のみです（あなたのID: ${actualUsername}）` });
@@ -1666,7 +1665,6 @@ io.use(async (socket, next) => {
 });
 
 io.on('connection', async (socket) => {
-  console.log('接続:', socket.user.username);
   socket.join('user_' + socket.user.id);
   // オンライン状態をブロードキャスト
   if (!io.onlineUsers) io.onlineUsers = new Map();
@@ -1869,7 +1867,6 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('call:answer', ({ answer, to }) => {
-    console.log(`[call:answer] from:${socket.user.username} to:${to} answer:${!!answer}`);
     if (!answer || !to) return;
     io.to('user_' + to).emit('call:answered', { answer, from: socket.user.id });
   });
