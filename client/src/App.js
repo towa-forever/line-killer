@@ -50,15 +50,19 @@ function AuthScreen({ onLogin }) {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showReset, setShowReset] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!username.trim()) { setError('IDを入力してください'); return; }
+    if (password.length < 6) { setError('パスワードは6文字以上にしてください'); return; }
+    if (!isLogin && username.length < 3) { setError('IDは3文字以上にしてください'); return; }
     setLoading(true); setError('');
     try {
-      const res = await axios.post(isLogin ? '/api/auth/login' : '/api/auth/register', { username, password });
+      const res = await axios.post(isLogin ? '/api/auth/login' : '/api/auth/register', { username: username.trim(), password });
       localStorage.setItem('token', res.data.token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       onLogin(res.data.user);
@@ -84,10 +88,18 @@ function AuthScreen({ onLogin }) {
           <p>LINEを超えるチャットアプリ</p>
         </div>
         <form onSubmit={handleSubmit}>
-          <input type="text" placeholder="ユーザーID" value={username}
-            onChange={(e) => setUsername(e.target.value)} required className="auth-input" />
-          <input type="password" placeholder="パスワード" value={password}
-            onChange={(e) => setPassword(e.target.value)} required className="auth-input" />
+          <input type="text" placeholder="ユーザーID（3文字以上）" value={username}
+            onChange={(e) => setUsername(e.target.value)} required className="auth-input"
+            autoComplete="username" autoCapitalize="none" />
+          <div style={{ position:'relative' }}>
+            <input type={showPw ? 'text' : 'password'} placeholder="パスワード（6文字以上）" value={password}
+              onChange={(e) => setPassword(e.target.value)} required className="auth-input"
+              style={{ paddingRight:44 }} autoComplete={isLogin ? 'current-password' : 'new-password'} />
+            <button type="button" onClick={() => setShowPw(v => !v)}
+              style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', fontSize:18, color:'var(--text2)', padding:4 }}>
+              {showPw ? '🙈' : '👁️'}
+            </button>
+          </div>
           {error && <div className="auth-error">{error}</div>}
           <button type="submit" disabled={loading} className="auth-btn">
             {loading ? '...' : isLogin ? 'ログイン' : '登録'}
