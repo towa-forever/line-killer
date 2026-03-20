@@ -51,7 +51,10 @@ const pushSubscriptions = new Map(); // userId -> subscription (メモリキャ�
 })();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: {
+    origin: process.env.CLIENT_URL ? [process.env.CLIENT_URL, 'http://localhost:3000'] : '*',
+    methods: ['GET', 'POST']
+  },
   pingTimeout: 20000,       // 20秒（デフォルト20000）
   pingInterval: 10000,      // 10秒ごとにping（デフォルト25000より短く）
   transports: ['websocket', 'polling'], // WebSocket優先
@@ -61,7 +64,12 @@ const io = new Server(httpServer, {
 });
 app.set('io', io);
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.CLIENT_URL
+    ? [process.env.CLIENT_URL, 'http://localhost:3000']
+    : true, // 開発環境では全オリジン許可
+  credentials: true,
+}));
 app.use(compression()); // gzip圧縮（全ルートに有効）
 app.use(helmet({ contentSecurityPolicy: false })); // セキュリティヘッダー
 
