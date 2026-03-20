@@ -867,7 +867,8 @@ app.post('/api/sub-accounts', async (req, res) => {
     const { username, password, displayName } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'IDとパスワードは必須です' });
     if (username.length < 3) return res.status(400).json({ error: 'IDは3文字以上にしてください' });
-    
+    if (password.length < 6) return res.status(400).json({ error: 'パスワードは6文字以上にしてください' });
+
     const exists = await User.findOne({ username });
     if (exists) return res.status(400).json({ error: 'このIDはすでに使われています' });
 

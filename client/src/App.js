@@ -849,7 +849,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <div className="header-menu-dropdown" onClick={() => setShowHeaderMenu(false)}>
                 {[
                   { icon:'🔍', label:'全体検索', action: () => { setShowGlobalSearch(true); setShowHeaderMenu(false); } },
-                  { icon:'📊', label:'ダッシュボード', action: () => { onNavigate?.('dashboard'); setShowHeaderMenu(false); } },
+                  { icon:'🏠', label:'ダッシュボード', action: () => { onNavigate?.('dashboard'); setShowHeaderMenu(false); } },
                   { icon:'📷', label:'アルバム', action: () => { onNavigate?.('album'); setShowHeaderMenu(false); } },
                   { icon:'⭐', label:'お気に入り', action: () => {
                     axios.get('/api/favorites').then(r => { setFavoritesList(r.data); setShowFavorites(true); }).catch(() => {});
@@ -867,10 +867,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   { icon:'📅', label:'カレンダー', action: () => setShowEventCal(true) },
                   { icon:'✅', label:'タスク', action: () => setShowTaskPanel(true) },
                   { icon:'🎮', label:'ゲーム', action: () => setShowMiniGame(true) },
-                  { icon:'🎨', label:'スタンプ自作', action: () => setShowStickerMaker(true) },
+                  { icon:'🖼️', label:'スタンプ自作', action: () => setShowStickerMaker(true) },
                   { icon:'📞', label:'音声通話', action: () => { const otherId = selectedRoom?.members?.find(m => m !== currentUser.id); setVoiceCall({ targetUser: otherId ? { id: otherId, displayName: selectedRoom.name } : null, isIncoming: false, roomId: selectedRoom?.id, callId: null }); } },
                   { icon:'🤖', label:'AIアシスタント', action: () => setShowAI(true) },
-                  { icon:'🎨', label:'背景を変える', action: () => setShowBgPicker(true) },
+                  { icon:'🌈', label:'背景を変える', action: () => setShowBgPicker(true) },
                   { icon:'📤', label:'チャットをエクスポート', action: () => setShowExport(true) },
                   { icon:'⏰', label:'予約送信一覧', action: () => {
                     axios.get('/api/rooms/' + selectedRoom.id + '/schedules').then(r => { setScheduleList(r.data || []); setShowScheduleList(true); }).catch(() => setShowScheduleList(true));
@@ -1282,11 +1282,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 </label>
                 <div className="modal-actions">
                   <button className="btn btn-secondary" onClick={() => setShowPollCreator(false)}>キャンセル</button>
-                  <button className="btn btn-primary" onClick={() => {
+                  <button className="btn btn-primary" onClick={async () => {
                     const opts = pollOptions.filter(o => o.trim());
-                    if (!pollQuestion.trim() || opts.length < 2) return;
-                    axios.post('/api/rooms/' + selectedRoom.id + '/polls', { question: pollQuestion.trim(), options: opts, multi: pollMulti })
-                      .catch(e => console.error(e));
+                    if (!pollQuestion.trim() || opts.length < 2) { showToast?.('質問と選択肢を2つ以上入力してね', 'error'); return; }
+                    try {
+                      await axios.post('/api/rooms/' + selectedRoom.id + '/polls', { question: pollQuestion.trim(), options: opts, multi: pollMulti });
+                      showToast?.('投票を作成したで！', 'success');
+                    } catch(e) { showToast?.('投票の作成に失敗した...', 'error'); return; }
                     setShowPollCreator(false); setPollQuestion(''); setPollOptions(['', '']); setPollMulti(false);
                   }}>作成</button>
                 </div>
@@ -1503,10 +1505,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                           await axios.post(`/api/rooms/${room.id}/forward`, {
                             content: forwardMsg.content,
                             type: forwardMsg.type,
-                            fileData: forwardMsg.fileData || null,
+                            fileData: forwardMsg.fileData || forwardMsg.file_data || null,
                           });
                           setForwardMsg(null);
-                        } catch(e) { console.error(e); }
+                          showToast?.(`${room.name} に転送したで！`, 'success');
+                        } catch(e) { console.error(e); showToast?.('転送に失敗した...', 'error'); }
                       }}
                       onMouseEnter={e => e.currentTarget.style.background='var(--surface2)'}
                       onMouseLeave={e => e.currentTarget.style.background=''}
