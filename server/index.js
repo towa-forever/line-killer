@@ -2641,12 +2641,14 @@ setInterval(async () => {
       const msg = await Message.create({
         id: 'msg_' + uuidv4(), room_id: sm.room_id,
         sender_id: sm.sender_id, sender_name: sm.sender_name,
-        content: sm.content, type: 'text', created_at: now
+        content: sm.content, type: 'text', created_at: now,
+        read_by: [sm.sender_id], reactions: [],
       });
       io.to(sm.room_id).emit('message:receive', {
         id: msg.id, roomId: sm.room_id, senderId: sm.sender_id,
         senderName: sm.sender_name, content: sm.content,
-        type: 'text', createdAt: now
+        type: 'text', createdAt: now,
+        readBy: [sm.sender_id], reactions: [],
       });
       await ScheduledMessage.findOneAndUpdate({ id: sm.id }, { sent: true });
     }
