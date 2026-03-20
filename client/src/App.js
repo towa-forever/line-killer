@@ -1989,6 +1989,7 @@ export default function App() {
     // メンション通知
     s.on('mention:new', (data) => {
       setMentions(prev => [data, ...prev].slice(0, 20));
+      setNotifications(prev => ({ ...prev, chat: (prev.chat || 0) + 1 }));
       showToast(`@メンション: ${data.from}さんから`, 'info');
     });
     // ギフト受信通知
