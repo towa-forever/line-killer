@@ -2004,7 +2004,7 @@ export default function App() {
     });
     // ギフト受信通知
     s.on('gift:received', (data) => {
-      showToast(`🎁 ${data.from}さんから ${data.stamp} ${data.amount}コインもらった！`, 'success');
+      showToast(`🎁 ${data.from}さんから ${data.stampId || data.stamp || '🎁'} ${data.amount}コインもらった！`, 'success');
     });
     setSocket(s);
     return () => s.disconnect();
