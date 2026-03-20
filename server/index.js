@@ -1022,7 +1022,7 @@ app.get('/api/users', async (req, res) => {
 app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
   try {
     const decoded = auth(req);
-    const { status, displayName, bio, avatarFrame, soundTheme, secretQuestion, secretAnswer } = req.body;
+    const { status, displayName, bio, avatarFrame, soundTheme, secretQuestion, secretAnswer, showOnline } = req.body;
     const update = {};
     if (req.files?.avatar?.[0]) update.avatar = getFileUrl({ file: req.files.avatar[0] });
     if (req.files?.cover?.[0])  update.cover_image = getFileUrl({ file: req.files.cover[0] });
@@ -1031,6 +1031,7 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
     if (bio !== undefined)         update.bio = bio;
     if (avatarFrame !== undefined) update.avatar_frame = avatarFrame;
     if (soundTheme !== undefined)  update.sound_theme = soundTheme;
+    if (showOnline !== undefined)  update.show_online = showOnline === 'true' || showOnline === true;
     if (secretQuestion !== undefined) update.secret_question = secretQuestion;
     if (secretAnswer !== undefined && secretAnswer.trim()) {
       update.secret_answer = await bcrypt.hash(secretAnswer.trim().toLowerCase(), 10);
@@ -1046,6 +1047,7 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
       soundTheme: user.sound_theme || 'default',
       secretQuestion: user.secret_question || '',
       pinEnabled: user.pin_enabled || false,
+      showOnline: user.show_online !== false,
       blockedUsers: user.blocked_users || [],
       mutedRooms: user.muted_rooms || [],
       bookmarks: user.bookmarked_messages || [],

@@ -311,6 +311,13 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
           </div>
           <div className={`toggle ${darkAutoMode ? 'on' : ''}`}><div className="toggle-knob" /></div>
         </div>
+        <div className="setting-row" onClick={() => saveSettings({ showOnline: !(currentUser?.showOnline !== false) })}>
+          <div>
+            <div>🟢 オンライン状態を表示</div>
+            <div style={{ fontSize:11, color:'var(--text2)' }}>オフにすると他の人にオンラインが見えない</div>
+          </div>
+          <div className={`toggle ${currentUser?.showOnline !== false ? 'on' : ''}`}><div className="toggle-knob" /></div>
+        </div>
 
         {/* ステータス */}
         <div style={{ padding:'12px 0', borderBottom:'1px solid var(--border)' }}>
