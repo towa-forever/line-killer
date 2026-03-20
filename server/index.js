@@ -1758,6 +1758,23 @@ io.on('connection', async (socket) => {
         url: '/',
       })).catch(() => { pushSubscriptions.delete(memberId); PushSubscription.deleteOne({ user_id: memberId }).catch(() => {}); });
     }
+    // @メンション検出・通知
+    if (type === 'text' && content && typeof content === 'string') {
+      const mentionMatches = content.match(/@(\S+)/g);
+      if (mentionMatches) {
+        const mentionedNames = mentionMatches.map(m => m.slice(1).toLowerCase());
+        const mentionedUsers = await User.find({
+          username: { $in: mentionedNames },
+          id: { $in: room.members, $ne: socket.user.id }
+        });
+        mentionedUsers.forEach(u => {
+          io.to('user_' + u.id).emit('mention:new', {
+            from: socket.user.username, roomId, roomName: room.name,
+            content: content.slice(0, 50), messageId: id
+          });
+        });
+      }
+    }
     } catch(e) { console.error('message:send error:', e); }
   });
 
@@ -2056,9 +2073,10 @@ app.get('/api/search', async (req, res) => {
     const roomIds = rooms.map(r => r.id);
     const roomMap = Object.fromEntries(rooms.map(r => [r.id, r]));
     // 全ルームのメッセージを検索
+    const safeQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const msgs = await Message.find({
       room_id: { $in: roomIds }, deleted: false,
-      $or: [{ content: new RegExp(q, 'i') }, { sender_name: new RegExp(q, 'i') }]
+      $or: [{ content: new RegExp(safeQ, 'i') }, { sender_name: new RegExp(safeQ, 'i') }]
     }).sort({ created_at: -1 }).limit(50);
     res.json(msgs.map(m => ({
       id: m.id, content: m.content, type: m.type,

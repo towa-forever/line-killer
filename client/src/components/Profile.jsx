@@ -4,7 +4,7 @@ import { QRCodeSVG as QRCode } from 'qrcode.react';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 
-export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccount, darkMode, onToggleDark, darkAutoMode, onToggleAuto, onContact, onOpenPinSetup }) {
+export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccount, darkMode, onToggleDark, darkAutoMode, onToggleAuto, onContact, onOpenPinSetup, onNavigate }) {
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser?.displayName || '');
   const [bio, setBio] = useState(currentUser?.bio || '');
@@ -531,6 +531,21 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
       />
 
       <div style={{ padding:'0 10px 8px' }}>
+        {/* クイックナビゲーション */}
+        {onNavigate && (
+          <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+            {[
+              { icon:'📢', label:'お知らせ', tab:'timeline' },
+              { icon:'📊', label:'ダッシュボード', tab:'dashboard' },
+            ].map(item => (
+              <button key={item.tab} onClick={() => onNavigate(item.tab)}
+                style={{ flex:1, padding:'10px 4px', borderRadius:14, background:'var(--surface)', border:'1px solid var(--border)', fontSize:13, fontWeight:600, cursor:'pointer', color:'var(--text)', display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                <span style={{ fontSize:20 }}>{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <button onClick={onContact}
           style={{ width:'100%', padding:14, borderRadius:14, background:'var(--surface)', border:'1px solid var(--border)', fontSize:15, fontWeight:600, cursor:'pointer', color:'var(--text)', display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:10 }}>
           <span>📨</span><span>お問い合わせ</span><span style={{ marginLeft:'auto', color:'var(--text2)', fontSize:18 }}>›</span>

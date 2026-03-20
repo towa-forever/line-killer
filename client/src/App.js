@@ -1803,7 +1803,7 @@ function TabBar({ activeTab, setActiveTab, notifications }) {
   const tabs = [
     { id: 'chat',      label: 'トーク',       icon: '💬' },
     { id: 'friends',   label: '友達',         icon: '👥' },
-    { id: 'timeline',  label: 'お知らせ',      icon: '📢' },
+    { id: 'album',     label: 'アルバム',      icon: '📷' },
     { id: 'stampshop', label: 'ショップ',      icon: '🎫' },
     { id: 'profile',   label: 'プロフィール',  icon: '👤' },
   ];
@@ -2078,6 +2078,7 @@ export default function App() {
               darkMode={darkMode} onToggleDark={() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(!darkMode); }}
               darkAutoMode={darkAutoMode} onToggleAuto={() => { const v = !darkAutoMode; setDarkAutoMode(v); localStorage.setItem('darkAutoMode', v); if (v) setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches); }}
               onOpenPinSetup={() => setShowPinSetup(true)}
+              onNavigate={setActiveTab}
               onSwitchAccount={(token, user) => { localStorage.setItem('token', token); axios.defaults.headers.common['Authorization'] = `Bearer ${token}`; setCurrentUser(user); window.location.reload(); }} />
           </Suspense></ErrorBoundary>
         </div>
