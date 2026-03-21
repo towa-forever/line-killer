@@ -509,13 +509,26 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     } else {
       setMessages([]);
     }
+    // キャッシュが30秒以内なら再取得しない
+    const cacheTime = messagesCache.current[selectedRoom.id + '_time'];
+    const isFreshCache = cacheTime && (Date.now() - cacheTime) < 30000;
     const currentRoomId = selectedRoom.id;
     (async () => {
       try {
+        if (isFreshCache) {
+          // キャッシュが新鮮なのでAPI省略・未読リセットだけ行う
+          setUnreadCounts((prev) => ({ ...prev, [currentRoomId]: 0 }));
+          onReadRoom?.();
+          isAtBottomRef.current = true;
+          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
+          if (socket) socket.emit('room:join', currentRoomId);
+          return;
+        }
         const res = await axios.get(`/api/rooms/${currentRoomId}/messages`);
         // ルームが切り替わってたら無視
         if (messagesCache.current._current !== currentRoomId) return;
         messagesCache.current[currentRoomId] = res.data;
+        messagesCache.current[currentRoomId + '_time'] = Date.now();
         setMessages(res.data);
         // ピン留め状態を復元
         if (selectedRoom.pinned_message_id) {

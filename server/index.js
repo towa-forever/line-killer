@@ -1412,14 +1412,8 @@ app.post('/api/rooms', async (req, res) => {
     if (!name || !name.trim()) return res.status(400).json({ error: 'ルーム名を入力してください' });
     if (name.trim().length > 50) return res.status(400).json({ error: 'ルーム名は50文字以内にしてください' });
     const safeIds = Array.isArray(memberIds) ? memberIds.filter(id => typeof id === 'string') : [];
-    // フレンドチェック（friend_id または id フィールドで照合）
-    const friends = await Friend.find({ user_id: decoded.id });
-    const friendIds = friends.map(f => f.friend_id);
-    // フレンドでなくても自分は必ず含める。フレンドIDが一致するものを優先、なければそのまま追加
-    const validMembers = safeIds.filter(id => friendIds.includes(id) || safeIds.length === 0);
-    // フレンドが0人でも作成できるようにfallback
-    const finalMembers = validMembers.length > 0 ? validMembers : safeIds;
-    const members = [...new Set([decoded.id, ...finalMembers])];
+    // 自分を含めたメンバーリスト（フレンドチェックなし・誰でも招待可能）
+    const members = [...new Set([decoded.id, ...safeIds])];
     const id = 'room_' + uuidv4();
     const room = await Room.create({ id, name: name.trim(), members, creator_id: decoded.id });
     const memberUsers = await User.find({ id: { $in: members } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
