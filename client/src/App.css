@@ -1898,3 +1898,37 @@ body.dark .toggle-knob { background: #f0f0f0; }
   line-height: 1.6;
   margin-bottom: 12px;
 }
+.profile-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ===== CreateRoom タブ ===== */
+.create-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.create-tab {
+  flex: 1;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.create-tab.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
