@@ -58,8 +58,7 @@ function AuthScreen({ onLogin }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!username.trim()) { setError('IDを入力してください'); return; }
-    if (password.length < 6) { setError('パスワードは6文字以上にしてください'); return; }
-    if (!isLogin && username.length < 3) { setError('IDは3文字以上にしてください'); return; }
+    if (!password) { setError('パスワードを入力してください'); return; }
     if (!isLogin && !/^[a-z0-9_\-.]+$/i.test(username.trim())) { setError('IDは英字・数字・_・-・.のみ使えます'); return; }
     setLoading(true); setError('');
     try {
@@ -89,11 +88,11 @@ function AuthScreen({ onLogin }) {
           <p>LINEを超えるチャットアプリ</p>
         </div>
         <form onSubmit={handleSubmit}>
-          <input type="text" placeholder="ユーザーID（3文字以上）" value={username}
+          <input type="text" placeholder="ユーザーID" value={username}
             onChange={(e) => setUsername(e.target.value)} required className="auth-input"
             autoComplete="username" autoCapitalize="none" />
           <div style={{ position:'relative' }}>
-            <input type={showPw ? 'text' : 'password'} placeholder="パスワード（6文字以上）" value={password}
+            <input type={showPw ? 'text' : 'password'} placeholder="パスワード" value={password}
               onChange={(e) => setPassword(e.target.value)} required className="auth-input"
               style={{ paddingRight:44 }} autoComplete={isLogin ? 'current-password' : 'new-password'} />
             <button type="button" onClick={() => setShowPw(v => !v)}

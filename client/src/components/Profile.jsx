@@ -36,15 +36,10 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [loadingBlocked, setLoadingBlocked] = useState(false);
-  const [secQuestion, setSecQuestion] = useState('');
-  const [secAnswer, setSecAnswer] = useState('');
+  const [recoveryEmail, setRecoveryEmail] = useState('');
   const [secSaving, setSecSaving] = useState(false);
   const [secMsg, setSecMsg] = useState('');
   const [showSecForm, setShowSecForm] = useState(false);
-  const SECURITY_QUESTIONS = [
-    'ペットの名前は？', '母親の旧姓は？', '出身小学校の名前は？',
-    '好きな食べ物は？', '初めて買ったゲームは？', '生まれた病院の名前は？'
-  ];
 
   const loadLoginHistory = async () => {
     setLoadingHistory(true);
@@ -72,19 +67,18 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
 
   const handleUnblock = async (userId) => {
     try {
-      await axios.post(`/api/users/${userId}/block`); // toggle
+      await axios.post(`/api/users/${userId}/block`);
       setBlockedUsers(prev => prev.filter(u => u.id !== userId && u !== userId));
     } catch {}
   };
 
-  const handleSaveSecQuestion = async () => {
-    if (!secQuestion || !secAnswer.trim()) { setSecMsg('質問と答えを入力してや'); return; }
+  const handleSaveRecoveryEmail = async () => {
+    if (!recoveryEmail.trim() || !recoveryEmail.includes('@')) { setSecMsg('正しいメールアドレスを入力してや'); return; }
     setSecSaving(true); setSecMsg('');
     try {
-      await axios.patch('/api/users/me', { secretQuestion: secQuestion, secretAnswer: secAnswer });
-      setSecMsg('秘密の質問を設定したで！');
+      await axios.post('/api/auth/recovery-email', { email: recoveryEmail });
+      setSecMsg('リカバリーメールを設定したで！');
       setShowSecForm(false);
-      setSecAnswer('');
     } catch { setSecMsg('保存に失敗した...'); }
     finally { setSecSaving(false); }
   };
@@ -99,7 +93,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
 
   const handleChangePw = async () => {
     if (!currentPw || !newPw) { setPwMsg('全て入力してや'); return; }
-    if (newPw.length < 6) { setPwMsg('新しいパスワードは6文字以上にしてや'); return; }
+    if (!newPw) { setPwMsg('新しいパスワードを入力してや'); return; }
     if (newPw !== newPw2) { setPwMsg('新しいパスワードが一致してへんで'); return; }
     setPwSaving(true); setPwMsg('');
     try {
@@ -401,7 +395,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
         {showPwForm && (
           <div style={{ padding:'10px 0 4px', borderBottom:'1px solid var(--border)' }}>
             <input className="form-input" type="password" placeholder="現在のパスワード" value={currentPw} onChange={e => setCurrentPw(e.target.value)} style={{ marginBottom:8 }} />
-            <input className="form-input" type="password" placeholder="新しいパスワード（6文字以上）" value={newPw} onChange={e => setNewPw(e.target.value)} style={{ marginBottom:8 }} />
+            <input className="form-input" type="password" placeholder="新しいパスワード" value={newPw} onChange={e => setNewPw(e.target.value)} style={{ marginBottom:8 }} />
             <input className="form-input" type="password" placeholder="新しいパスワード（確認）" value={newPw2} onChange={e => setNewPw2(e.target.value)} style={{ marginBottom:8 }} />
             {pwMsg && <div style={{ fontSize:12, color: pwMsg.includes('！') ? 'var(--primary)' : 'var(--danger)', marginBottom:6 }}>{pwMsg}</div>}
             <button onClick={handleChangePw} disabled={pwSaving}
@@ -420,25 +414,20 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
           <span style={{ color:'var(--text2)', fontSize:18 }}>›</span>
         </div>
 
-        {/* 秘密の質問 */}
+        {/* リカバリーメール */}
         <div className="setting-row" onClick={() => setShowSecForm(v=>!v)} style={{ cursor:'pointer' }}>
           <div>
-            <div>❓ 秘密の質問</div>
-            <div style={{ fontSize:11, color:'var(--text2)' }}>{currentUser?.secretQuestion ? `設定済み: ${currentUser?.secretQuestion}` : '未設定（パスワードリセット用）'}</div>
+            <div>📧 リカバリーメール</div>
+            <div style={{ fontSize:11, color:'var(--text2)' }}>パスワードを忘れた時のリセット用メール</div>
           </div>
           <span style={{ color:'var(--text2)', fontSize:18 }}>{showSecForm ? '∨' : '›'}</span>
         </div>
         {showSecForm && (
           <div style={{ padding:'10px 0 4px', borderBottom:'1px solid var(--border)' }}>
-            <select value={secQuestion} onChange={e => setSecQuestion(e.target.value)}
-              style={{ width:'100%', padding:'10px 12px', borderRadius:10, border:'1.5px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:14, marginBottom:8 }}>
-              <option value="">質問を選んでや</option>
-              {SECURITY_QUESTIONS.map(q => <option key={q} value={q}>{q}</option>)}
-            </select>
-            <input className="form-input" placeholder="答えを入力" value={secAnswer} onChange={e => setSecAnswer(e.target.value)}
-              style={{ marginBottom:8 }} />
+            <input className="form-input" type="email" placeholder="メールアドレスを入力" value={recoveryEmail}
+              onChange={e => setRecoveryEmail(e.target.value)} style={{ marginBottom:8 }} />
             {secMsg && <div style={{ fontSize:12, color: secMsg.includes('！') ? 'var(--primary)' : 'var(--danger)', marginBottom:6 }}>{secMsg}</div>}
-            <button onClick={handleSaveSecQuestion} disabled={secSaving}
+            <button onClick={handleSaveRecoveryEmail} disabled={secSaving}
               style={{ width:'100%', padding:10, borderRadius:10, background:'var(--primary)', color:'white', border:'none', fontSize:14, fontWeight:700, cursor:'pointer', marginBottom:8 }}>
               {secSaving ? '保存中...' : '保存する'}
             </button>

@@ -37,6 +37,7 @@ const UserSchema = new mongoose.Schema({
   bookmarked_messages: { type: [String], default: [] },
   created_at: { type: Date, default: Date.now },
   // パスワードリセット用
+  recovery_email: { type: String, default: '' }, // パスワードリセット用メールアドレス
   secret_question: { type: String, default: '' },
   secret_answer: { type: String, default: '' }, // bcryptハッシュ
   // 2段階認証
