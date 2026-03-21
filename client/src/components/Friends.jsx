@@ -29,7 +29,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
   useEffect(() => {
     fetchFriends(); fetchRequests(); fetchOnline();
     if (onClearNotif) onClearNotif();
-    const timer = setInterval(() => { fetchFriends(); fetchOnline(); }, 30000);
+    const timer = setInterval(() => { fetchFriends(); fetchOnline(); }, 60000);
     return () => clearInterval(timer);
   }, [fetchFriends, fetchRequests, fetchOnline, onClearNotif]);
 

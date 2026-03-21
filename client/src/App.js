@@ -312,11 +312,21 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchRooms = useCallback(async () => {
-    try { const res = await axios.get('/api/rooms'); setRooms(res.data); }
+    try {
+      const res = await axios.get('/api/rooms');
+      setRooms(res.data);
+      // キャッシュに保存（次回起動時に即表示）
+      try { localStorage.setItem('rooms_cache', JSON.stringify(res.data)); } catch {}
+    }
     catch (err) { console.error(err); }
   }, []);
 
   useEffect(() => {
+    // キャッシュがあれば即表示してから最新データを取得
+    try {
+      const cached = localStorage.getItem('rooms_cache');
+      if (cached) setRooms(JSON.parse(cached));
+    } catch {}
     fetchRooms();
     // 起動時に未読カウントを取得
     axios.get('/api/dashboard').then(res => {
@@ -1974,7 +1984,15 @@ export default function App() {
     if (!currentUser) return;
     axios.get('/api/stamps').then(res => setAllStampSets(res.data)).catch(() => {});
     axios.get('/api/stamps/mysets').then(res => setAcquiredStampIds(res.data.acquired || [])).catch(() => {});
-    axios.get('/api/friends').then(res => setFriendsList(res.data)).catch(() => {});
+    // 友達リストはキャッシュ活用
+    try {
+      const cached = localStorage.getItem('friends_cache');
+      if (cached) setFriendsList(JSON.parse(cached));
+    } catch {}
+    axios.get('/api/friends').then(res => {
+      setFriendsList(res.data);
+      try { localStorage.setItem('friends_cache', JSON.stringify(res.data)); } catch {}
+    }).catch(() => {});
     // ミュート・ブックマーク初期化
     axios.get('/api/auth/me').then(res => {
       if (res.data.user.mutedRooms) setMutedRooms(new Set(res.data.user.mutedRooms));

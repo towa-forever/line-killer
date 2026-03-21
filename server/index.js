@@ -74,21 +74,17 @@ app.use(compression()); // gzip圧縮（全ルートに有効）
 app.use(helmet({ contentSecurityPolicy: false })); // セキュリティヘッダー
 
 // ログイン・登録のレートリミット（ブルートフォース対策）
+// レートリミット（ブルートフォース対策のみ・緩め設定）
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分
-  max: 300, // 300回まで
+  max: 500, // 十分に緩め
   message: { error: 'リクエストが多すぎます。しばらく待ってから試してください' },
   standardHeaders: true, legacyHeaders: false,
+  skip: (req) => !!req.headers.authorization, // 認証済みはスキップ
 });
-// APIのレートリミット（一般）
-const apiLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1分
-  max: 2000, // 2000回まで
-  message: { error: 'リクエストが多すぎます' },
-  standardHeaders: true, legacyHeaders: false,
-});
-app.use('/api/auth', authLimiter);
-app.use('/api/', apiLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+// 一般APIのレートリミットは無効化（Socket.ioと競合するため）
 // 管理エンドポイント（ADMIN_KEY必須）
 app.get('/admin/reset-requests', async (req, res) => {
   try {
@@ -565,9 +561,8 @@ app.post('/api/auth/register', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
     const uname = username.trim().toLowerCase();
-    if (uname.length < 1 || uname.length > 30) return res.status(400).json({ error: 'ユーザー名は1〜30文字にしてください' });
-    if (!/^[a-z0-9_\-.]+$/.test(uname)) return res.status(400).json({ error: 'ユーザー名は英小文字・数字・_ ・- ・. のみ使えます' });
-    if (!password) return res.status(400).json({ error: 'パスワードを入力してください' });
+    if (uname.length < 1) return res.status(400).json({ error: 'ユーザー名を入力してください' });
+    if (!/^[a-z0-9_\-.]+$/i.test(uname)) return res.status(400).json({ error: 'ユーザー名は英字・数字・_・-・.のみ使えます' });
     const exists = await User.findOne({ username: uname });
     if (exists) return res.status(400).json({ error: 'このユーザー名は既に使われてます' });
     const hashed = await bcrypt.hash(password, 10);
@@ -627,7 +622,8 @@ app.get('/api/auth/me', async (req, res) => {
       mutedRooms: user.muted_rooms || [], bookmarks: user.bookmarked_messages || [],
       avatarFrame: user.avatar_frame || 'none', soundTheme: user.sound_theme || 'default',
       pinEnabled: user.pin_enabled || false, secretQuestion: user.secret_question || '',
-      blockedUsers: user.blocked_users || [],
+      blockedUsers: user.blocked_users || [], showOnline: user.show_online !== false,
+      coins: user.coins || 0,
     }});
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
