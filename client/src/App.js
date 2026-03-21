@@ -381,6 +381,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         const cached = messagesCache.current[roomId];
         if (!cached.some(m => m.id === normalizedMsg.id)) {
           messagesCache.current[roomId] = [...cached, normalizedMsg].slice(-500);
+          messagesCache.current[roomId + '_time'] = Date.now(); // キャッシュ時刻更新
         }
       }
       setRooms((prev) =>
