@@ -64,11 +64,8 @@ export default function Timeline({ currentUser }) {
   const verifyAndPost = async () => {
     if (!adminPassword.trim()) { setPasswordError('パスワードを入力してください'); return; }
     try {
-      const token = localStorage.getItem('token');
-      // パスワード照合API
-      await axios.post('/api/auth/verify-password', { password: adminPassword }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // axiosのデフォルトヘッダー（Authorization）を使用
+      await axios.post('/api/auth/verify-password', { password: adminPassword });
       // 照合OK → 投稿実行
       handlePost();
     } catch (err) {
@@ -82,19 +79,11 @@ export default function Timeline({ currentUser }) {
     setError('');
     setShowPasswordModal(false);
     try {
-      const token = localStorage.getItem('token');
-      if (!token) { setError('ログインが必要です'); return; }
-
       const formData = new FormData();
       formData.append('content', newPostText);
       if (newPostImage) formData.append('image', newPostImage);
 
-      const res = await axios.post('/api/posts', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const res = await axios.post('/api/posts', formData);
       setPosts((prev) => [res.data, ...prev]);
       setNewPostText('');
       setNewPostImage(null);
