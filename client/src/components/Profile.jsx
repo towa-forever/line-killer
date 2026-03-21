@@ -371,7 +371,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
               }}
                 style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 12px', borderRadius:12, border:'2px solid',
                   borderColor: current===icon.id ? 'var(--primary)' : 'var(--border)',
-                  background: current===icon.id ? 'rgba(var(--primary-rgb),0.1)' : 'var(--surface2)', cursor:'pointer' }}>
+                  background: current===icon.id ? 'rgba(6,199,85,0.12)' : 'var(--surface2)', cursor:'pointer' }}>
                 <span style={{ fontSize:28 }}>{icon.emoji}</span>
                 <span style={{ fontSize:11 }}>{icon.label}</span>
               </button>
