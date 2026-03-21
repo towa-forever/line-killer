@@ -179,7 +179,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
       setMessage(res.data.message || '友達申請を送りました！');
     } catch (e) {
       setMessage(e.response?.data?.error || '申請に失敗しました');
-    } finally { setQrSending(false); /* removed */; }
+    } finally { setQrSending(false); }
   };
 
   // カメラQRスキャン（スマホ向け）
