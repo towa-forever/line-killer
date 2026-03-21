@@ -2117,6 +2117,14 @@ export default function App() {
     return () => { vv.removeEventListener('resize', handler); vv.removeEventListener('scroll', handler); };
   }, []);
 
+  // Renderのコールドスタート防止 - 5分ごとにpingを送る
+  useEffect(() => {
+    if (!currentUser) return;
+    const ping = () => axios.get('/api/auth/me').catch(() => {});
+    const timer = setInterval(ping, 5 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, [currentUser]);
+
   const handleLogin = async (user) => {
     setCurrentUser(user);
     // PINが設定されてたら確認画面（pin_enabled / pinEnabled 両対応）

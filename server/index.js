@@ -1067,7 +1067,7 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
       coins: user.coins || 0,
       parentAccountId: user.parent_account_id || null,
     };
-    io.emit('user:updated', userRes);
+    io.to('user_' + decoded.id).emit('user:updated', userRes);
     res.json(userRes);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

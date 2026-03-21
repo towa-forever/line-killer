@@ -6,7 +6,9 @@ const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-serv
 
 export default function Friends({ currentUser, socket, onClearNotif, onStartChat }) {
   const [tab, setTab]                 = useState('list');
-  const [friends, setFriends]         = useState([]);
+  const [friends, setFriends] = useState(() => {
+    try { const c = localStorage.getItem('friends_cache'); return c ? JSON.parse(c) : []; } catch { return []; }
+  });
   const [requests, setRequests]       = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -20,7 +22,12 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
   const showMsg = (text, type = 'success') => { setMessage(text); setMessageType(type); setTimeout(() => setMessage(''), 3000); };
 
   const fetchFriends  = useCallback(async () => {
-    try { const r = await axios.get('/api/friends'); setFriends(Array.isArray(r.data) ? r.data : []); }
+    try {
+      const r = await axios.get('/api/friends');
+      const data = Array.isArray(r.data) ? r.data : [];
+      setFriends(data);
+      try { localStorage.setItem('friends_cache', JSON.stringify(data)); } catch {}
+    }
     catch { setFriends(prev => prev); /* エラー時は現状維持 */ }
   }, []);
   const fetchRequests = useCallback(async () => { try { const r = await axios.get('/api/friend-requests'); setRequests(Array.isArray(r.data) ? r.data : []); } catch {} }, []);
