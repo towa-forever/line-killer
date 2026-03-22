@@ -1072,7 +1072,33 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// 友だち申請
+// 設定専用エンドポイント（JSON送信・ファイルなし）
+app.patch('/api/users/me/settings', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { status, displayName, bio, avatarFrame, soundTheme, showOnline } = req.body;
+    const update = {};
+    if (status !== undefined)      update.status = status;
+    if (displayName !== undefined) update.display_name = displayName;
+    if (bio !== undefined)         update.bio = bio;
+    if (avatarFrame !== undefined) update.avatar_frame = avatarFrame;
+    if (soundTheme !== undefined)  update.sound_theme = soundTheme;
+    if (showOnline !== undefined)  update.show_online = showOnline === 'true' || showOnline === true;
+    const user = await User.findOneAndUpdate({ id: decoded.id }, update, { new: true });
+    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    const userRes = {
+      id: user.id, username: user.username, avatar: user.avatar || null,
+      coverImage: user.cover_image || '', displayName: user.display_name || user.username,
+      bio: user.bio || '', status: user.status || '',
+      avatarFrame: user.avatar_frame || 'none', soundTheme: user.sound_theme || 'default',
+      pinEnabled: user.pin_enabled || false, showOnline: user.show_online !== false,
+      blockedUsers: user.blocked_users || [], mutedRooms: user.muted_rooms || [],
+      bookmarks: user.bookmarked_messages || [], coins: user.coins || 0,
+    };
+    res.json(userRes);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/friend-requests', async (req, res) => {
   try {
     const decoded = auth(req);

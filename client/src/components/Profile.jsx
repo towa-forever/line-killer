@@ -121,9 +121,9 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
 
   const saveSettings = async (updates) => {
     try {
-      const res = await axios.patch('/api/users/me', updates);
+      const res = await axios.patch('/api/users/me/settings', updates);
       onUpdate(res.data);
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error('saveSettings error:', e); }
   };
 
   const handleSave = async () => {
@@ -605,10 +605,12 @@ function SubAccountSection({ currentUser, subAccounts, setSubAccounts, showSubMo
   };
 
   const switchToParent = async () => {
+    const parentId = currentUser?.parentAccountId;
+    if (!parentId) return;
     try {
-      const res = await axios.post(`/api/sub-accounts/${currentUser?.id}/switch`);
+      const res = await axios.post(`/api/sub-accounts/${parentId}/switch`);
       onSwitchAccount?.(res.data.token, res.data.user);
-    } catch {}
+    } catch (e) { console.error('親アカへの切替失敗', e); }
   };
 
   return (
