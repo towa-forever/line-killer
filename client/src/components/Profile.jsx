@@ -63,8 +63,8 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   const loadBlockedUsers = async () => {
     setLoadingBlocked(true);
     try {
-      const res = await axios.get('/api/auth/me');
-      setBlockedUsers(res.data.user?.blockedUsers || []);
+      // currentUserから直接取得（APIコール省略）
+      setBlockedUsers(currentUser?.blockedUsers || []);
     } catch { setBlockedUsers([]); }
     finally { setLoadingBlocked(false); }
   };
@@ -132,8 +132,12 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   const saveSettings = async (updates) => {
     try {
       const res = await axios.patch('/api/users/me/settings', updates);
-      onUpdate(res.data);
-    } catch(e) { console.error('saveSettings error:', e); }
+      if (res.data) onUpdate(res.data);
+    } catch(e) {
+      console.error('saveSettings error:', e);
+      setMessage('設定の保存に失敗した...');
+      setTimeout(() => setMessage(''), 3000);
+    }
   };
 
   const handleSave = async () => {
