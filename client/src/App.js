@@ -336,6 +336,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     }).catch(() => {});
   }, [fetchRooms]);
 
+  // roomsが変わるたびにlocalStorageキャッシュを更新
+  useEffect(() => {
+    if (rooms.length > 0) {
+      try { localStorage.setItem('rooms_cache', JSON.stringify(rooms)); } catch {}
+    }
+  }, [rooms]);
+
   // タイピングタイムアウトのクリーンアップ
   useEffect(() => {
     const ref = typingTimeoutRef.current;
@@ -481,6 +488,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
   useEffect(() => {
     // ルーム切り替え時に状態をリセット
+    setTypingUsers([]); // タイピング表示クリア
     // 前のルームの下書きを保存
     if (draftRef.current._prevRoom && inputText.trim()) {
       draftRef.current[draftRef.current._prevRoom] = inputText;
