@@ -1092,8 +1092,10 @@ app.patch('/api/users/me/settings', async (req, res) => {
       bio: user.bio || '', status: user.status || '',
       avatarFrame: user.avatar_frame || 'none', soundTheme: user.sound_theme || 'default',
       pinEnabled: user.pin_enabled || false, showOnline: user.show_online !== false,
+      secretQuestion: user.secret_question || '',
       blockedUsers: user.blocked_users || [], mutedRooms: user.muted_rooms || [],
       bookmarks: user.bookmarked_messages || [], coins: user.coins || 0,
+      parentAccountId: user.parent_account_id || null,
     };
     res.json(userRes);
   } catch(e) { res.status(500).json({ error: e.message }); }
