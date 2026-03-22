@@ -517,12 +517,19 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     (async () => {
       try {
         if (isFreshCache) {
-          // キャッシュが新鮮なのでAPI省略・未読リセットだけ行う
+          // キャッシュが新鮮なのでAPI省略・未読リセット・既読送信を行う
           setUnreadCounts((prev) => ({ ...prev, [currentRoomId]: 0 }));
           onReadRoom?.();
           isAtBottomRef.current = true;
           setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
-          if (socket) socket.emit('room:join', currentRoomId);
+          if (socket) {
+            socket.emit('room:join', currentRoomId);
+            (messagesCache.current[currentRoomId] || []).forEach(msg => {
+              if ((msg.senderId || msg.sender_id) !== currentUser?.id && !msg.read_by?.includes(currentUser?.id)) {
+                socket.emit('message:read', { messageId: msg.id, roomId: currentRoomId });
+              }
+            });
+          }
           return;
         }
         const res = await axios.get(`/api/rooms/${currentRoomId}/messages`);
@@ -2118,11 +2125,12 @@ export default function App() {
     return () => { vv.removeEventListener('resize', handler); vv.removeEventListener('scroll', handler); };
   }, []);
 
-  // Renderのコールドスタート防止 - 5分ごとにpingを送る
+  // Renderのコールドスタート防止 - 2分ごとにpingを送る（ログイン前後両方）
   useEffect(() => {
-    if (!currentUser) return;
-    const ping = () => axios.get('/api/auth/me').catch(() => {});
-    const timer = setInterval(ping, 5 * 60 * 1000);
+    const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+    const ping = () => axios.get(currentUser ? '/api/auth/me' : `${SERVER_URL}/health`).catch(() => {});
+    ping(); // 即時実行
+    const timer = setInterval(ping, 2 * 60 * 1000);
     return () => clearInterval(timer);
   }, [currentUser]);
 

@@ -201,6 +201,8 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
     {id:'mute',    label:'🔇 ミュート'},
   ];
 
+  if (!currentUser) return <div className="page" style={{ display:'flex', alignItems:'center', justifyContent:'center', flex:1, color:'var(--text2)' }}>読み込み中...</div>;
+
   return (
     <div className="page" style={{ overflowY: 'auto', paddingBottom: 80 }}>
       {/* ログアウト確認 */}
