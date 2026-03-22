@@ -2221,18 +2221,16 @@ export default function App() {
           </Suspense></ErrorBoundary>
         </div>
       )}
-      {activeTab === 'profile' && (
-        <div style={tabVisible('profile')}>
-          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-            <Profile currentUser={currentUser} onUpdate={(u) => setCurrentUser(u)} onLogout={handleLogout} onContact={() => setShowContact(true)}
-              darkMode={darkMode} onToggleDark={() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(!darkMode); }}
-              darkAutoMode={darkAutoMode} onToggleAuto={() => { const v = !darkAutoMode; setDarkAutoMode(v); localStorage.setItem('darkAutoMode', v); if (v) setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches); }}
-              onOpenPinSetup={() => setShowPinSetup(true)}
-              onNavigate={setActiveTab}
-              onSwitchAccount={(token, user) => { localStorage.setItem('token', token); axios.defaults.headers.common['Authorization'] = `Bearer ${token}`; setCurrentUser(user); window.location.reload(); }} />
-          </Suspense></ErrorBoundary>
-        </div>
-      )}
+      <div style={tabVisible('profile')}>
+        <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+          <Profile currentUser={currentUser} onUpdate={(u) => setCurrentUser(u)} onLogout={handleLogout} onContact={() => setShowContact(true)}
+            darkMode={darkMode} onToggleDark={() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(!darkMode); }}
+            darkAutoMode={darkAutoMode} onToggleAuto={() => { const v = !darkAutoMode; setDarkAutoMode(v); localStorage.setItem('darkAutoMode', v); if (v) setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches); }}
+            onOpenPinSetup={() => setShowPinSetup(true)}
+            onNavigate={setActiveTab}
+            onSwitchAccount={(token, user) => { localStorage.setItem('token', token); axios.defaults.headers.common['Authorization'] = `Bearer ${token}`; setCurrentUser(user); window.location.reload(); }} />
+        </Suspense></ErrorBoundary>
+      </div>
     </>
   );
 

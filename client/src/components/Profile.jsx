@@ -18,6 +18,16 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   const [coverPreview, setCoverPreview] = useState(null);
   const [coverFile, setCoverFile] = useState(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  // currentUserが変わったらstateを同期
+  useEffect(() => {
+    if (!currentUser) return;
+    setDisplayName(currentUser.displayName || '');
+    setBio(currentUser.bio || '');
+    setSelectedFrame(currentUser.avatarFrame || 'none');
+    setSelectedSound(currentUser.soundTheme || 'default');
+    setStatusText(currentUser.status || '');
+  }, [currentUser?.id]); // idが変わった時だけ（ログアウト・アカウント切替時）
   const [subAccounts, setSubAccounts] = useState([]);
   const [showSubModal, setShowSubModal] = useState(false);
   const [subForm, setSubForm] = useState({ username:'', password:'', displayName:'' });
