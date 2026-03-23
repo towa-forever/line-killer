@@ -2214,13 +2214,11 @@ export default function App() {
           <Album currentUser={currentUser} />
         </Suspense></ErrorBoundary>
       </div>
-      {activeTab === 'dashboard' && (
-        <div style={tabVisible('dashboard')}>
-          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-            <Dashboard currentUser={currentUser} onNavigateRoom={() => setActiveTab('chat')} />
-          </Suspense></ErrorBoundary>
-        </div>
-      )}
+      <div style={tabVisible('dashboard')}>
+        <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+          <Dashboard currentUser={currentUser} onNavigateRoom={() => setActiveTab('chat')} />
+        </Suspense></ErrorBoundary>
+      </div>
       <div style={tabVisible('profile')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
           <Profile currentUser={currentUser} onUpdate={(u) => setCurrentUser(u)} onLogout={handleLogout} onContact={() => setShowContact(true)}
