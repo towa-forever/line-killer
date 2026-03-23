@@ -766,7 +766,14 @@ app.get('/api/stamps/mysets', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
-    res.json({ acquired: user.acquired_stamps || [] });
+    // デフォルトで最初の3セットを全員に付与
+    const defaultStamps = [1, 2, 3];
+    const acquired = [...new Set([...defaultStamps, ...(user.acquired_stamps || [])])];
+    // DBにも保存（初回のみ）
+    if (!user.acquired_stamps || user.acquired_stamps.length === 0) {
+      await User.findOneAndUpdate({ id: decoded.id }, { acquired_stamps: acquired });
+    }
+    res.json({ acquired });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 

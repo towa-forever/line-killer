@@ -1879,7 +1879,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <div style={{
                 position:'fixed', left:0, right:0,
                 bottom: 'calc(env(safe-area-inset-bottom) + 56px)',
-                zIndex:300, background:'var(--surface)',
+                zIndex:3000, background:'var(--surface)',
                 borderTop:'1px solid var(--border)',
                 display:'grid', gridTemplateColumns:'repeat(4,1fr)',
                 boxShadow:'0 -4px 16px rgba(0,0,0,0.12)',
