@@ -60,7 +60,16 @@ export default function Timeline({ currentUser }) {
   };
 
   // パスワード確認なしで直接投稿（サーバーが管理者チェック）
-  const verifyAndPost = () => handlePost();
+  const verifyAndPost = async () => {
+    if (!adminPassword.trim()) { setPasswordError('パスワードを入力してください'); return; }
+    try {
+      await axios.post('/api/auth/verify-password', { password: adminPassword });
+      setShowPasswordModal(false);
+      handlePost();
+    } catch (err) {
+      setPasswordError(err.response?.data?.error || 'パスワードが違います');
+    }
+  };
 
   const handlePost = async () => {
     if (!newPostText.trim() && !newPostImage) return;
