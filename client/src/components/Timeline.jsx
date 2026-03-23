@@ -55,23 +55,12 @@ export default function Timeline({ currentUser }) {
   // パスワード確認モーダルを開く
   const openPasswordModal = () => {
     if (!newPostText.trim() && !newPostImage) return;
-    setAdminPassword('');
-    setPasswordError('');
-    setShowPasswordModal(true);
+    // パスワード確認不要 - サーバー側で管理者チェックする
+    handlePost();
   };
 
-  // パスワードをサーバーで照合してから投稿
-  const verifyAndPost = async () => {
-    if (!adminPassword.trim()) { setPasswordError('パスワードを入力してください'); return; }
-    try {
-      // axiosのデフォルトヘッダー（Authorization）を使用
-      await axios.post('/api/auth/verify-password', { password: adminPassword });
-      // 照合OK → 投稿実行
-      handlePost();
-    } catch (err) {
-      setPasswordError(err.response?.data?.error || 'パスワードが違います');
-    }
-  };
+  // パスワード確認なしで直接投稿（サーバーが管理者チェック）
+  const verifyAndPost = () => handlePost();
 
   const handlePost = async () => {
     if (!newPostText.trim() && !newPostImage) return;
@@ -164,39 +153,7 @@ export default function Timeline({ currentUser }) {
         </div>
       )}
 
-      {/* パスワード確認モーダル */}
-      {showPasswordModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
-          onClick={() => setShowPasswordModal(false)}>
-          <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:320 }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize:18, fontWeight:800, textAlign:'center', marginBottom:4 }}>🔒 管理者確認</div>
-            <div style={{ fontSize:13, color:'var(--text2)', textAlign:'center', marginBottom:16 }}>パスワードを入力してください</div>
-            <input
-              type="password"
-              className="form-input"
-              placeholder="パスワード"
-              value={adminPassword}
-              onChange={e => { setAdminPassword(e.target.value); setPasswordError(''); }}
-              onKeyDown={e => e.key === 'Enter' && verifyAndPost()}
-              autoFocus
-              style={{ marginBottom: passwordError ? 6 : 16 }}
-            />
-            {passwordError && (
-              <div style={{ fontSize:12, color:'var(--danger)', marginBottom:12, textAlign:'center' }}>{passwordError}</div>
-            )}
-            <div style={{ display:'flex', gap:10 }}>
-              <button onClick={() => setShowPasswordModal(false)}
-                style={{ flex:1, padding:12, borderRadius:12, background:'var(--surface2)', border:'none', fontSize:15, cursor:'pointer' }}>
-                キャンセル
-              </button>
-              <button onClick={verifyAndPost}
-                style={{ flex:1, padding:12, borderRadius:12, background:'#06c755', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer' }}>
-                投稿する
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* パスワード確認モーダルは廃止 - サーバー側で管理者チェック */}
 
       {/* ヘッダー */}
       <div style={{ background:'#06c755', color:'white', padding:'16px 16px 18px', paddingTop:'calc(16px + env(safe-area-inset-top))' }}>

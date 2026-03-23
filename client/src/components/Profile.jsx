@@ -89,7 +89,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
       await axios.post('/api/auth/recovery-email', { email: recoveryEmail });
       setSecMsg('リカバリーメールを設定したで！');
       setShowSecForm(false);
-    } catch { setSecMsg('保存に失敗した...'); }
+    } catch (e) { setSecMsg(e.response?.data?.error || '保存に失敗した...'); }
     finally { setSecSaving(false); }
   };
 
