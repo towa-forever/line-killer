@@ -7,20 +7,19 @@ export default class ErrorBoundary extends React.Component {
   }
 
   static getDerivedStateFromError(e) {
-    // ChunkLoadError（デプロイ後の古いchunk）は自動リロード
-    const isChunkError = e?.name === 'ChunkLoadError' || e?.message?.includes('Loading chunk') || e?.message?.includes('chunk');
+    // ChunkLoadErrorのみ（条件を厳密に）
+    const isChunkError = e?.name === 'ChunkLoadError';
     return { error: e, isChunkError };
   }
 
   componentDidCatch(error, errorInfo) {
     this.setState({ errorInfo });
-    console.error('[ErrorBoundary]', error, errorInfo);
+    console.error('[ErrorBoundary]', error.message);
 
-    // ChunkLoadErrorはページをリロードして解決
-    if (error?.name === 'ChunkLoadError' || error?.message?.includes('Loading chunk')) {
-      // 無限ループ防止: 直近5秒以内にリロードしてたら止める
+    // ChunkLoadErrorのみリロード（他のエラーは絶対リロードしない）
+    if (error?.name === 'ChunkLoadError') {
       const lastReload = sessionStorage.getItem('last_chunk_reload');
-      if (!lastReload || Date.now() - parseInt(lastReload) > 5000) {
+      if (!lastReload || Date.now() - parseInt(lastReload) > 10000) {
         sessionStorage.setItem('last_chunk_reload', Date.now().toString());
         window.location.reload();
       }
@@ -38,9 +37,6 @@ export default class ErrorBoundary extends React.Component {
           <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text, #1a1a2a)' }}>
             アップデートがあるで
           </div>
-          <div style={{ fontSize: 13, color: '#888', textAlign: 'center' }}>
-            新しいバージョンに更新しています...
-          </div>
           <button
             onClick={() => { sessionStorage.setItem('last_chunk_reload', Date.now().toString()); window.location.reload(); }}
             style={{ padding: '10px 24px', borderRadius: 12, border: 'none', background: '#06c755', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}
@@ -55,13 +51,13 @@ export default class ErrorBoundary extends React.Component {
       return (
         <div style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          height: '100%', minHeight: 200, padding: 24, gap: 12, background: 'var(--bg, #f8f8f8)'
+          height: '100%', minHeight: 120, padding: 24, gap: 8, background: 'var(--bg, #f8f8f8)'
         }}>
-          <div style={{ fontSize: 48 }}>😵</div>
-          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text, #1a1a2a)' }}>
-            ここでエラーが発生したで
+          <div style={{ fontSize: 36 }}>😵</div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text, #1a1a2a)', textAlign: 'center' }}>
+            エラーが発生したで
           </div>
-          <div style={{ fontSize: 12, color: '#888', maxWidth: 300, wordBreak: 'break-all', textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: '#888', maxWidth: 280, wordBreak: 'break-all', textAlign: 'center' }}>
             {this.state.error?.message}
           </div>
           <button
