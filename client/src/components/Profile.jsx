@@ -88,7 +88,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
     try {
       await axios.post('/api/auth/recovery-email', { email: recoveryEmail });
       setSecMsg('リカバリーメールを設定したで！');
-      setShowSecForm(false);
+      setTimeout(() => setShowSecForm(false), 1500);
     } catch (e) { setSecMsg(e.response?.data?.error || '保存に失敗した...'); }
     finally { setSecSaving(false); }
   };
@@ -442,13 +442,13 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
           <div style={{ padding:'10px 0 4px', borderBottom:'1px solid var(--border)' }}>
             <input className="form-input" type="email" placeholder="メールアドレスを入力" value={recoveryEmail}
               onChange={e => setRecoveryEmail(e.target.value)} style={{ marginBottom:8 }} />
-            {secMsg && <div style={{ fontSize:12, color: secMsg.includes('！') ? 'var(--primary)' : 'var(--danger)', marginBottom:6 }}>{secMsg}</div>}
             <button onClick={handleSaveRecoveryEmail} disabled={secSaving}
               style={{ width:'100%', padding:10, borderRadius:10, background:'var(--primary)', color:'white', border:'none', fontSize:14, fontWeight:700, cursor:'pointer', marginBottom:8 }}>
               {secSaving ? '保存中...' : '保存する'}
             </button>
           </div>
         )}
+        {secMsg && <div style={{ fontSize:12, color: secMsg.includes('！') ? 'var(--primary)' : 'var(--danger)', padding:'6px 0', borderBottom:'1px solid var(--border)' }}>{secMsg}</div>}
 
         {/* セキュリティ詳細（履歴・ブロック） */}
         <div className="setting-row" onClick={handleOpenSecurity} style={{ cursor:'pointer' }}>
