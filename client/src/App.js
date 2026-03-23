@@ -59,7 +59,7 @@ function AuthScreen({ onLogin }) {
     e.preventDefault();
     if (!username.trim()) { setError('IDを入力してください'); return; }
     if (!password) { setError('パスワードを入力してください'); return; }
-    if (!isLogin && !/^[a-z0-9_\-.]+$/i.test(username.trim())) { setError('IDは英字・数字・_・-・.のみ使えます'); return; }
+    if (!isLogin && /[\s\x00-\x1f]/.test(username.trim())) { setError('IDにスペースは使えません'); return; }
     setLoading(true); setError('');
     try {
       const res = await axios.post(isLogin ? '/api/auth/login' : '/api/auth/register', { username: username.trim(), password });
@@ -2303,7 +2303,11 @@ export default function App() {
         {/* PIN設定 */}
         {showPinSetup && (
           <ErrorBoundary><Suspense fallback={null}>
-            <PinSetup enabled={!!currentUser?.pinEnabled} onClose={() => setShowPinSetup(false)} />
+            <PinSetup enabled={!!currentUser?.pinEnabled} onClose={() => {
+              setShowPinSetup(false);
+              // PIN設定後にcurrentUserを更新
+              axios.get('/api/auth/me').then(r => setCurrentUser(r.data.user)).catch(() => {});
+            }} />
           </Suspense></ErrorBoundary>
         )}
 

@@ -560,9 +560,10 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
-    const uname = username.trim().toLowerCase();
+    const uname = username.trim();
     if (uname.length < 1) return res.status(400).json({ error: 'ユーザー名を入力してください' });
-    if (!/^[a-z0-9_\-.]+$/i.test(uname)) return res.status(400).json({ error: 'ユーザー名は英字・数字・_・-・.のみ使えます' });
+    // スペースと制御文字のみ禁止（日本語・記号はOK）
+    if (/[\s\x00-\x1f]/.test(uname)) return res.status(400).json({ error: 'ユーザー名にスペースや制御文字は使えません' });
     const exists = await User.findOne({ username: uname });
     if (exists) return res.status(400).json({ error: 'このユーザー名は既に使われてます' });
     const hashed = await bcrypt.hash(password, 10);
