@@ -354,7 +354,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     if (!showHeaderMenu && !showInputMenu) return;
     const close = (e) => {
       if (!e.target.closest('.header-menu-dropdown') && !e.target.closest('.header-menu-btn')) setShowHeaderMenu(false);
-      if (!e.target.closest('.input-menu-grid') && !e.target.closest('.plus-btn')) setShowInputMenu(false);
+      // input-menu-item ボタン自体はactionで閉じるのでここでは閉じない
+      if (!e.target.closest('.input-menu-grid') && !e.target.closest('.plus-btn') && !e.target.closest('.input-menu-item')) setShowInputMenu(false);
     };
     document.addEventListener('touchstart', close, { passive: true });
     document.addEventListener('mousedown', close);
@@ -1876,7 +1877,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>➤</button>
             </div>
             {showInputMenu && (
-              <div style={{
+              <div className="input-menu-grid" style={{
                 position:'fixed', left:0, right:0,
                 bottom: 'calc(env(safe-area-inset-bottom) + 56px)',
                 zIndex:3000, background:'var(--surface)',
@@ -1885,8 +1886,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 boxShadow:'0 -4px 16px rgba(0,0,0,0.12)',
                 animation:'menuSlideUp 0.2s ease',
               }}>
+                {/* ファイルはlabelで直接input操作 */}
+                <label className="input-menu-item" style={{ cursor:'pointer' }} onClick={() => setShowInputMenu(false)}>
+                  <span className="input-menu-icon">📎</span>
+                  <span className="input-menu-label">ファイル</span>
+                  <input type="file" accept="image/*,video/*,audio/*,.pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" style={{ display:'none' }} onChange={handleFileUpload} />
+                </label>
                 {[
-                  { icon:'📎', label:'ファイル', action: () => { fileInputRef.current?.click(); setShowInputMenu(false); } },
                   { icon:'🎤', label:'音声', action: () => { setShowVoice(v=>!v); setShowInputMenu(false); } },
                   { icon:'📍', label:'位置情報', action: () => { setShowLocation(v=>!v); setShowInputMenu(false); } },
                   { icon:'🔐', label:'秘密', action: () => { setShowSecret(v=>!v); setShowInputMenu(false); } },
