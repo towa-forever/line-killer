@@ -353,7 +353,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   useEffect(() => {
     if (!showHeaderMenu && !showInputMenu) return;
     const close = (e) => {
-      if (!e.target.closest('.header-menu-dropdown') && !e.target.closest('.header-menu-btn')) setShowHeaderMenu(false);
+      if (!e.target.closest('.header-menu-dropdown') && !e.target.closest('.header-menu-btn') && !e.target.closest('.header-menu-item')) setShowHeaderMenu(false);
       // input-menu-item ボタン自体はactionで閉じるのでここでは閉じない
       if (!e.target.closest('.input-menu-grid') && !e.target.closest('.plus-btn') && !e.target.closest('.input-menu-item')) setShowInputMenu(false);
     };
