@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 
 const ICE_SERVERS = {
   iceServers: [
@@ -67,8 +68,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       stream.getTracks().forEach(t => pc.addTrack(t, stream));
       const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false });
       await pc.setLocalDescription(offer);
-      const { v4: uuidv4 } = await import('uuid').catch(() => ({ v4: () => Math.random().toString(36).slice(2) }));
-      callIdRef.current = typeof uuidv4 === 'function' ? uuidv4() : Date.now().toString();
+      callIdRef.current = uuidv4();
       socket.emit('voice:start', { to: targetUser.id, from: currentUser, offer, callId: callIdRef.current, roomId });
     } catch (e) { console.error(e); onClose(); }
   }, [createPC, socket, targetUser, currentUser, roomId, onClose]);
