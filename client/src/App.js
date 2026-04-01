@@ -301,7 +301,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const typingTimeoutRef = useRef(null);
   const isAtBottomRef = useRef(true); // スクロール最下部にいるかどうか
 
-  const myStampSets = allStampSets.filter(s => acquiredStampIds.includes(s.id));
+  const myStampSets = allStampSets.filter(s => acquiredStampIds.map(id => String(id)).includes(String(s.id)));
 
   // マウント時にAPIから下書きを取得してdraftRefに入れる
   useEffect(() => {

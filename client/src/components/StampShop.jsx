@@ -26,7 +26,7 @@ export default function StampShop({ currentUser, acquiredStampIds = [], onAcquir
     } finally { setAcquiring(null); }
   };
 
-  const isOwned = (setId) => acquiredStampIds.includes(setId);
+  const isOwned = (setId) => acquiredStampIds.map(id => String(id)).includes(String(setId));
   const myStampSets = stamps.filter((s) => isOwned(s.id));
 
   if (loading) return <div className="page"><div className="empty-state">読み込み中...</div></div>;
