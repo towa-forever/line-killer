@@ -1932,3 +1932,11 @@ body.dark .toggle-knob { background: #f0f0f0; }
   color: white;
   border-color: var(--primary);
 }
+
+/* ===== input-menu-item label対応 ===== */
+label.input-menu-item {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+}
