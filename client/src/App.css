@@ -527,11 +527,15 @@ a { text-decoration: none; color: var(--accent); }
 /* スタンプパネルをLINEらしく */
 .stamp-panel {
   display: flex; flex-wrap: wrap; gap: 2px;
-  padding: 10px 8px; max-height: 180px; overflow-y: auto;
+  padding: 10px 8px; max-height: 220px; overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
 }
 .stamp-panel span {
   border-radius: 10px; transition: background 0.1s;
+  min-width: 44px; min-height: 44px;
+  display: flex; align-items: center; justify-content: center;
 }
 .stamp-panel span:active { background: var(--surface2); }
 
