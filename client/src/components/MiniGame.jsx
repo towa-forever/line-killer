@@ -38,7 +38,7 @@ function ReflexGame({ onShare, onBack }) {
       {phase === 'tap'}
       {phase === 'tap' && <div onClick={tap} style={{ ...colorBox, background:'#06c755', color:'white', fontSize:26 }}>タップ！！</div>}
       {phase === 'false' && <><div style={{ fontSize:36, marginBottom:8 }}>😅</div><div style={{ color:'#ff3b30', fontWeight:700, marginBottom:16 }}>フライング！</div><button onClick={start} style={primaryBtn}>もう一度</button></>}
-      {phase === 'result' && ms && <><div style={{ fontSize:40, marginBottom:4 }}>{ms < 250 ? '🚀' : '👍'}</div><div style={{ fontSize:36, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>{ms}ms</div><div style={{ color:'var(--text2)', marginBottom:16 }}>{label}</div><div style={{ display:'flex', gap:8 }}><button onClick={start} style={secBtn}>もう一度</button><button onClick={() => onShare(`⚡ 反射神経テスト: ${ms}ms！${label}`)} style={primaryBtn}>シェア</button></div></>}
+      {phase === 'result' && ms && <><div style={{ fontSize:40, marginBottom:4 }}>{ms < 250 ? '🚀' : '👍'}</div><div style={{ fontSize:36, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>{ms}ms</div><div style={{ color:'var(--text2)', marginBottom:16 }}>{label}</div><div style={{ display:'flex', gap:8 }}><button onClick={start} style={secBtn}>もう一度</button><button onClick={() => onShare(`⚡ 反射神経テスト: ${ms}ms！${label}`, { game:'reflex', score: Math.max(0, 1000 - ms) })} style={primaryBtn}>シェア</button></div></>}
     </div>
   );
 }
@@ -72,7 +72,7 @@ function NumberGame({ onShare, onBack }) {
         <div style={{ fontSize:40, marginBottom:6 }}>🏆</div>
         <div style={{ fontSize:24, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>正解！ {target}</div>
         <div style={{ color:'var(--text2)', marginBottom:16 }}>{tries}回でクリア！スコア {score}/10</div>
-        <button onClick={() => onShare(`🔢 数字当てゲーム: ${tries}回で正解！スコア ${score}/10点`)} style={primaryBtn}>シェア</button>
+        <button onClick={() => onShare(`🔢 数字当てゲーム: ${tries}回で正解！スコア ${score}/10点`, { game:'number', score: score * 100 })} style={primaryBtn}>シェア</button>
       </>}
     </div>
   );
@@ -129,7 +129,7 @@ function MemoryGame({ onShare, onBack }) {
           <div style={{ fontSize:40, marginBottom:6 }}>🏆</div>
           <div style={{ fontSize:20, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>クリア！</div>
           <div style={{ color:'var(--text2)', marginBottom:16 }}>{moves}手でクリア！</div>
-          <button onClick={() => onShare(`🧠 記憶力ゲーム: ${moves}手でクリア！`)} style={primaryBtn}>シェア</button>
+          <button onClick={() => onShare(`🧠 記憶力ゲーム: ${moves}手でクリア！`, { game:'memory', score: Math.max(0, 1000 - moves * 20) })} style={primaryBtn}>シェア</button>
         </>
       )}
     </div>
@@ -188,7 +188,7 @@ function TypingGame({ onShare, onBack }) {
           <div style={{ fontSize:40, marginBottom:6 }}>🏆</div>
           <div style={{ fontSize:22, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>{elapsed}秒！</div>
           <div style={{ color:'var(--text2)', marginBottom:16 }}>約{wpm} WPM</div>
-          <button onClick={() => onShare(`⌨️ タイピングゲーム: ${elapsed}秒でクリア！${wpm}WPM`)} style={primaryBtn}>シェア</button>
+          <button onClick={() => onShare(`⌨️ タイピングゲーム: ${elapsed}秒でクリア！${wpm}WPM`, { game:'type', score: wpm * 10 })} style={primaryBtn}>シェア</button>
         </>
       )}
     </div>
@@ -239,7 +239,7 @@ function ColorGame({ onShare, onBack }) {
       </div>
       {total >= 10 && (
         <div style={{ marginTop:12 }}>
-          <button onClick={() => onShare(`🎨 色当てゲーム: ${score}/${total}問正解！`)} style={primaryBtn}>シェア</button>
+          <button onClick={() => onShare(`🎨 色当てゲーム: ${score}/${total}問正解！`, { game:'color', score: score * 100 })} style={primaryBtn}>シェア</button>
         </div>
       )}
     </div>
@@ -302,7 +302,7 @@ function MathGame({ onShare, onBack }) {
           <div style={{ fontSize:40, marginBottom:6 }}>🏆</div>
           <div style={{ fontSize:22, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>{score}問正解！</div>
           <div style={{ color:'var(--text2)', marginBottom:16 }}>30秒で{total}問中{score}問正解</div>
-          <button onClick={() => onShare(`🔣 暗算チャレンジ: 30秒で${score}問正解！`)} style={primaryBtn}>シェア</button>
+          <button onClick={() => onShare(`🔣 暗算チャレンジ: 30秒で${score}問正解！`, { game:'math', score: score * 100 })} style={primaryBtn}>シェア</button>
         </>
       )}
     </div>

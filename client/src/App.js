@@ -408,6 +408,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           const next = [...prev, normalizedMsg];
           return next.length > 500 ? next.slice(-500) : next;
         });
+        // message:receiveと同様に既読を送信
+        if (senderId !== currentUser.id) {
+          socket.emit('message:read', { messageId: msg.id, roomId });
+        }
       } else if (senderId !== currentUser.id) {
         setUnreadCounts((prev) => ({ ...prev, [roomId]: (prev[roomId] || 0) + 1 }));
       }

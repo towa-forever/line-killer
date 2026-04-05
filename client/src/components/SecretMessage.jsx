@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 // 秘密メッセージ（閲覧後自動削除 or タイマー削除）
 export default function SecretMessage({ socket, roomId, currentUser, onSent, onCancel }) {
   const [text, setText] = useState('');
@@ -48,24 +48,74 @@ export default function SecretMessage({ socket, roomId, currentUser, onSent, onC
 export function SecretBubble({ msg, isMine }) {
   const [revealed, setRevealed] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [remaining, setRemaining] = useState(null);
+  const intervalRef = useRef(null);
   const timer = msg.fileData?.timer || msg.file_data?.timer || 10;
 
   const reveal = () => {
     setRevealed(true);
-    setTimeout(() => setExpired(true), timer * 1000);
+    setRemaining(timer);
   };
 
-  if (expired) return <span style={{ opacity:0.5, fontSize:13, fontStyle:'italic' }}>🔐 このメッセージは削除されました</span>;
+  // カウントダウン処理
+  useEffect(() => {
+    if (!revealed || isMine) return;
+    intervalRef.current = setInterval(() => {
+      setRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(intervalRef.current);
+          setExpired(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(intervalRef.current);
+  }, [revealed, isMine]);
+
+  useEffect(() => {
+    return () => clearInterval(intervalRef.current);
+  }, []);
+
+  if (expired) return (
+    <span style={{ opacity:0.5, fontSize:13, fontStyle:'italic' }}>🔐 このメッセージは削除されました</span>
+  );
+
   if (!revealed && !isMine) return (
     <button onClick={reveal} style={{ background:'rgba(199,125,255,0.15)', border:'1.5px solid #c77dff', borderRadius:12, padding:'8px 14px', cursor:'pointer', color:'#c77dff', fontWeight:700, fontSize:13 }}>
       🔐 タップして表示 ({timer}秒で消える)
     </button>
   );
-  if (!revealed) return <span style={{ opacity:0.7, fontSize:13 }}>🔐 秘密メッセージを送信しました ({timer}秒)</span>;
+
+  if (!revealed) return (
+    <span style={{ opacity:0.7, fontSize:13 }}>🔐 秘密メッセージを送信しました ({timer}秒)</span>
+  );
+
+  const urgent = remaining !== null && remaining <= 5;
+
   return (
     <div style={{ position:'relative' }}>
       <span>{msg.content}</span>
-      {revealed && !isMine && <div style={{ fontSize:11, opacity:0.7, marginTop:4, color:'#c77dff' }}>⏱ {timer}秒後に消えます</div>}
+      {!isMine && remaining !== null && (
+        <div style={{
+          fontSize:11, marginTop:6, fontWeight:700,
+          color: urgent ? '#ff3b30' : '#c77dff',
+          display:'flex', alignItems:'center', gap:5,
+          transition:'color 0.3s',
+        }}>
+          <span style={{
+            display:'inline-flex', alignItems:'center', justifyContent:'center',
+            width:18, height:18, borderRadius:'50%',
+            border: `2px solid ${urgent ? '#ff3b30' : '#c77dff'}`,
+            fontSize:9, fontWeight:900,
+            animation: urgent ? 'secretPulse 0.5s infinite alternate' : 'none',
+          }}>
+            {remaining}
+          </span>
+          {remaining}秒後に消えます
+          <style>{`@keyframes secretPulse { from { opacity:1; transform:scale(1); } to { opacity:0.4; transform:scale(1.15); } }`}</style>
+        </div>
+      )}
     </div>
   );
 }
