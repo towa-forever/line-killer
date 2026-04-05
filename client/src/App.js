@@ -278,6 +278,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
   const [pollMulti, setPollMulti] = useState(false);
+  const [pollFreeText, setPollFreeText] = useState(false);
   const [polls, setPolls] = useState({});
   const [chatBg, setChatBg] = useState(() => localStorage.getItem('chatBg') || 'default');
   const [editText, setEditText] = useState('');
@@ -1205,7 +1206,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                       <div style={{ fontSize:12, color:'var(--text2)', marginBottom:4 }}>{f.sender_name}</div>
                       <div style={{ fontSize:14 }}>{f.content}</div>
                       <button style={{ fontSize:11, color:'var(--danger)', marginTop:4, background:'none', border:'none', cursor:'pointer', padding:0 }}
-                        onClick={() => { axios.post('/api/favorites', { messageId: f.message_id }); setFavoritesList(prev => prev.filter(x => x.message_id !== f.message_id)); }}>
+                        onClick={() => { axios.post('/api/favorites', { messageId: f.message_id, roomId: f.room_id, content: f.content, senderName: f.sender_name }).catch(() => {}); setFavoritesList(prev => prev.filter(x => x.message_id !== f.message_id)); }}>
                         削除
                       </button>
                     </div>
@@ -1418,16 +1419,20 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   <input type="checkbox" checked={pollMulti} onChange={e => setPollMulti(e.target.checked)} />
                   複数選択を許可
                 </label>
+                <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:14, marginBottom:12 }}>
+                  <input type="checkbox" checked={pollFreeText} onChange={e => setPollFreeText(e.target.checked)} />
+                  記述回答を許可 ✏️
+                </label>
                 <div className="modal-actions">
                   <button className="btn btn-secondary" onClick={() => setShowPollCreator(false)}>キャンセル</button>
                   <button className="btn btn-primary" onClick={async () => {
                     const opts = pollOptions.filter(o => o.trim());
                     if (!pollQuestion.trim() || opts.length < 2) { showToast?.('質問と選択肢を2つ以上入力してね', 'error'); return; }
                     try {
-                      await axios.post('/api/rooms/' + selectedRoom.id + '/polls', { question: pollQuestion.trim(), options: opts, multi: pollMulti });
+                      await axios.post('/api/rooms/' + selectedRoom.id + '/polls', { question: pollQuestion.trim(), options: opts, multi: pollMulti, allow_free_text: pollFreeText });
                       showToast?.('投票を作成したで！', 'success');
                     } catch(e) { showToast?.('投票の作成に失敗した...', 'error'); return; }
-                    setShowPollCreator(false); setPollQuestion(''); setPollOptions(['', '']); setPollMulti(false);
+                    setShowPollCreator(false); setPollQuestion(''); setPollOptions(['', '']); setPollMulti(false); setPollFreeText(false);
                   }}>作成</button>
                 </div>
               </div>
@@ -1563,13 +1568,14 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 {bookmarkedMsgs.length === 0
                   ? <div style={{ textAlign:'center', color:'var(--text2)', padding:'20px 0' }}>ブックマークがまだないで</div>
                   : bookmarkedMsgs.map(msg => (
-                    <div key={msg.id} style={{ padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
-                      <div style={{ fontSize:12, color:'var(--text2)', marginBottom:4 }}>{msg.senderName} · {new Date(msg.createdAt).toLocaleDateString('ja-JP')}</div>
-                      <div style={{ fontSize:14 }}>{msg.content}</div>
+                    <div key={msg.id || msg._id} style={{ padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                      <div style={{ fontSize:12, color:'var(--text2)', marginBottom:4 }}>{msg.sender_name || msg.senderName} · {new Date(msg.created_at || msg.createdAt).toLocaleDateString('ja-JP')}</div>
+                      <div style={{ fontSize:14 }}>{msg.type === 'stamp' ? '[スタンプ]' : msg.type === 'image' ? '[画像]' : msg.content}</div>
                       <button style={{ fontSize:11, color:'var(--danger)', marginTop:4, background:'none', border:'none', cursor:'pointer', padding:0 }} onClick={() => {
-                        axios.delete('/api/bookmarks/' + msg.id);
-                        setBookmarks(prev => { const n = new Set(prev); n.delete(msg.id); return n; });
-                        setBookmarkedMsgs(prev => prev.filter(m => m.id !== msg.id));
+                        const msgId = msg.id || msg._id;
+                        axios.delete('/api/bookmarks/' + msgId).catch(() => {});
+                        setBookmarks(prev => { const n = new Set(prev); n.delete(msgId); return n; });
+                        setBookmarkedMsgs(prev => prev.filter(m => (m.id || m._id) !== msgId));
                       }}>削除</button>
                     </div>
                   ))

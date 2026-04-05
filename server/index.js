@@ -2553,10 +2553,12 @@ app.post('/api/rooms/:roomId/polls', async (req, res) => {
   try {
     const decoded = auth(req);
     
-    const { question, options, multi } = req.body;
+    const { question, options, multi, allow_free_text } = req.body;
     const poll = await Poll.create({
       id: 'poll_' + uuidv4(), room_id: req.params.roomId,
       creator_id: decoded.id, question, multi: !!multi,
+      allow_free_text: !!allow_free_text,
+      free_text_answers: [],
       options: options.map((t, i) => ({ id: 'opt_' + i, text: t, voters: [] }))
     });
     // メッセージとして送信
@@ -2609,6 +2611,24 @@ app.post('/api/polls/:pollId/close', async (req, res) => {
     const decoded = auth(req);
     const poll = await Poll.findOneAndUpdate({ id: req.params.pollId, creator_id: decoded.id }, { closed: true }, { new: true });
     if (!poll) return res.status(404).json({ error: '投票が見つかりません' });
+    io.to(poll.room_id).emit('poll:updated', poll);
+    res.json(poll);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+// 記述回答の送信
+app.post('/api/polls/:pollId/free-text', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { text } = req.body;
+    if (!text || !text.trim()) return res.status(400).json({ error: 'テキストを入力してください' });
+    const poll = await Poll.findOne({ id: req.params.pollId });
+    if (!poll || poll.closed) return res.status(400).json({ error: '投票できません' });
+    if (!poll.allow_free_text) return res.status(400).json({ error: '記述投票は許可されていません' });
+    const user = await User.findOne({ id: decoded.id });
+    // 同じユーザーの既存回答は上書き
+    poll.free_text_answers = poll.free_text_answers.filter(a => a.user_id !== decoded.id);
+    poll.free_text_answers.push({ user_id: decoded.id, username: user.display_name || user.username, text: text.trim(), created_at: new Date() });
+    await poll.save();
     io.to(poll.room_id).emit('poll:updated', poll);
     res.json(poll);
   } catch(e) { res.status(400).json({ error: e.message }); }

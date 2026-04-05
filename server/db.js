@@ -143,6 +143,8 @@ const PollSchema = new mongoose.Schema({
   question: String,
   options: [{ id: String, text: String, voters: [String] }],
   multi: { type: Boolean, default: false },
+  allow_free_text: { type: Boolean, default: false },
+  free_text_answers: [{ user_id: String, username: String, text: String, created_at: { type: Date, default: Date.now } }],
   closed: { type: Boolean, default: false },
   created_at: { type: Date, default: Date.now }
 });
