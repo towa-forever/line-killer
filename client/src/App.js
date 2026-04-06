@@ -865,12 +865,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           {msg.forwarded && (
             <div style={{ fontSize:11, color:'var(--text2)', marginBottom:4 }}>📤 転送されたメッセージ</div>
           )}
-          {msg.replyTo && (
-            <div className="reply-preview">
-              <span className="reply-name">{msg.replyTo.senderName}</span>
-              <span className="reply-content">{msg.replyTo.content?.slice(0, 40)}{msg.replyTo.content?.length > 40 ? '...' : ''}</span>
-            </div>
-          )}
+          {(msg.replyTo || msg.reply_to) && (() => {
+            const rt = msg.replyTo || msg.reply_to;
+            return (
+              <div className="reply-preview">
+                <span className="reply-name">{rt.senderName}</span>
+                <span className="reply-content">{rt.content?.slice(0, 40)}{rt.content?.length > 40 ? '...' : ''}</span>
+              </div>
+            );
+          })()}
           <div style={{ position:'relative' }}>
             <div className="message-bubble">{content}
             {translating[msg.id] && (

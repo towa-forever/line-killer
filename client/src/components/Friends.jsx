@@ -396,26 +396,28 @@ function FriendRow({ friend, Avatar, onChat, onRemove }) {
           {friend.status || `ID: ${friend.username}`}
         </div>
       </div>
-      <button onClick={e => { e.stopPropagation(); setShowMenu(m => !m); }}
-        style={{ padding:'8px', background:'none', border:'none', fontSize:20, color:'var(--text2)', cursor:'pointer', flexShrink:0, borderRadius:8 }}>
-        ···
-      </button>
-      {showMenu && (
-        <>
-          <div style={{ position:'fixed', inset:0, zIndex:99 }} onClick={e => { e.stopPropagation(); setShowMenu(false); }} />
-          <div style={{ position:'absolute', right:12, top:'100%', background:'var(--surface)', borderRadius:14, boxShadow:'0 6px 20px rgba(0,0,0,0.15)', zIndex:100, minWidth:160, overflow:'hidden', border:'0.5px solid var(--border)' }}
-            onClick={e => e.stopPropagation()}>
-            <button onClick={() => { onChat(); setShowMenu(false); }}
-              style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'13px 16px', textAlign:'left', background:'none', border:'none', fontSize:14, cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
-              <span>💬</span> トークする
-            </button>
-            <button onClick={() => { onRemove(); setShowMenu(false); }}
-              style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'13px 16px', textAlign:'left', background:'none', border:'none', fontSize:14, color:'var(--danger)', cursor:'pointer' }}>
-              <span>🗑️</span> 友達を削除
-            </button>
-          </div>
-        </>
-      )}
+      <div style={{ position:'relative', flexShrink:0 }}>
+        <button onClick={e => { e.stopPropagation(); setShowMenu(m => !m); }}
+          style={{ padding:'8px', background:'none', border:'none', fontSize:20, color:'var(--text2)', cursor:'pointer', borderRadius:8 }}>
+          ···
+        </button>
+        {showMenu && (
+          <>
+            <div style={{ position:'fixed', inset:0, zIndex:99 }} onClick={e => { e.stopPropagation(); setShowMenu(false); }} />
+            <div style={{ position:'absolute', right:0, top:'100%', background:'var(--surface)', borderRadius:14, boxShadow:'0 6px 20px rgba(0,0,0,0.15)', zIndex:100, minWidth:160, overflow:'hidden', border:'0.5px solid var(--border)' }}
+              onClick={e => e.stopPropagation()}>
+              <button onClick={() => { onChat(); setShowMenu(false); }}
+                style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'13px 16px', textAlign:'left', background:'none', border:'none', fontSize:14, cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
+                <span>💬</span> トークする
+              </button>
+              <button onClick={() => { onRemove(); setShowMenu(false); }}
+                style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'13px 16px', textAlign:'left', background:'none', border:'none', fontSize:14, color:'var(--danger)', cursor:'pointer' }}>
+                <span>🗑️</span> 友達を削除
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

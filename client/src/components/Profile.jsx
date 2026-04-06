@@ -102,8 +102,9 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   const [pwSaving, setPwSaving] = useState(false);
 
   const handleChangePw = async () => {
-    if (!currentPw || !newPw) { setPwMsg('全て入力してや'); return; }
+    if (!currentPw) { setPwMsg('現在のパスワードを入力してや'); return; }
     if (!newPw) { setPwMsg('新しいパスワードを入力してや'); return; }
+    if (newPw.length < 6) { setPwMsg('パスワードは6文字以上にしてや'); return; }
     if (newPw !== newPw2) { setPwMsg('新しいパスワードが一致してへんで'); return; }
     setPwSaving(true); setPwMsg('');
     try {
@@ -404,7 +405,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
         <div className="profile-section-title">🔐 セキュリティ</div>
 
         {/* パスワード変更 */}
-        <div className="setting-row" onClick={() => setShowPwForm(v=>!v)} style={{ cursor:'pointer' }}>
+        <div className="setting-row" onClick={() => { setShowPwForm(v=>!v); setPwMsg(''); setCurrentPw(''); setNewPw(''); setNewPw2(''); }} style={{ cursor:'pointer' }}>
           <div>🔑 パスワード変更</div>
           <span style={{ color:'var(--text2)', fontSize:18 }}>{showPwForm ? '∨' : '›'}</span>
         </div>
@@ -585,6 +586,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
 
 function SubAccountSection({ currentUser, subAccounts, setSubAccounts, showSubModal, setShowSubModal, subForm, setSubForm, subError, setSubError, subLoading, setSubLoading, onSwitchAccount }) {
   const isSubAccount = !!currentUser?.parentAccountId;
+  const [deleteConfirm, setDeleteConfirm] = React.useState(null); // subIdを保持
 
   useEffect(() => {
     if (isSubAccount) return;
@@ -604,11 +606,15 @@ function SubAccountSection({ currentUser, subAccounts, setSubAccounts, showSubMo
   };
 
   const deleteSub = async (subId) => {
-    if (!window.confirm('このサブアカウントを削除しますか？')) return;
+    setDeleteConfirm(subId);
+  };
+
+  const confirmDeleteSub = async (subId) => {
     try {
       await axios.delete(`/api/sub-accounts/${subId}`);
       setSubAccounts(p => p.filter(s => s.id !== subId));
     } catch {}
+    setDeleteConfirm(null);
   };
 
   const switchTo = async (subId) => {
@@ -629,6 +635,20 @@ function SubAccountSection({ currentUser, subAccounts, setSubAccounts, showSubMo
 
   return (
     <div className="card" style={{ margin:10 }}>
+      {/* サブアカ削除確認ダイアログ */}
+      {deleteConfirm && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={() => setDeleteConfirm(null)}>
+          <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:300 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:16, fontWeight:700, textAlign:'center', marginBottom:8 }}>サブアカウント削除</div>
+            <div style={{ fontSize:14, color:'var(--text2)', textAlign:'center', marginBottom:20 }}>このサブアカウントを削除しますか？</div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setDeleteConfirm(null)} style={{ flex:1, padding:12, borderRadius:12, background:'var(--surface2)', border:'none', fontSize:15, cursor:'pointer' }}>キャンセル</button>
+              <button onClick={() => confirmDeleteSub(deleteConfirm)} style={{ flex:1, padding:12, borderRadius:12, background:'var(--danger)', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer' }}>削除</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* サブアカ作成モーダル */}
       {showSubModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
