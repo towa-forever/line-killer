@@ -344,7 +344,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const typingTimeoutRef = useRef(null);
   const isAtBottomRef = useRef(true); // スクロール最下部にいるかどうか
 
-  const myStampSets = allStampSets.filter(s => acquiredStampIds.map(id => String(id)).includes(String(s.id)));
+  const myStampSets = React.useMemo(
+    () => allStampSets.filter(s => acquiredStampIds.map(id => String(id)).includes(String(s.id))),
+    [allStampSets, acquiredStampIds]
+  );
 
   // マウント時にAPIから下書きを取得してdraftRefに入れる
   useEffect(() => {
@@ -814,19 +817,21 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             <span style={{ fontSize:16 }}>{isStart ? '📞' : '📵'}</span>
             <span>{msg.content}</span>
             <span style={{ fontSize:11, opacity:0.7 }}>
-              {new Date(msg.created_at).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}
+              {new Date(msg.createdAt || msg.created_at).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}
             </span>
           </div>
         </div>
       );
     } else if (msg.type === 'stamp') {
       content = <span style={{ fontSize: 36 }}>{msg.content}</span>;
-    } else if (msg.type === 'image' && msg.fileData?.url) {
-      const imgSrc = msg.fileData.url?.startsWith('http') ? msg.fileData.url : `${SERVER_URL}${msg.fileData.url}`;
+    } else if (msg.type === 'image' && (msg.fileData?.url || msg.file_data?.url)) {
+      const rawUrl = msg.fileData?.url || msg.file_data?.url;
+      const imgSrc = rawUrl?.startsWith('http') ? rawUrl : `${SERVER_URL}${rawUrl}`;
       content = <img src={imgSrc} alt="img" className="chat-image" loading="lazy" />;
-    } else if (msg.type === 'file' && msg.fileData?.url) {
-      const fileUrl = msg.fileData.url?.startsWith('http') ? msg.fileData.url : `${SERVER_URL}${msg.fileData.url}`;
-      const ext = (msg.fileData.url || '').split('.').pop().toLowerCase();
+    } else if (msg.type === 'file' && (msg.fileData?.url || msg.file_data?.url)) {
+      const rawUrl = msg.fileData?.url || msg.file_data?.url;
+      const fileUrl = rawUrl?.startsWith('http') ? rawUrl : `${SERVER_URL}${rawUrl}`;
+      const ext = (rawUrl || '').split('.').pop().toLowerCase();
       const icons = { pdf:'📄', zip:'🗜️', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊', mp4:'🎬', mov:'🎬', mp3:'🎵' };
       content = <a href={fileUrl} target="_blank" rel="noreferrer" className="chat-file-link" download style={{ display:'flex', alignItems:'center', gap:6 }}>{icons[ext]||'📎'} {msg.content}</a>;
     } else if (msg.type === 'voice') {
@@ -1041,7 +1046,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   { icon:'✅', label:'タスク', action: () => setShowTaskPanel(true) },
                   { icon:'🎮', label:'ゲーム', action: () => setShowMiniGame(true) },
                   { icon:'🖼️', label:'スタンプ自作', action: () => setShowStickerMaker(true) },
-                  { icon:'📞', label:'音声通話', action: () => { const otherId = selectedRoom?.members?.find(m => m !== currentUser.id); setVoiceCall({ targetUser: otherId ? { id: otherId, displayName: selectedRoom.name } : null, isIncoming: false, roomId: selectedRoom?.id, callId: null }); } },
+                  { icon:'📞', label:'音声通話', action: () => {
+                    if (selectedRoom?.members?.length > 2) { showToast?.('音声通話はDMのみ対応やで', 'error'); return; }
+                    const otherId = selectedRoom?.members?.find(m => m !== currentUser.id);
+                    setVoiceCall({ targetUser: otherId ? { id: otherId, displayName: selectedRoom.name } : null, isIncoming: false, roomId: selectedRoom?.id, callId: null });
+                  } },
                   { icon:'🤖', label:'AIアシスタント', action: () => setShowAI(true) },
                   { icon:'🌈', label:'背景を変える', action: () => setShowBgPicker(true) },
                   { icon:'📤', label:'チャットをエクスポート', action: () => setShowExport(true) },
@@ -1275,7 +1284,18 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   {!globalSearching && globalResults.length === 0 && globalQuery && <div style={{ textAlign:'center', color:'var(--text2)', padding:20 }}>見つからんかった</div>}
                   {globalResults.map(msg => (
                     <div key={msg.id} style={{ padding:'10px 0', borderBottom:'1px solid var(--border)', cursor:'pointer' }}
-                      onClick={() => { setShowGlobalSearch(false); setSelectedRoom(rooms.find(r => r.id === msg.roomId)); }}>
+                      onClick={() => {
+                        setShowGlobalSearch(false);
+                        const room = rooms.find(r => r.id === msg.roomId);
+                        if (room) {
+                          setSelectedRoom(room);
+                          // ルーム読み込み後にメッセージへスクロール
+                          setTimeout(() => {
+                            const el = document.getElementById(`msg-${msg.id}`);
+                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }, 600);
+                        }
+                      }}>
                       <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
                         <span style={{ fontSize:12, color:'var(--primary)', fontWeight:600 }}>{msg.roomName}</span>
                         <span style={{ fontSize:11, color:'var(--text2)' }}>{new Date(msg.createdAt).toLocaleDateString('ja-JP', { month:'numeric', day:'numeric' })}</span>
@@ -1825,10 +1845,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               backgroundSize: 'cover', backgroundPosition: 'center',
             } : {}}>
             {messages.reduce((acc, msg, i) => {
-              const d = new Date(msg.createdAt);
+              const d = new Date(msg.createdAt || msg.created_at);
+              if (isNaN(d.getTime())) { acc.push(renderMessage(msg, i)); return acc; }
               const dateStr = d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
               const prevMsg = messages[i - 1];
-              const prevDate = prevMsg ? new Date(prevMsg.createdAt).toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' }) : null;
+              const prevD = prevMsg ? new Date(prevMsg.createdAt || prevMsg.created_at) : null;
+              const prevDate = prevD && !isNaN(prevD.getTime()) ? prevD.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' }) : null;
               if (!prevDate || prevDate !== d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' })) {
                 acc.push(<div key={`date-${i}`} className="date-divider">{dateStr}</div>);
               }
