@@ -1774,7 +1774,8 @@ io.on('connection', async (socket) => {
       senderAvatar: socket.user.avatar || null,
       content, type, fileData: fileData || null, replyTo: replyTo || null, stampLabel: stampLabel || null,
       edited: false, deleted: false, readBy: [socket.user.id], reactions: [], read_by: [socket.user.id],
-      createdAt: msg.created_at
+      createdAt: msg.created_at,
+      expiresAt: msg.expires_at || null, expires_at: msg.expires_at || null,
     });
 
     // Push通知: ルームにいない他のメンバーに通知

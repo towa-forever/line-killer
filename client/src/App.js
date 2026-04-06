@@ -214,11 +214,52 @@ function AvatarImg({ src, name, size = 40, frame = 'none' }) {
   );
 }
 
+// ephemeralメッセージ用カウントダウンコンポーネント
+function EphemeralBubble({ msg, isMine }) {
+  const expiresAt = msg.expiresAt || msg.expires_at ? new Date(msg.expiresAt || msg.expires_at) : null;
+  const [remaining, setRemaining] = React.useState(
+    expiresAt ? Math.max(0, Math.round((expiresAt - Date.now()) / 1000)) : 0
+  );
+  React.useEffect(() => {
+    if (!expiresAt || remaining <= 0) return;
+    const t = setInterval(() => {
+      const r = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
+      setRemaining(r);
+      if (r <= 0) clearInterval(t);
+    }, 1000);
+    return () => clearInterval(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const pct = expiresAt ? Math.min(100, (remaining / ((expiresAt - new Date(msg.createdAt || msg.created_at)) / 1000)) * 100) : 0;
+  return (
+    <div className="message-bubble" style={{ border:'1.5px dashed var(--danger)', background:'rgba(255,59,48,0.07)', position:'relative', overflow:'hidden' }}>
+      <span style={{ fontSize:12, marginRight:6 }}>💨</span>{msg.content}
+      {remaining > 0 ? (
+        <>
+          <div style={{ fontSize:10, color:'var(--danger)', marginTop:4, fontWeight:600 }}>
+            {remaining >= 3600
+              ? `${Math.floor(remaining/3600)}時間後に消えるで`
+              : remaining >= 60
+              ? `${Math.floor(remaining/60)}分${remaining%60}秒後に消えるで`
+              : `${remaining}秒後に消えるで`}
+          </div>
+          <div style={{ height:3, background:'var(--surface2)', borderRadius:2, marginTop:4, overflow:'hidden' }}>
+            <div style={{ height:'100%', width:`${pct}%`, background:'var(--danger)', borderRadius:2, transition:'width 1s linear' }} />
+          </div>
+        </>
+      ) : (
+        <div style={{ fontSize:10, color:'var(--text2)', marginTop:4, fontStyle:'italic' }}>消えました</div>
+      )}
+    </div>
+  );
+}
+
 function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate, onReadRoom }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const messagesCache = useRef({});
+  // selectedRoomRefを常に最新に保つ
+  useEffect(() => { selectedRoomRef.current = selectedRoom; }, [selectedRoom]);
   const hasMoreMessages = useRef({}); // ルームごとにまだ読めるか
   const loadingMoreRef = useRef(false); // 二重ロード防止
   const [inputText, setInputText] = useState('');
@@ -296,6 +337,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   });
   const [showNotifSettings, setShowNotifSettings] = useState(false);
   const draftRef = useRef({}); // 下書き一時保存 { roomId: text }
+  const selectedRoomRef = useRef(null); // closureで古いselectedRoomを参照しないためのRef
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -376,7 +418,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       const roomId = msg.roomId || msg.room_id;
       const senderId = msg.senderId || msg.sender_id;
       const normalizedMsg = { ...msg, roomId, senderId };
-      if (roomId === selectedRoom?.id) {
+      if (roomId === selectedRoomRef.current?.id) {
         setMessages((prev) => { const next = [...prev, normalizedMsg]; return next.length > 500 ? next.slice(-500) : next; });
         if (senderId !== currentUser.id) {
           socket.emit('message:read', { messageId: msg.id, roomId });
@@ -403,7 +445,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       const roomId = msg.roomId || msg.room_id;
       const senderId = msg.senderId || msg.sender_id;
       const normalizedMsg = { ...msg, roomId, senderId, createdAt: msg.createdAt || msg.created_at };
-      if (roomId === selectedRoom?.id) {
+      if (roomId === selectedRoomRef.current?.id) {
         setMessages((prev) => {
           if (prev.some(m => m.id === normalizedMsg.id)) return prev;
           const next = [...prev, normalizedMsg];
@@ -435,7 +477,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       setMessages((prev) => prev.map(m => m.id === messageId ? { ...m, reactions } : m));
     });
     socket.on('room:pinned', ({ roomId, messageId }) => {
-      if (roomId !== selectedRoom?.id) return;
+      if (roomId !== selectedRoomRef.current?.id) return;
       if (!messageId) { setPinnedMessage(null); return; }
       setMessages((prev) => {
         const msg = prev.find(m => m.id === messageId);
@@ -456,7 +498,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       setPolls(prev => ({ ...prev, [poll.id]: poll }));
     });
     socket.on('room:announcement', ({ roomId, text, by }) => {
-      if (roomId === selectedRoom?.id) {
+      if (roomId === selectedRoomRef.current?.id) {
         const sysMsg = { id: 'ann_' + Date.now(), type: 'announcement', content: text, senderId: by, createdAt: new Date().toISOString() };
         setMessages(prev => [...prev, sysMsg]);
       }
@@ -722,17 +764,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     }
     // 期限付きメッセージ
     if (msg.type === 'ephemeral') {
-      const expiresAt = msg.expiresAt ? new Date(msg.expiresAt) : null;
-      const remaining = expiresAt ? Math.max(0, Math.round((expiresAt - Date.now()) / 1000)) : 0;
       return (
         <div key={msg.id} className={`message ${isMine ? 'mine' : 'theirs'}`} style={{ marginBottom:6 }}>
           {!isMine && <div className="message-avatar">{msg.senderName?.[0] || '?'}</div>}
           <div className="message-body">
             {!isMine && <div className="message-sender">{msg.senderName}</div>}
-            <div className="message-bubble" style={{ border:'1.5px dashed var(--danger)', background:'rgba(255,59,48,0.07)', position:'relative' }}>
-              <span style={{ fontSize:12, marginRight:6 }}>💨</span>{msg.content}
-              {remaining > 0 && <div style={{ fontSize:10, color:'var(--danger)', marginTop:4 }}>{remaining}秒後に消えるで</div>}
-            </div>
+            <EphemeralBubble msg={msg} isMine={isMine} />
           </div>
         </div>
       );

@@ -320,11 +320,23 @@ function shuffle(arr) { return [...arr].sort(() => Math.random()-0.5); }
 // ---- メインコンポーネント ----
 export default function MiniGame({ onSendResult, onClose }) {
   const [game, setGame] = useState(null);
+  const [coinToast, setCoinToast] = useState(null); // { coins, score }
 
-  const share = (text, scoreData) => {
-    // スコアをAPIに送信（ゲームIDとスコアがある場合）
+  const share = async (text, scoreData) => {
+    // スコアをAPIに送信してコイン獲得数を表示
     if (scoreData?.game && typeof scoreData.score === 'number') {
-      axios.post('/api/game/score', scoreData).catch(() => {});
+      try {
+        const res = await axios.post('/api/game/score', scoreData);
+        if (res.data?.coinsEarned > 0) {
+          setCoinToast({ coins: res.data.coinsEarned, score: scoreData.score });
+          setTimeout(() => {
+            setCoinToast(null);
+            onSendResult(text);
+            onClose();
+          }, 1800);
+          return;
+        }
+      } catch { /* 無視 */ }
     }
     onSendResult(text);
     onClose();
@@ -333,6 +345,20 @@ export default function MiniGame({ onSendResult, onClose }) {
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000 }}
       onClick={!game ? onClose : undefined}>
+      {/* コイン獲得トースト */}
+      {coinToast && (
+        <div style={{
+          position:'absolute', top:60, left:'50%', transform:'translateX(-50%)',
+          background:'linear-gradient(135deg, #f7b731, #f9ca24)',
+          color:'#333', borderRadius:20, padding:'14px 28px', zIndex:10,
+          textAlign:'center', boxShadow:'0 4px 20px rgba(0,0,0,0.3)',
+          animation:'fadeInDown 0.3s ease'
+        }}>
+          <div style={{ fontSize:32, marginBottom:4 }}>🪙</div>
+          <div style={{ fontWeight:800, fontSize:22 }}>+{coinToast.coins} コイン！</div>
+          <div style={{ fontSize:12, opacity:0.8, marginTop:2 }}>スコア: {coinToast.score}pts</div>
+        </div>
+      )}
       <div style={{ background:'var(--surface)', borderRadius:24, padding:24, width:'92%', maxWidth:360, textAlign:'center', maxHeight:'85vh', overflowY:'auto' }}
         onClick={e => e.stopPropagation()}>
         {!game ? (
