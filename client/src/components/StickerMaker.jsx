@@ -47,21 +47,25 @@ export default function StickerMaker({ onSend, onClose }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     setSending(true);
-    try {
-      canvas.toBlob(async (blob) => {
+    canvas.toBlob(async (blob) => {
+      try {
         const formData = new FormData();
         formData.append('file', blob, 'sticker.png');
         formData.append('type', 'sticker');
         const res = await axios.post('/api/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
         onSend({ type: 'sticker', fileData: { url: res.data.url }, content: '🎨 自作スタンプ' });
         onClose();
-      }, 'image/png');
-    } catch (e) {
-      // フォールバック: base64で直接送信
-      const dataUrl = canvas.toDataURL('image/png');
-      onSend({ type: 'sticker', fileData: { url: dataUrl }, content: '🎨 自作スタンプ' });
-      onClose();
-    } finally { setSending(false); }
+      } catch (e) {
+        // フォールバック: base64で直接送信
+        try {
+          const dataUrl = canvas.toDataURL('image/png');
+          onSend({ type: 'sticker', fileData: { url: dataUrl }, content: '🎨 自作スタンプ' });
+          onClose();
+        } catch {
+          setSending(false);
+        }
+      }
+    }, 'image/png');
   };
 
   return (

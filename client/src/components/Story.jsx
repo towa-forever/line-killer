@@ -115,7 +115,7 @@ function StoryViewer({ data, onClose, currentUserId, onDeleted }) {
         {/* 閉じるボタン */}
         <button onClick={onClose} style={{ position:'absolute', top:10, right:10, background:'rgba(0,0,0,0.5)', border:'none', color:'white', fontSize:22, cursor:'pointer', borderRadius:'50%', width:36, height:36 }}>×</button>
         {story.user_id === currentUserId && (
-          <button onClick={async (e) => { e.stopPropagation(); try { await axios.delete('/api/stories/' + story.id); onDeleted?.(); } catch {} }}
+          <button onClick={async (e) => { e.stopPropagation(); try { await axios.delete('/api/stories/' + (story._id || story.id)); onDeleted?.(); } catch {} }}
             style={{ position:'absolute', top:10, left:10, background:'rgba(231,76,60,0.8)', border:'none', color:'white', fontSize:12, cursor:'pointer', borderRadius:20, padding:'5px 10px', fontWeight:700 }}>🗑️ 削除</button>
         )}
         {/* 投稿時刻 */}

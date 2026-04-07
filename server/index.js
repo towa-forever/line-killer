@@ -2236,7 +2236,7 @@ app.get('/api/rooms/:roomId/stats', async (req, res) => {
       types: typeMap,
       hourMap,
       mostActiveHour: mostActive,
-      firstMessage: msgs[0]?.created_at,
+      firstMessage: msgs[msgs.length - 1]?.created_at, // 降順ソートなので末尾が最古メッセージ
     });
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
@@ -2659,20 +2659,31 @@ app.get('/api/rooms/:roomId/tasks', async (req, res) => {
 });
 app.patch('/api/tasks/:taskId', async (req, res) => {
   try {
-    auth(req);
+    const decoded = auth(req);
+    const task = await Task.findOne({ id: req.params.taskId });
+    if (!task) return res.status(404).json({ error: 'タスクが見つかりません' });
+    // 作成者またはアサイニーのみ更新可
+    if (task.creator_id !== decoded.id && task.assignee_id !== decoded.id) {
+      return res.status(403).json({ error: '権限がありません' });
+    }
     const allowed = {};
     if (req.body.done !== undefined) allowed.done = !!req.body.done;
     if (req.body.title) allowed.title = String(req.body.title).slice(0, 200);
     if (req.body.due !== undefined) allowed.due = req.body.due ? new Date(req.body.due) : null;
-    const task = await Task.findOneAndUpdate({ id: req.params.taskId }, allowed, { new: true });
-    io.to(task.room_id).emit('task:updated', task);
-    res.json(task);
+    const updated = await Task.findOneAndUpdate({ id: req.params.taskId }, allowed, { new: true });
+    io.to(updated.room_id).emit('task:updated', updated);
+    res.json(updated);
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 app.delete('/api/tasks/:taskId', async (req, res) => {
   try {
     const decoded = auth(req);
     const task = await Task.findOne({ id: req.params.taskId });
+    if (!task) return res.status(404).json({ error: 'タスクが見つかりません' });
+    // 作成者のみ削除可
+    if (task.creator_id !== decoded.id) {
+      return res.status(403).json({ error: '削除できるのは作成者のみです' });
+    }
     await Task.deleteOne({ id: req.params.taskId });
     io.to(task.room_id).emit('task:deleted', { taskId: req.params.taskId });
     res.json({ ok: true });

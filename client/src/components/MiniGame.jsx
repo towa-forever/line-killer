@@ -95,9 +95,12 @@ function MemoryGame({ onShare, onBack }) {
       setMoves(m => m+1);
       if (next[0].emoji === next[1].emoji) {
         setTimeout(() => {
-          setCards(cs => cs.map(c => next.some(s => s.id === c.id) ? { ...c, matched:true } : c));
+          setCards(cs => {
+            const updated = cs.map(c => next.some(s => s.id === c.id) ? { ...c, matched:true } : c);
+            if (updated.every(c => c.matched)) setDone(true);
+            return updated;
+          });
           setSelected([]);
-          if (newCards.filter(c => !c.matched).length === 2) setDone(true);
         }, 400);
       } else {
         setTimeout(() => {

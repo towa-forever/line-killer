@@ -19,8 +19,8 @@ export default function Album({ currentUser }) {
       setRooms(roomRes.data);
       const allPhotos = photoRes.data.map(p => ({
         ...p,
-        roomId: p.room_id,
-        roomName: p.roomName || roomRes.data.find(r => (r._id || r.id) === p.room_id)?.name || 'ルーム'
+        roomId: String(p.room_id),
+        roomName: p.roomName || roomRes.data.find(r => String(r._id || r.id) === String(p.room_id))?.name || 'ルーム'
       }));
       setPhotos(allPhotos);
     } catch (err) { console.error(err); }
@@ -30,7 +30,7 @@ export default function Album({ currentUser }) {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const filteredPhotos = selectedRoom
-    ? photos.filter((p) => p.roomId === selectedRoom)
+    ? photos.filter((p) => String(p.roomId) === String(selectedRoom))
     : photos;
 
   if (loading) return <div className="page"><div className="empty-state">読み込み中...</div></div>;
@@ -45,12 +45,12 @@ export default function Album({ currentUser }) {
           全て ({photos.length})
         </button>
         {rooms.map((room) => {
-          const count = photos.filter((p) => p.roomId === (room._id || room.id)).length;
+          const count = photos.filter((p) => String(p.roomId) === String(room._id || room.id)).length;
           if (count === 0) return null;
           return (
             <button key={room._id || room.id}
               className={`album-room-btn ${selectedRoom === (room._id || room.id) ? 'active' : ''}`}
-              onClick={() => setSelectedRoom(room._id || room.id)}>
+              onClick={() => setSelectedRoom(String(room._id || room.id))}>
               {room.name || 'ルーム'} ({count})
             </button>
           );

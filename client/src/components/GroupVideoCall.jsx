@@ -5,18 +5,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
   const iceBufRef = useRef({});
   const localStreamRef = useRef(null);
   const localVideoRef = useRef(null);
-  const [remoteStreams, setRemoteStreams] = useState({});
-  const [status, setStatus] = useState('joining');
-  const [isMuted, setIsMuted] = useState(false);
-  const [isCamOff, setIsCamOff] = useState(false);
-  const [error, setError] = useState('');
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [facingMode, setFacingMode] = useState('user'); // 'user'=内カメ / 'environment'=外カメ
-  const [showLeaveMenu, setShowLeaveMenu] = useState(false);
-  const screenTrackRef = useRef(null);
-  const isCreator = currentUser?.id === members[0]; // 最初のメンバーがホスト
-
-  let ICE = {
+  const iceConfigRef = useRef({
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun.cloudflare.com:3478' },
@@ -28,10 +17,26 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
     bundlePolicy: 'max-bundle',
     rtcpMuxPolicy: 'require',
     iceTransportPolicy: 'all',
-  };
-  fetch('/api/ice-servers').then(r => r.json()).then(data => {
-    if (data.iceServers) ICE = { ...ICE, iceServers: data.iceServers };
-  }).catch(() => {});
+  });
+  const [remoteStreams, setRemoteStreams] = useState({});
+  const [status, setStatus] = useState('joining');
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCamOff, setIsCamOff] = useState(false);
+  const [error, setError] = useState('');
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [facingMode, setFacingMode] = useState('user'); // 'user'=内カメ / 'environment'=外カメ
+  const [showLeaveMenu, setShowLeaveMenu] = useState(false);
+  const screenTrackRef = useRef(null);
+  const isCreator = currentUser?.id === members[0]; // 最初のメンバーがホスト
+
+  // 動的ICEサーバー取得（マウント時のみ）
+  useEffect(() => {
+    fetch('/api/ice-servers').then(r => r.json()).then(data => {
+      if (data.iceServers) {
+        iceConfigRef.current = { ...iceConfigRef.current, iceServers: data.iceServers };
+      }
+    }).catch(() => {});
+  }, []);
 
   const addRemoteStream = useCallback((userId, userName, stream) => {
     setRemoteStreams(prev => ({ ...prev, [userId]: { stream, name: userName } }));
@@ -43,7 +48,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
 
   const createPC = useCallback((targetId, targetName, localStream, isInitiator) => {
     if (pcsRef.current[targetId]) return pcsRef.current[targetId];
-    const pc = new RTCPeerConnection(ICE);
+    const pc = new RTCPeerConnection(iceConfigRef.current);
     pcsRef.current[targetId] = pc;
     iceBufRef.current[targetId] = [];
 

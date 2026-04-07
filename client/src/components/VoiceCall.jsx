@@ -18,13 +18,14 @@ function fmtTime(s) {
   return `${String(m).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
 }
 
-export default function VoiceCall({ socket, currentUser, targetUser, roomId, isIncoming, onClose, callId: initCallId }) {
+export default function VoiceCall({ socket, currentUser, targetUser, roomId, isIncoming, onClose, callId: initCallId, incomingOffer }) {
   const [status, setStatus]     = useState(isIncoming ? 'incoming' : 'calling');
   const [elapsed, setElapsed]   = useState(0);
   const [muted, setMuted]       = useState(false);
   const [speakerOn, setSpeakerOn] = useState(true);
   const pcRef        = useRef(null);
   const localStream  = useRef(null);
+  const remoteAudio  = useRef(null);
   const callIdRef    = useRef(initCallId || null);
   const callStartRef = useRef(null);
   const timerRef     = useRef(null);
@@ -47,8 +48,10 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
     // リモート音声受信（発信側・着信側共通）
     pc.ontrack = e => {
       if (e.streams?.[0]) {
-        const audio = new Audio();
+        const audio = remoteAudio.current || new Audio();
+        remoteAudio.current = audio;
         audio.srcObject = e.streams[0];
+        audio.volume = speakerOn ? 1 : 0;
         audio.play().catch(() => {});
       }
     };
@@ -88,13 +91,13 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
     const handleEnd = () => { cleanup(); onClose(); };
 
     socket.on('voice:answer', handleAnswer);
-    socket.on('call:ice', handleIce);
+    socket.on('voice:ice', handleIce);
     socket.on('voice:end', handleEnd);
     socket.on('voice:reject', handleEnd);
 
     return () => {
       socket.off('voice:answer', handleAnswer);
-      socket.off('call:ice', handleIce);
+      socket.off('voice:ice', handleIce);
       socket.off('voice:end', handleEnd);
       socket.off('voice:reject', handleEnd);
     };
@@ -108,7 +111,9 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       localStream.current = stream;
       const pc = createPC();
       stream.getTracks().forEach(t => pc.addTrack(t, stream));
-      await pc.setRemoteDescription(new RTCSessionDescription(window.__voiceOffer));
+      const offer = incomingOffer || window.__voiceOffer;
+      if (!offer) { console.error('[VoiceCall] incomingOffer がありません'); onClose(); return; }
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit('voice:answer', { to: targetUser.id, answer, callId: callIdRef.current });
@@ -168,7 +173,11 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
             style={{ width:70, height:70, borderRadius:'50%', background:'#e74c3c', border:'none', fontSize:28, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
             📵
           </button>
-          <button onClick={() => setSpeakerOn(s => !s)}
+          <button onClick={() => {
+              const next = !speakerOn;
+              setSpeakerOn(next);
+              if (remoteAudio.current) remoteAudio.current.volume = next ? 1 : 0;
+            }}
             style={{ width:60, height:60, borderRadius:'50%', background: speakerOn ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)', border:'none', fontSize:24, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
             {speakerOn ? '🔊' : '🔈'}
           </button>
