@@ -8,6 +8,7 @@ export default function Note({ room, currentUser, socket, onClose }) {
   const [sharedInfo, setSharedInfo] = useState(null); // { updatedBy, updatedAt }
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false); // 未保存の変更あり
 
   const fetchNotes = useCallback(async () => {
     try {
@@ -45,13 +46,19 @@ export default function Note({ room, currentUser, socket, onClose }) {
         await axios.put(`/api/rooms/${room.id}/note/mine`, { content: mineContent });
       }
       setSaved(true);
+      setDirty(false);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
   };
 
   const content = tab === 'shared' ? sharedContent : mineContent;
-  const setContent = tab === 'shared' ? setSharedContent : setMineContent;
+  const setContent = (val) => {
+    if (tab === 'shared') setSharedContent(val);
+    else setMineContent(val);
+    setDirty(true);
+    setSaved(false);
+  };
 
   return (
     <div style={{
@@ -66,11 +73,12 @@ export default function Note({ room, currentUser, socket, onClose }) {
       }}>
         <button onClick={onClose} style={{ fontSize: 20, color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
         <span style={{ fontWeight: 700, fontSize: 16 }}>📝 ノート - {room.name || 'トーク'}</span>
-        <button onClick={handleSave} disabled={saving} style={{
-          background: 'var(--primary)', color: 'white', border: 'none',
-          borderRadius: 8, padding: '6px 14px', fontSize: 14, cursor: 'pointer', fontWeight: 600
+        <button onClick={handleSave} disabled={saving || !dirty} style={{
+          background: dirty ? 'var(--primary)' : 'var(--border)', color: dirty ? 'white' : 'var(--text2)', border: 'none',
+          borderRadius: 8, padding: '6px 14px', fontSize: 14, cursor: dirty ? 'pointer' : 'default', fontWeight: 600,
+          transition: 'background 0.2s'
         }}>
-          {saving ? '保存中' : saved ? '✓ 保存済' : '保存'}
+          {saving ? '保存中' : saved ? '✓ 保存済' : dirty ? '保存' : '保存済'}
         </button>
       </div>
 

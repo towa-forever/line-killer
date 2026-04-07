@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-export default function TaskPanel({ room, currentUser, socket, onClose }) {
+export default function TaskPanel({ room, currentUser, socket, onClose, showToast }) {
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
   const [due, setDue] = useState('');
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     axios.get('/api/rooms/' + room.id + '/tasks').then(r => { setTasks(r.data); setLoading(false); }).catch(() => setLoading(false));
@@ -21,7 +22,8 @@ export default function TaskPanel({ room, currentUser, socket, onClose }) {
   }, [room.id, socket]);
 
   const addTask = async () => {
-    if (!title.trim()) return;
+    if (!title.trim() || adding) return;
+    setAdding(true);
     try {
       await axios.post('/api/rooms/' + room.id + '/tasks', {
         title: title.trim(),
@@ -30,7 +32,9 @@ export default function TaskPanel({ room, currentUser, socket, onClose }) {
         due: due || null
       });
       setTitle(''); setAssigneeId(''); setDue('');
-    } catch (e) { console.error('タスク追加エラー:', e); }
+    } catch (e) {
+      showToast?.('タスクの追加に失敗したで', 'error');
+    } finally { setAdding(false); }
   };
 
   const toggle = (task) => axios.patch('/api/tasks/' + task.id, { done: !task.done }).catch(() => {});
@@ -52,7 +56,7 @@ export default function TaskPanel({ room, currentUser, socket, onClose }) {
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タスクを入力..." className="form-input" style={{ marginBottom:8 }} />
           <div style={{ display:'flex', gap:8 }}>
             <input type="datetime-local" value={due} onChange={e => setDue(e.target.value)} className="form-input" style={{ flex:1, marginBottom:0, fontSize:13 }} />
-            <button onClick={addTask} style={{ padding:'0 16px', borderRadius:10, background:'var(--primary)', color:'white', border:'none', fontWeight:700, fontSize:14, cursor:'pointer', flexShrink:0 }}>追加</button>
+            <button onClick={addTask} disabled={adding || !title.trim()} style={{ padding:'0 16px', borderRadius:10, background: title.trim() ? 'var(--primary)' : 'var(--border)', color:'white', border:'none', fontWeight:700, fontSize:14, cursor: title.trim() ? 'pointer' : 'default', flexShrink:0 }}>{adding ? '...' : '追加'}</button>
           </div>
         </div>
 

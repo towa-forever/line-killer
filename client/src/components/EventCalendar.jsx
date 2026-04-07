@@ -29,7 +29,20 @@ export default function EventCalendar({ room, currentUser, socket, onClose }) {
   };
 
   const attend = async (eventId, status) => {
-    try { await axios.patch('/api/events/' + eventId + '/attend', { status }); } catch { /* 無視 */ }
+    // オプティミスティックUI更新（即時反映）
+    setEvents(prev => prev.map(e => {
+      if (e.id !== eventId) return e;
+      const attendees = (e.attendees || []).map(a =>
+        a.user_id === currentUser?.id ? { ...a, status } : a
+      );
+      // 自分の参加情報がなければ追加
+      if (!attendees.find(a => a.user_id === currentUser?.id)) {
+        attendees.push({ user_id: currentUser?.id, status });
+      }
+      return { ...e, attendees };
+    }));
+    try { await axios.patch('/api/events/' + eventId + '/attend', { status }); }
+    catch { /* サーバーエラー時はsocket経由で正しい状態に戻る */ }
   };
 
   const STATUS_COLOR = { going: '#06c755', maybe: '#ff9500', notgoing: '#ff3b30', pending: 'var(--text2)' };

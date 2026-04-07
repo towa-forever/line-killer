@@ -16,9 +16,6 @@ export default function Timeline({ currentUser }) {
   const [confirmDialog, setConfirmDialog]   = useState(null);
   const [error, setError]                   = useState('');
   const [success, setSuccess]               = useState('');
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [adminPassword, setAdminPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
   const fileInputRef = useRef(null);
 
   // 管理者判定 - 複数の方法でチェック
@@ -52,23 +49,10 @@ export default function Timeline({ currentUser }) {
     reader.readAsDataURL(file);
   };
 
-  // パスワード確認モーダルを開く
+  // パスワード確認なしで直接投稿（サーバーが管理者チェック）
   const openPasswordModal = () => {
     if (!newPostText.trim() && !newPostImage) return;
-    // パスワード確認不要 - サーバー側で管理者チェックする
     handlePost();
-  };
-
-  // パスワード確認なしで直接投稿（サーバーが管理者チェック）
-  const verifyAndPost = async () => {
-    if (!adminPassword.trim()) { setPasswordError('パスワードを入力してください'); return; }
-    try {
-      await axios.post('/api/auth/verify-password', { password: adminPassword });
-      setShowPasswordModal(false);
-      handlePost();
-    } catch (err) {
-      setPasswordError(err.response?.data?.error || 'パスワードが違います');
-    }
   };
 
   const handlePost = async () => {

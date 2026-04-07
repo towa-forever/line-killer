@@ -87,13 +87,13 @@ export default function Dashboard({ currentUser, onNavigateRoom }) {
         {data?.events?.length > 0 && data.events.slice(0, 3).map(e => (
           <div key={e.id} style={{ display:'flex', gap:12, padding:'8px 0', borderBottom:'1px solid var(--border)', alignItems:'center' }}>
             <div style={{ background:'var(--primary)', color:'white', borderRadius:10, padding:'6px 10px', textAlign:'center', minWidth:44 }}>
-              <div style={{ fontSize:16, fontWeight:800 }}>{new Date(e.startAt).getDate()}</div>
-              <div style={{ fontSize:10 }}>{new Date(e.startAt).toLocaleDateString('ja-JP', { month:'short' })}</div>
+              <div style={{ fontSize:16, fontWeight:800 }}>{e.startAt ? new Date(e.startAt).getDate() : '?'}</div>
+              <div style={{ fontSize:10 }}>{e.startAt ? new Date(e.startAt).toLocaleDateString('ja-JP', { month:'short' }) : ''}</div>
             </div>
             <div>
               <div style={{ fontSize:14, fontWeight:600, color:'var(--text)' }}>{e.title}</div>
               <div style={{ fontSize:11, color:'var(--text2)' }}>
-                {new Date(e.startAt).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}〜
+                {e.startAt ? new Date(e.startAt).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' }) : ''}〜
               </div>
             </div>
           </div>

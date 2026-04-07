@@ -1321,7 +1321,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             /></Suspense></ErrorBoundary>
           )}
           {showTaskPanel && (
-            <ErrorBoundary><Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} /></Suspense></ErrorBoundary>
+            <ErrorBoundary><Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} showToast={showToast} /></Suspense></ErrorBoundary>
           )}
           {showSchedule && (
             <div className="modal-overlay" onClick={() => setShowSchedule(false)}>
