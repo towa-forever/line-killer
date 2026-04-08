@@ -37,3 +37,18 @@ export const sounds = {
   },
   friend: () => { beep(523, 0.1, 'sine', 0.2); beep(659, 0.1, 'sine', 0.2, 0.12); beep(784, 0.2, 'sine', 0.2, 0.24); },
 };
+
+// 着信音ループ
+let _ringtoneTimer = null;
+function _ringOnce() {
+  beep(440, 0.25, 'sine', 0.3);
+  beep(550, 0.25, 'sine', 0.25, 0.3);
+}
+export function startRingtone() {
+  if (_ringtoneTimer) return;
+  _ringOnce();
+  _ringtoneTimer = setInterval(_ringOnce, 1500);
+}
+export function stopRingtone() {
+  if (_ringtoneTimer) { clearInterval(_ringtoneTimer); _ringtoneTimer = null; }
+}

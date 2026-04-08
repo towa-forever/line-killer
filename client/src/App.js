@@ -4,7 +4,7 @@ import io from 'socket.io-client';
 import axios from 'axios';
 import ErrorBoundary from "./components/ErrorBoundary";
 import VideoCall from "./components/VideoCall";
-import { sounds } from "./utils/sounds";
+import { sounds, startRingtone, stopRingtone } from "./utils/sounds";
 import VoiceMessage, { VoiceMessageBubble } from './components/VoiceMessage';
 import LocationShare, { LocationBubble } from './components/LocationShare';
 import { SecretBubble } from './components/SecretMessage';
@@ -332,6 +332,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [scheduleList, setScheduleList] = useState([]); // スケジュール済みメッセージ
   const [searchSender, setSearchSender] = useState(''); // 検索：送信者フィルター
   const [searchDate, setSearchDate] = useState(''); // 検索：日付フィルター
+  const searchDebounceRef = useRef(null);
   const [notifSettings, setNotifSettings] = useState(() => { // 通知設定
     try { return JSON.parse(localStorage.getItem('notifSettings') || '{}'); } catch { return {}; }
   });
@@ -1749,20 +1750,23 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   <input
                     autoFocus
                     value={searchQuery}
-                    onChange={async (e) => {
+                    onChange={(e) => {
                       const q = e.target.value;
                       setSearchQuery(q);
+                      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
                       if (!q.trim() && !searchSender && !searchDate) { setSearchResults([]); return; }
-                      setSearchLoading(true);
-                      try {
-                        const params = new URLSearchParams();
-                        if (q.trim()) params.set('q', q);
-                        if (searchSender) params.set('sender', searchSender);
-                        if (searchDate) params.set('date', searchDate);
-                        const res = await axios.get(`/api/rooms/${selectedRoom.id}/search?${params}`);
-                        setSearchResults(res.data);
-                      } catch {}
-                      finally { setSearchLoading(false); }
+                      searchDebounceRef.current = setTimeout(async () => {
+                        setSearchLoading(true);
+                        try {
+                          const params = new URLSearchParams();
+                          if (q.trim()) params.set('q', q);
+                          if (searchSender) params.set('sender', searchSender);
+                          if (searchDate) params.set('date', searchDate);
+                          const res = await axios.get(`/api/rooms/${selectedRoom.id}/search?${params}`);
+                          setSearchResults(res.data);
+                        } catch {}
+                        finally { setSearchLoading(false); }
+                      }, 300);
                     }}
                     placeholder="メッセージを検索..."
                     style={{ flex:1, padding:'8px 12px', borderRadius:20, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)', fontSize:15, outline:'none' }}
@@ -2133,17 +2137,19 @@ export default function App() {
     // 初回接続時にオンラインユーザー一覧を取得
     axios.get('/api/users/online').then(r => setOnlineUsers(new Set(r.data))).catch(() => {});
     s.on('call:incoming', (data) => {
+      startRingtone();
       setIncomingCall(data);
     });
     // 音声通話着信
     s.on('voice:incoming', (data) => {
       // { from: {id, username, avatar}, offer, callId, roomId }
-      window.__voiceOffer = data.offer;
+      startRingtone();
       setVoiceCall({
         targetUser: { id: data.from.id, displayName: data.from.username, avatar: data.from.avatar },
         isIncoming: true,
         callId: data.callId,
         roomId: data.roomId,
+        incomingOffer: data.offer,
       });
     });
     // メンション通知
@@ -2239,6 +2245,7 @@ export default function App() {
 
   const handleAcceptCall = () => {
     if (!incomingCall) return;
+    stopRingtone();
     const { from, roomId, offer } = incomingCall;
     setIncomingCall(null);
     setActiveCall({ roomId, targetUserId: from, isCaller: false, offer });
@@ -2246,8 +2253,22 @@ export default function App() {
 
   const handleRejectCall = () => {
     if (!incomingCall) return;
+    stopRingtone();
     socket?.emit('call:reject', { to: incomingCall.from });
     setIncomingCall(null);
+  };
+
+  const handleAcceptVoice = () => {
+    if (!voiceCall) return;
+    stopRingtone();
+    setVoiceCall(prev => ({ ...prev, _accepted: true }));
+  };
+
+  const handleRejectVoice = () => {
+    if (!voiceCall) return;
+    stopRingtone();
+    socket?.emit('voice:reject', { to: voiceCall.targetUser?.id, callId: voiceCall.callId });
+    setVoiceCall(null);
   };
 
   // ChatScreenは常にマウントし続けてdisplay:noneで隠す（アンマウントするとselectedRoomが消えるため）
@@ -2268,8 +2289,9 @@ export default function App() {
               try {
                 const res = await axios.post('/api/rooms/dm', { targetUserId: friend.id || friend._id });
                 if (res.data) {
-                  // friendsListも更新
+                  // friendsListも更新 + キャッシュ削除して最新ルーム取得
                   axios.get('/api/friends').then(r => setFriendsList(r.data)).catch(() => {});
+                  localStorage.removeItem('rooms_cache');
                   setActiveTab('chat');
                 }
               } catch (e) { console.error('DM失敗', e); }
@@ -2415,7 +2437,7 @@ export default function App() {
         )}
 
         {/* 音声通話 */}
-        {voiceCall && (
+        {voiceCall && voiceCall._accepted && (
           <ErrorBoundary><Suspense fallback={null}>
             <VoiceCall
               socket={socket}
@@ -2424,33 +2446,72 @@ export default function App() {
               roomId={voiceCall.roomId}
               isIncoming={voiceCall.isIncoming}
               callId={voiceCall.callId}
-              onClose={() => setVoiceCall(null)}
+              incomingOffer={voiceCall.incomingOffer}
+              onClose={() => { stopRingtone(); setVoiceCall(null); }}
             />
           </Suspense></ErrorBoundary>
         )}
-
-        {incomingCall && (
-          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.65)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
-            <div className="incoming-call-modal">
-              {/* 発信者アバター */}
-              <div style={{ width:80, height:80, borderRadius:'50%', background:'linear-gradient(135deg,#06c755,#03a040)', margin:'0 auto 16px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, fontWeight:700, border:'3px solid rgba(255,255,255,0.3)' }}>
-                {incomingCall.fromName?.[0]?.toUpperCase() || '?'}
-              </div>
-              <div style={{ fontSize:13, color:'rgba(255,255,255,0.6)', marginBottom:4, letterSpacing:1 }}>ビデオ通話</div>
-              <div style={{ fontSize:22, fontWeight:800, marginBottom:4 }}>{incomingCall.fromName}</div>
-              <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:32 }}>着信中…</div>
-              <div style={{ display:'flex', gap:32, justifyContent:'center', alignItems:'center' }}>
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-                  <button onClick={handleRejectCall} style={{ width:68, height:68, borderRadius:'50%', background:'#e74c3c', fontSize:28, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 16px rgba(231,76,60,0.5)' }}>📵</button>
-                  <span style={{ fontSize:12, color:'rgba(255,255,255,0.6)' }}>拒否</span>
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-                  <button onClick={handleAcceptCall} style={{ width:68, height:68, borderRadius:'50%', background:'#06c755', fontSize:28, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 16px rgba(6,199,85,0.5)', animation:'pulse 1.5s infinite' }}>📞</button>
-                  <span style={{ fontSize:12, color:'rgba(255,255,255,0.6)' }}>応答</span>
-                </div>
+        {/* 音声通話着信UI（未応答時） */}
+        {voiceCall && voiceCall.isIncoming && !voiceCall._accepted && (
+          <div style={{ position:'fixed', inset:0, background:'linear-gradient(180deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%)', zIndex:9999, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+            <style>{`
+              @keyframes ripple { 0%{transform:scale(1);opacity:0.4} 100%{transform:scale(2.4);opacity:0} }
+              @keyframes voicePulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+              .v-ripple { position:absolute; border-radius:50%; border:2px solid rgba(6,199,85,0.5); animation:ripple 2s ease-out infinite; }
+            `}</style>
+            {/* 波紋 */}
+            <div style={{ position:'relative', width:140, height:140, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:32 }}>
+              <div className="v-ripple" style={{ width:140, height:140, animationDelay:'0s' }} />
+              <div className="v-ripple" style={{ width:140, height:140, animationDelay:'0.6s' }} />
+              <div className="v-ripple" style={{ width:140, height:140, animationDelay:'1.2s' }} />
+              <div style={{ position:'relative', width:88, height:88, borderRadius:'50%', background:'linear-gradient(135deg,#06c755,#03a040)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:40, fontWeight:700, border:'3px solid rgba(255,255,255,0.25)', zIndex:1, animation:'voicePulse 1.5s ease-in-out infinite' }}>
+                {voiceCall.targetUser?.displayName?.[0]?.toUpperCase() || '?'}
               </div>
             </div>
-            <style>{`@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }`}</style>
+            <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)', letterSpacing:2, marginBottom:8 }}>音声通話</div>
+            <div style={{ fontSize:26, fontWeight:800, color:'#fff', marginBottom:8 }}>{voiceCall.targetUser?.displayName || '不明'}</div>
+            <div style={{ fontSize:14, color:'rgba(255,255,255,0.45)', marginBottom:56 }}>着信中…</div>
+            <div style={{ display:'flex', gap:48, justifyContent:'center', alignItems:'center' }}>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+                <button onClick={handleRejectVoice} style={{ width:72, height:72, borderRadius:'50%', background:'#e74c3c', fontSize:30, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 20px rgba(231,76,60,0.6)' }}>📵</button>
+                <span style={{ fontSize:12, color:'rgba(255,255,255,0.55)' }}>拒否</span>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+                <button onClick={handleAcceptVoice} style={{ width:72, height:72, borderRadius:'50%', background:'#06c755', fontSize:30, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 20px rgba(6,199,85,0.6)', animation:'voicePulse 1.2s ease-in-out infinite' }}>📞</button>
+                <span style={{ fontSize:12, color:'rgba(255,255,255,0.55)' }}>応答</span>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ビデオ通話着信フルスクリーンUI */}
+        {incomingCall && (
+          <div style={{ position:'fixed', inset:0, background:'linear-gradient(180deg,#0d0d1a 0%,#1a0a2e 50%,#0a1628 100%)', zIndex:9999, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+            <style>{`
+              @keyframes vcRipple { 0%{transform:scale(1);opacity:0.5} 100%{transform:scale(2.6);opacity:0} }
+              @keyframes vcPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.07)} }
+              .vc-ripple { position:absolute; border-radius:50%; border:2px solid rgba(99,102,241,0.5); animation:vcRipple 2s ease-out infinite; }
+            `}</style>
+            <div style={{ position:'relative', width:150, height:150, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:36 }}>
+              <div className="vc-ripple" style={{ width:150, height:150, animationDelay:'0s' }} />
+              <div className="vc-ripple" style={{ width:150, height:150, animationDelay:'0.7s' }} />
+              <div className="vc-ripple" style={{ width:150, height:150, animationDelay:'1.4s' }} />
+              <div style={{ position:'relative', width:92, height:92, borderRadius:'50%', background:'linear-gradient(135deg,#6366f1,#8b5cf6)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:42, fontWeight:700, color:'#fff', border:'3px solid rgba(255,255,255,0.2)', zIndex:1, animation:'vcPulse 1.5s ease-in-out infinite' }}>
+                {incomingCall.fromName?.[0]?.toUpperCase() || '?'}
+              </div>
+            </div>
+            <div style={{ fontSize:13, color:'rgba(255,255,255,0.45)', letterSpacing:2, marginBottom:8 }}>ビデオ通話</div>
+            <div style={{ fontSize:28, fontWeight:800, color:'#fff', marginBottom:8 }}>{incomingCall.fromName}</div>
+            <div style={{ fontSize:14, color:'rgba(255,255,255,0.4)', marginBottom:60 }}>着信中…</div>
+            <div style={{ display:'flex', gap:52, justifyContent:'center', alignItems:'center' }}>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+                <button onClick={handleRejectCall} style={{ width:72, height:72, borderRadius:'50%', background:'#e74c3c', fontSize:30, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 24px rgba(231,76,60,0.6)' }}>📵</button>
+                <span style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>拒否</span>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+                <button onClick={handleAcceptCall} style={{ width:72, height:72, borderRadius:'50%', background:'linear-gradient(135deg,#6366f1,#8b5cf6)', fontSize:30, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 24px rgba(99,102,241,0.6)', animation:'vcPulse 1.2s ease-in-out infinite' }}>📹</button>
+                <span style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>応答</span>
+              </div>
+            </div>
           </div>
         )}
       </div>
