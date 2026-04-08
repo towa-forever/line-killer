@@ -750,7 +750,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     setTimeout(() => ta?.focus(), 0);
   };
 
-  const renderMessage = (msg) => {
+  const renderMessage = useCallback((msg) => {
     const isMine = (msg.senderId || msg.sender_id) === currentUser.id;
     // 投票メッセージ
     if (msg.type === 'poll') {
@@ -928,7 +928,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         </div>
       </div>
     );
-  };
+  }, [currentUser, polls, selectedRoom, onlineUsers, bookmarks, socket, setReplyTo, showToast, soundTheme]);
 
   return (
     <div className="chat-screen">
@@ -2056,6 +2056,7 @@ export default function App() {
   const [acquiredStampIds, setAcquiredStampIds] = useState([]);
   const [friendsList, setFriendsList] = useState([]);
   const [incomingCall, setIncomingCall] = useState(null);
+  const callTimeoutRef = useRef(null);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [bookmarks, setBookmarks] = useState(new Set());
   const [mutedRooms, setMutedRooms] = useState(new Set());
@@ -2139,6 +2140,13 @@ export default function App() {
     s.on('call:incoming', (data) => {
       startRingtone();
       setIncomingCall(data);
+      if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = setTimeout(() => {
+        stopRingtone();
+        s.emit('call:reject', { to: data.from });
+        setIncomingCall(null);
+        callTimeoutRef.current = null;
+      }, 30000);
     });
     // 音声通話着信
     s.on('voice:incoming', (data) => {
@@ -2151,6 +2159,13 @@ export default function App() {
         roomId: data.roomId,
         incomingOffer: data.offer,
       });
+      if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = setTimeout(() => {
+        stopRingtone();
+        s.emit('voice:reject', { to: data.from.id, callId: data.callId });
+        setVoiceCall(null);
+        callTimeoutRef.current = null;
+      }, 30000);
     });
     // メンション通知
     s.on('mention:new', (data) => {
@@ -2245,6 +2260,7 @@ export default function App() {
 
   const handleAcceptCall = () => {
     if (!incomingCall) return;
+    if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     stopRingtone();
     const { from, roomId, offer } = incomingCall;
     setIncomingCall(null);
@@ -2253,6 +2269,7 @@ export default function App() {
 
   const handleRejectCall = () => {
     if (!incomingCall) return;
+    if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     stopRingtone();
     socket?.emit('call:reject', { to: incomingCall.from });
     setIncomingCall(null);
@@ -2260,12 +2277,14 @@ export default function App() {
 
   const handleAcceptVoice = () => {
     if (!voiceCall) return;
+    if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     stopRingtone();
     setVoiceCall(prev => ({ ...prev, _accepted: true }));
   };
 
   const handleRejectVoice = () => {
     if (!voiceCall) return;
+    if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     stopRingtone();
     socket?.emit('voice:reject', { to: voiceCall.targetUser?.id, callId: voiceCall.callId });
     setVoiceCall(null);
