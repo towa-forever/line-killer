@@ -16,6 +16,7 @@ export default function Timeline({ currentUser }) {
   const [confirmDialog, setConfirmDialog]   = useState(null);
   const [error, setError]                   = useState('');
   const [success, setSuccess]               = useState('');
+  const [showPasswordModal, setShowPasswordModal] = useState(false); // eslint-disable-line no-unused-vars
   const fileInputRef = useRef(null);
 
   // 管理者判定 - 複数の方法でチェック

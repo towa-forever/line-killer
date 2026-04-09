@@ -59,7 +59,7 @@ function AuthScreen({ onLogin }) {
     e.preventDefault();
     if (!username.trim()) { setError('IDを入力してください'); return; }
     if (!password) { setError('パスワードを入力してください'); return; }
-    if (!isLogin && /[\s\x00-\x1f]/.test(username.trim())) { setError('IDにスペースは使えません'); return; }
+    if (!isLogin && /[\s\x00-\x1f]/.test(username.trim())) { setError('IDにスペースは使えません'); return; } // eslint-disable-line no-control-regex
     setLoading(true); setError('');
     try {
       const res = await axios.post(isLogin ? '/api/auth/login' : '/api/auth/register', { username: username.trim(), password });
@@ -928,7 +928,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         </div>
       </div>
     );
-  }, [currentUser, polls, selectedRoom, onlineUsers, bookmarks, socket, setReplyTo, showToast, soundTheme]);
+  }, [currentUser, polls, selectedRoom, onlineUsers, bookmarks, socket, setReplyTo, showToast, soundTheme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="chat-screen">
