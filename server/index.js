@@ -690,7 +690,7 @@ app.get('/api/read-later', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
-    const msgs = await Message.find({ id: { $in: user?.read_later || [] } });
+    const msgs = await Message.find({ id: { $in: user?.read_later || [] } }).limit(100);
     res.json(msgs);
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -1035,7 +1035,7 @@ app.get('/api/users/search', async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     auth(req); // 認証必須
-    const users = await User.find({}, { id: 1, username: 1, display_name: 1, avatar: 1, status: 1, is_official: 1 });
+    const users = await User.find({}, { id: 1, username: 1, display_name: 1, avatar: 1, status: 1, is_official: 1 }).limit(500);
     res.json(users);
   } catch (e) { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -1252,7 +1252,7 @@ app.get('/api/bookmarks', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
-    const msgs = await Message.find({ id: { $in: user.bookmarked_messages || [] } });
+    const msgs = await Message.find({ id: { $in: user.bookmarked_messages || [] } }).limit(100);
     res.json(msgs.map(m => ({ id: m.id, content: m.content, type: m.type, senderId: m.sender_id, senderName: m.sender_name, roomId: m.room_id, createdAt: m.created_at })));
   } catch { res.status(400).json({ error: 'エラー' }); }
 });
@@ -2218,7 +2218,7 @@ app.get('/api/rooms/:roomId/stats', async (req, res) => {
     const decoded = auth(req);
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
     if (!room) return res.status(403).json({ error: '権限なし' });
-    const msgs = await Message.find({ room_id: req.params.roomId, deleted: false });
+    const msgs = await Message.find({ room_id: req.params.roomId, deleted: false }).sort({ created_at: -1 }).limit(2000);
     // 送信数ランキング
     const countMap = {};
     const typeMap = {};

@@ -258,7 +258,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const messagesCache = useRef({});
-  // selectedRoomRefを常に最新に保つ
+  // Refを常に最新に保つ
   useEffect(() => { selectedRoomRef.current = selectedRoom; }, [selectedRoom]);
   const hasMoreMessages = useRef({}); // ルームごとにまだ読めるか
   const loadingMoreRef = useRef(false); // 二重ロード防止
@@ -339,6 +339,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showNotifSettings, setShowNotifSettings] = useState(false);
   const draftRef = useRef({}); // 下書き一時保存 { roomId: text }
   const selectedRoomRef = useRef(null); // closureで古いselectedRoomを参照しないためのRef
+  const notifSettingsRef = useRef({}); // 通知設定をclosure-safeに参照
+  const mutedRoomsRef = useRef(new Set()); // ミュートルームをclosure-safeに参照
+  useEffect(() => { notifSettingsRef.current = notifSettings; }, [notifSettings]);
+  useEffect(() => { mutedRoomsRef.current = mutedRooms; }, [mutedRooms]);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -422,14 +426,25 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       const roomId = msg.roomId || msg.room_id;
       const senderId = msg.senderId || msg.sender_id;
       const normalizedMsg = { ...msg, roomId, senderId };
+      const isMuted = mutedRoomsRef.current.has(roomId);
+      const notifLevel = notifSettingsRef.current[roomId] || 'all';
       if (roomId === selectedRoomRef.current?.id) {
         setMessages((prev) => { const next = [...prev, normalizedMsg]; return next.length > 500 ? next.slice(-500) : next; });
         if (senderId !== currentUser.id) {
           socket.emit('message:read', { messageId: msg.id, roomId });
-          sounds.receive(soundTheme);
+          if (!isMuted && notifLevel !== 'mute') sounds.receive(soundTheme);
         }
       } else if (senderId !== currentUser.id) {
         setUnreadCounts((prev) => ({ ...prev, [roomId]: (prev[roomId] || 0) + 1 }));
+        // バックグラウンドルームへのブラウザ通知もミュートチェック
+        if (!isMuted && notifLevel !== 'mute') {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            new Notification(msg.senderName || msg.sender_name || '新着メッセージ', {
+              body: msg.content?.slice(0, 80) || '📎 ファイル',
+              icon: '/favicon.ico',
+            });
+          }
+        }
       }
       // キャッシュにも追加（バックグラウンドのルームのメッセージも保存）
       if (messagesCache.current[roomId]) {
@@ -1063,7 +1078,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   }},
                   { icon:'🔔', label:'通知設定', action: () => setShowNotifSettings(true) },
                 ].map(item => (
-                  <button key={item.label} className="header-menu-item" onClick={item.action}>
+                  <button key={item.label} className="header-menu-item" onClick={(e) => { e.stopPropagation(); item.action(); }}>
                     <span className="header-menu-icon">{item.icon}</span>
                     <span>{item.label}</span>
                   </button>
