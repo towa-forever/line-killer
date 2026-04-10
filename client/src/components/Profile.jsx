@@ -1,11 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import axios from 'axios';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
+
+const ContactForm = lazy(() => import('./ContactForm'));
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 
 export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccount, darkMode, onToggleDark, darkAutoMode, onToggleAuto, onContact, onOpenPinSetup, onNavigate }) {
   const [editing, setEditing] = useState(false);
+  const [showContact, setShowContact] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser?.displayName || '');
   const [bio, setBio] = useState(currentUser?.bio || '');
   const [saving, setSaving] = useState(false);
@@ -27,7 +30,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
     setSelectedFrame(currentUser.avatarFrame || 'none');
     setSelectedSound(currentUser.soundTheme || 'default');
     setStatusText(currentUser.status || '');
-  }, [currentUser?.id]); // idが変わった時だけ（ログアウト・アカウント切替時）
+  }, [currentUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [subAccounts, setSubAccounts] = useState([]);
   const [showSubModal, setShowSubModal] = useState(false);
   const [subForm, setSubForm] = useState({ username:'', password:'', displayName:'' });
@@ -559,7 +562,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
             ))}
           </div>
         )}
-        <button onClick={onContact}
+        <button onClick={() => setShowContact(true)}
           style={{ width:'100%', padding:14, borderRadius:14, background:'var(--surface)', border:'1px solid var(--border)', fontSize:15, fontWeight:600, cursor:'pointer', color:'var(--text)', display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:10 }}>
           <span>📨</span><span>お問い合わせ</span><span style={{ marginLeft:'auto', color:'var(--text2)', fontSize:18 }}>›</span>
         </button>
@@ -580,6 +583,12 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
         .toggle-knob { width:20px; height:20px; border-radius:50%; background:white; position:absolute; top:2px; left:2px; transition:left 0.3s; box-shadow:0 1px 4px rgba(0,0,0,0.2); }
         .toggle.on .toggle-knob { left:22px; }
       `}</style>
+      {/* お問い合わせ - Profile内で開いてRouterの再レンダリングを防ぐ */}
+      {showContact && (
+        <Suspense fallback={null}>
+          <ContactForm currentUser={currentUser} onClose={() => setShowContact(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }
