@@ -1078,7 +1078,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   }},
                   { icon:'🔔', label:'通知設定', action: () => setShowNotifSettings(true) },
                 ].map(item => (
-                  <button key={item.label} className="header-menu-item" onClick={(e) => { e.stopPropagation(); item.action(); }}>
+                  <button key={item.label} className="header-menu-item" onClick={() => { setShowHeaderMenu(false); item.action(); }}>
                     <span className="header-menu-icon">{item.icon}</span>
                     <span>{item.label}</span>
                   </button>
