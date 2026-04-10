@@ -455,7 +455,7 @@ app.post('/api/auth/recovery-email', async (req, res) => {
     const decoded = auth(req);
     const { email } = req.body;
     if (!email || !email.includes('@')) return res.status(400).json({ error: '正しいメールアドレスを入力してください' });
-    await User.findOneAndUpdate({ id: decoded.id }, { recovery_email: email.trim().toLowerCase() });
+    await User.findOneAndUpdate({ id: decoded.id }, { recovery_email: email.trim().toLowerCase() }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -484,7 +484,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
     if (!user.recovery_email) return res.status(400).json({ error: 'リカバリーメールが設定されていません' });
     if (user.recovery_email.toLowerCase() !== email.trim().toLowerCase()) return res.status(401).json({ error: 'メールアドレスが違います' });
     const hashed = await bcrypt.hash(newPassword, 10);
-    await User.findOneAndUpdate({ username }, { password: hashed });
+    await User.findOneAndUpdate({ username }, { password: hashed }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'リセットに失敗しました' }); }
 });
@@ -496,7 +496,7 @@ app.post('/api/auth/secret-question', async (req, res) => {
     const { question, answer } = req.body;
     if (!question || !answer) return res.status(400).json({ error: '質問と答えは必須です' });
     const hashed = await bcrypt.hash(answer.trim().toLowerCase(), 10);
-    await User.findOneAndUpdate({ id: decoded.id }, { secret_question: question, secret_answer: hashed });
+    await User.findOneAndUpdate({ id: decoded.id }, { secret_question: question, secret_answer: hashed }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -508,7 +508,7 @@ app.post('/api/auth/pin/setup', async (req, res) => {
     const { pin } = req.body;
     if (!pin || !/^\d{4,6}$/.test(pin)) return res.status(400).json({ error: 'PINは4〜6桁の数字にしてください' });
     const hashed = await bcrypt.hash(pin, 10);
-    await User.findOneAndUpdate({ id: decoded.id }, { pin_code: hashed, pin_enabled: true });
+    await User.findOneAndUpdate({ id: decoded.id }, { pin_code: hashed, pin_enabled: true }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -516,7 +516,7 @@ app.post('/api/auth/pin/setup', async (req, res) => {
 app.post('/api/auth/pin/disable', async (req, res) => {
   try {
     const decoded = auth(req);
-    await User.findOneAndUpdate({ id: decoded.id }, { pin_code: '', pin_enabled: false });
+    await User.findOneAndUpdate({ id: decoded.id }, { pin_code: '', pin_enabled: false }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -544,7 +544,7 @@ app.post('/api/auth/change-password', async (req, res) => {
     const ok = await bcrypt.compare(currentPassword, user.password);
     if (!ok) return res.status(401).json({ error: '現在のパスワードが違います' });
     const hashed = await bcrypt.hash(newPassword, 10);
-    await User.findOneAndUpdate({ id: decoded.id }, { password: hashed });
+    await User.findOneAndUpdate({ id: decoded.id }, { password: hashed }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'サーバーエラー' }); }
 });
@@ -594,7 +594,7 @@ app.post('/api/auth/login', async (req, res) => {
     // ログイン履歴を記録
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
     const ua = req.headers['user-agent'] || '';
-    await User.findOneAndUpdate({ id: user.id }, { $push: { login_history: { $each: [{ ip, ua, at: new Date() }], $slice: -20 } } });
+    await User.findOneAndUpdate({ id: user.id }, { $push: { login_history: { $each: [{ ip, ua, at: new Date() }], $slice: -20 } } }, {returnDocument:'after'});
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
     res.json({ token, user: {
       id: user.id, username: user.username, avatar: user.avatar || null,
@@ -659,7 +659,7 @@ app.put('/api/drafts/:roomId', async (req, res) => {
     const drafts = user?.drafts || {};
     if (content) drafts[req.params.roomId] = content;
     else delete drafts[req.params.roomId];
-    await User.findOneAndUpdate({ id: decoded.id }, { drafts });
+    await User.findOneAndUpdate({ id: decoded.id }, { drafts }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -676,7 +676,7 @@ app.get('/api/drafts', async (req, res) => {
 app.post('/api/read-later/:msgId', async (req, res) => {
   try {
     const decoded = auth(req);
-    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { read_later: req.params.msgId } });
+    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { read_later: req.params.msgId } }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -684,7 +684,7 @@ app.post('/api/read-later/:msgId', async (req, res) => {
 app.delete('/api/read-later/:msgId', async (req, res) => {
   try {
     const decoded = auth(req);
-    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { read_later: req.params.msgId } });
+    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { read_later: req.params.msgId } }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -708,8 +708,8 @@ app.post('/api/users/:userId/gift', async (req, res) => {
     if (!sender || (sender.coins || 0) < amount) return res.status(400).json({ error: 'コインが不足しています' });
     const receiver = await User.findOne({ id: req.params.userId });
     if (!receiver) return res.status(404).json({ error: 'ユーザーが見つかりません' });
-    await User.findOneAndUpdate({ id: decoded.id }, { $inc: { coins: -amount, gift_sent: amount } });
-    await User.findOneAndUpdate({ id: req.params.userId }, { $inc: { coins: amount, gift_received: amount } });
+    await User.findOneAndUpdate({ id: decoded.id }, { $inc: { coins: -amount, gift_sent: amount } }, {returnDocument:'after'});
+    await User.findOneAndUpdate({ id: req.params.userId }, { $inc: { coins: amount, gift_received: amount } }, {returnDocument:'after'});
     // ギフト通知
     io.to('user_' + req.params.userId).emit('gift:received', {
       from: decoded.username, amount, stampId,
@@ -761,7 +761,7 @@ app.post('/api/stamps/acquire', async (req, res) => {
   try {
     const decoded = auth(req);
     const { setId } = req.body;
-    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { acquired_stamps: setId } });
+    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { acquired_stamps: setId } }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -775,7 +775,7 @@ app.get('/api/stamps/mysets', async (req, res) => {
     const acquired = [...new Set([...defaultStamps, ...(user.acquired_stamps || [])])];
     // DBにも保存（初回のみ）
     if (!user.acquired_stamps || user.acquired_stamps.length === 0) {
-      await User.findOneAndUpdate({ id: decoded.id }, { acquired_stamps: acquired });
+      await User.findOneAndUpdate({ id: decoded.id }, { acquired_stamps: acquired }, {returnDocument:'after'});
     }
     res.json({ acquired });
   } catch { res.status(401).json({ error: '認証エラー' }); }
@@ -1146,16 +1146,16 @@ app.post('/api/friend-requests/:requestId/accept', async (req, res) => {
     const decoded = auth(req);
     const request = await FriendRequest.findOne({ id: req.params.requestId, to_id: decoded.id });
     if (!request) return res.status(404).json({ error: '申請が見つかりません' });
-    await FriendRequest.findOneAndUpdate({ id: req.params.requestId }, { status: 'accepted' });
+    await FriendRequest.findOneAndUpdate({ id: req.params.requestId }, { status: 'accepted' }, {returnDocument:'after'});
     await Friend.findOneAndUpdate(
       { user_id: decoded.id, friend_id: request.from_id },
       { $setOnInsert: { user_id: decoded.id, friend_id: request.from_id } },
-      { upsert: true }
+      { upsert: true, returnDocument: 'after' }
     );
     await Friend.findOneAndUpdate(
       { user_id: request.from_id, friend_id: decoded.id },
       { $setOnInsert: { user_id: request.from_id, friend_id: decoded.id } },
-      { upsert: true }
+      { upsert: true, returnDocument: 'after' }
     );
     io.to('user_' + request.from_id).emit('friend:accepted', { by_id: decoded.id, by_name: decoded.username });
     res.json({ ok: true });
@@ -1165,7 +1165,7 @@ app.post('/api/friend-requests/:requestId/accept', async (req, res) => {
 app.post('/api/friend-requests/:requestId/reject', async (req, res) => {
   try {
     const decoded = auth(req);
-    await FriendRequest.findOneAndUpdate({ id: req.params.requestId, to_id: decoded.id }, { status: 'rejected' });
+    await FriendRequest.findOneAndUpdate({ id: req.params.requestId, to_id: decoded.id }, { status: 'rejected' }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -1203,7 +1203,7 @@ app.delete('/api/friends/:friendId', async (req, res) => {
 app.post('/api/users/:userId/block', async (req, res) => {
   try {
     const decoded = auth(req);
-    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { blocked_users: req.params.userId } });
+    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { blocked_users: req.params.userId } }, {returnDocument:'after'});
     await Friend.deleteOne({ user_id: decoded.id, friend_id: req.params.userId });
     await Friend.deleteOne({ user_id: req.params.userId, friend_id: decoded.id });
     res.json({ ok: true });
@@ -1213,7 +1213,7 @@ app.post('/api/users/:userId/block', async (req, res) => {
 app.delete('/api/users/:userId/block', async (req, res) => {
   try {
     const decoded = auth(req);
-    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { blocked_users: req.params.userId } });
+    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { blocked_users: req.params.userId } }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -1231,7 +1231,7 @@ app.get('/api/users/blocked', async (req, res) => {
 app.post('/api/rooms/:roomId/mute', async (req, res) => {
   try {
     const decoded = auth(req);
-    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { muted_rooms: req.params.roomId } });
+    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { muted_rooms: req.params.roomId } }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -1240,14 +1240,14 @@ app.post('/api/rooms/:roomId/mute', async (req, res) => {
 app.post('/api/bookmarks/:messageId', async (req, res) => {
   try {
     const decoded = auth(req);
-    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { bookmarked_messages: req.params.messageId } });
+    await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { bookmarked_messages: req.params.messageId } }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(400).json({ error: 'エラー' }); }
 });
 app.delete('/api/bookmarks/:messageId', async (req, res) => {
   try {
     const decoded = auth(req);
-    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { bookmarked_messages: req.params.messageId } });
+    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { bookmarked_messages: req.params.messageId } }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(400).json({ error: 'エラー' }); }
 });
@@ -1268,7 +1268,7 @@ app.post('/api/rooms/:roomId/announcement', async (req, res) => {
     if (!room) return res.status(404).json({ error: 'ルームが見つかりません' });
     // 作成者またはメンバーなら設定可能
     const annText = (req.body.text || '').slice(0, 200); // 200文字まで
-    await Room.findOneAndUpdate({ id: req.params.roomId }, { announcement: annText });
+    await Room.findOneAndUpdate({ id: req.params.roomId }, { announcement: annText }, {returnDocument:'after'});
     io.to(req.params.roomId).emit('room:announcement', { roomId: req.params.roomId, text: annText, by: decoded.id });
     res.json({ ok: true });
   } catch { res.status(400).json({ error: 'エラー' }); }
@@ -1277,7 +1277,7 @@ app.post('/api/rooms/:roomId/announcement', async (req, res) => {
 app.delete('/api/rooms/:roomId/mute', async (req, res) => {
   try {
     const decoded = auth(req);
-    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { muted_rooms: req.params.roomId } });
+    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { muted_rooms: req.params.roomId } }, {returnDocument:'after'});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -1329,9 +1329,9 @@ app.post('/api/posts/:postId/like', async (req, res) => {
     if (!post) return res.status(404).json({ error: '投稿が見つかりません' });
     const liked = post.likes.includes(decoded.id);
     if (liked) {
-      await Post.findOneAndUpdate({ id: req.params.postId }, { $pull: { likes: decoded.id } });
+      await Post.findOneAndUpdate({ id: req.params.postId }, { $pull: { likes: decoded.id } }, {returnDocument:'after'});
     } else {
-      await Post.findOneAndUpdate({ id: req.params.postId }, { $addToSet: { likes: decoded.id } });
+      await Post.findOneAndUpdate({ id: req.params.postId }, { $addToSet: { likes: decoded.id } }, {returnDocument:'after'});
     }
     const updated = await Post.findOne({ id: req.params.postId });
     io.emit('post:liked', { postId: req.params.postId, likes: updated.likes });
@@ -1345,7 +1345,7 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
     const { content } = req.body;
     if (!content || !content.trim()) return res.status(400).json({ error: 'コメントを入力してください' });
     const comment = { id: uuidv4(), user_id: decoded.id, username: decoded.username, content: content.trim().slice(0, 500), created_at: new Date() };
-    await Post.findOneAndUpdate({ id: req.params.postId }, { $push: { comments: comment } });
+    await Post.findOneAndUpdate({ id: req.params.postId }, { $push: { comments: comment } }, {returnDocument:'after'});
     io.emit('post:commented', { postId: req.params.postId, comment });
     const updatedPost = await Post.findOne({ id: req.params.postId });
     res.json({ comments: updatedPost.comments });
@@ -1674,7 +1674,7 @@ app.put('/api/rooms/:roomId/note/mine', async (req, res) => {
     await Note.findOneAndUpdate(
       { room_id: req.params.roomId, user_id: decoded.id },
       { content: req.body.content, updated_at: new Date(), $setOnInsert: { id: uuidv4() } },
-      { upsert: true }
+      { upsert: true, returnDocument: 'after' }
     );
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
@@ -1839,7 +1839,8 @@ io.on('connection', async (socket) => {
     try {
       const msg = await Message.findOneAndUpdate(
         { id: messageId, sender_id: socket.user.id },
-        { deleted: true, content: 'このメッセージは削除されました' }
+        { deleted: true, content: 'このメッセージは削除されました' },
+        { returnDocument: 'after' }
       );
       if (!msg) return;
       io.to(roomId).emit('message:deleted', { messageId, roomId });
@@ -1883,7 +1884,7 @@ io.on('connection', async (socket) => {
 
   socket.on('room:leave', async ({ roomId }) => {
     try {
-      await Room.findOneAndUpdate({ id: roomId }, { $pull: { members: socket.user.id } });
+      await Room.findOneAndUpdate({ id: roomId }, { $pull: { members: socket.user.id } }, {returnDocument:'after'});
       socket.leave(roomId);
       const room = await Room.findOne({ id: roomId });
       if (room) {
@@ -2083,7 +2084,7 @@ function formatDuration(seconds) {
   socket.on('disconnect', () => {
     if (io.onlineUsers) {
       io.onlineUsers.delete(socket.user.id);
-      User.findOneAndUpdate({ id: socket.user.id }, { last_seen: new Date() }).catch(() => {});
+      User.findOneAndUpdate({ id: socket.user.id }, { last_seen: new Date() }).catch(() => {}, {returnDocument:'after'});
       io.emit('user:offline', { userId: socket.user.id, lastSeen: Date.now() });
     }
     // 入力中インジケーターをクリア（参加してた全ルームに通知）
@@ -2370,10 +2371,10 @@ app.post('/api/game/shop/buy', async (req, res) => {
     // 既に持っているか確認
     const existing = await GameItem.findOne({ user_id: decoded.id, item_id: itemId });
     if (existing) return res.status(400).json({ error: '既に持ってるで' });
-    await GameCoin.findOneAndUpdate({ user_id: decoded.id }, { $inc: { coins: -price }, updated_at: new Date() });
+    await GameCoin.findOneAndUpdate({ user_id: decoded.id }, { $inc: { coins: -price }, updated_at: new Date() }, {returnDocument:'after'});
     const item = await GameItem.create({ id: 'gi_' + uuidv4(), user_id: decoded.id, item_type: itemType, item_id: itemId });
     // アバターフレーム購入の場合はUserにも反映
-    if (itemType === 'avatar_frame') await User.findOneAndUpdate({ id: decoded.id }, { avatar_frame: itemId });
+    if (itemType === 'avatar_frame') await User.findOneAndUpdate({ id: decoded.id }, { avatar_frame: itemId }, {returnDocument:'after'});
     res.json({ ok: true, item, remainingCoins: wallet.coins - price });
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
@@ -2741,7 +2742,7 @@ setInterval(async () => {
         type: 'text', createdAt: now,
         readBy: [sm.sender_id], reactions: [],
       });
-      await ScheduledMessage.findOneAndUpdate({ id: sm.id }, { sent: true });
+      await ScheduledMessage.findOneAndUpdate({ id: sm.id }, { sent: true }, {returnDocument:'after'});
     }
   } catch(e) { console.error('スケジュール送信エラー:', e); }
 }, 60000);
