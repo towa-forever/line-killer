@@ -30,6 +30,8 @@ const { join } = require('path');
 const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription } = require('./db');
 
 const app = express();
+// Render等のリバースプロキシ対応（express-rate-limitのX-Forwarded-Forエラー解消）
+app.set('trust proxy', 1);
 
 // VAPID設定
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BAwzRukb1C_xX8RFR2Luln0HcUEDsAgrimF1njzr2t4952nvpwfkrQ6yvSHE4z9wqXXpnp3tMhwzIBKuuvd5Xkk';
@@ -736,7 +738,7 @@ app.post('/api/push/subscribe', async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     pushSubscriptions.set(decoded.id, req.body);
     // DBにも保存（再起動対策）
-    PushSubscription.findOneAndUpdate({ user_id: decoded.id }, { user_id: decoded.id, subscription: req.body, updated_at: new Date() }, { upsert: true, new: true }).catch(() => {});
+    PushSubscription.findOneAndUpdate({ user_id: decoded.id }, { user_id: decoded.id, subscription: req.body, updated_at: new Date() }, { upsert: true,returnDocument:'after'}).catch(() => {});
     res.json({ ok: true });
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -854,7 +856,7 @@ app.patch('/api/rooms/:roomId/theme', async (req, res) => {
     const room = await Room.findOneAndUpdate(
       { id: req.params.roomId, members: decoded.id },
       { theme_color: themeColor || '' },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!room) return res.status(403).json({ error: '権限なし' });
     io.to('room_' + req.params.roomId).emit('room:theme_changed', { roomId: req.params.roomId, themeColor: themeColor || '' });
@@ -1057,7 +1059,7 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
     if (secretAnswer !== undefined && secretAnswer.trim()) {
       update.secret_answer = await bcrypt.hash(secretAnswer.trim().toLowerCase(), 10);
     }
-    const user = await User.findOneAndUpdate({ id: decoded.id }, update, { new: true, projection: { password: 0 } });
+    const user = await User.findOneAndUpdate({ id: decoded.id }, update, { returnDocument:'after', projection: { password: 0 } });
     if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
     const userRes = {
       id: user.id, username: user.username, avatar: user.avatar || null,
@@ -1092,7 +1094,7 @@ app.patch('/api/users/me/settings', async (req, res) => {
     if (avatarFrame !== undefined) update.avatar_frame = avatarFrame;
     if (soundTheme !== undefined)  update.sound_theme = soundTheme;
     if (showOnline !== undefined)  update.show_online = showOnline === 'true' || showOnline === true;
-    const user = await User.findOneAndUpdate({ id: decoded.id }, update, { new: true });
+    const user = await User.findOneAndUpdate({ id: decoded.id }, update, { returnDocument: 'after' });
     if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
     const userRes = {
       id: user.id, username: user.username, avatar: user.avatar || null,
@@ -1465,7 +1467,7 @@ app.patch('/api/rooms/:roomId/name', async (req, res) => {
     const decoded = auth(req);
     const room = await Room.findOneAndUpdate(
       { id: req.params.roomId, members: decoded.id },
-      { name: req.body.name }, { new: true }
+      { name: req.body.name }, { returnDocument: 'after' }
     );
     if (!room) return res.status(403).json({ error: '権限なし' });
     io.to(req.params.roomId).emit('room:updated', { roomId: room.id, name: room.name, icon: room.icon });
@@ -1479,7 +1481,7 @@ app.post('/api/rooms/:roomId/icon', upload.single('icon'), async (req, res) => {
     const icon = getFileUrl(req);
     const room = await Room.findOneAndUpdate(
       { id: req.params.roomId, members: decoded.id },
-      { icon }, { new: true }
+      { icon }, { returnDocument: 'after' }
     );
     if (!room) return res.status(403).json({ error: '権限なし' });
     io.to(req.params.roomId).emit('room:updated', { roomId: req.params.roomId, icon });
@@ -1493,7 +1495,7 @@ app.post('/api/rooms/:roomId/members', async (req, res) => {
     const { memberIds } = req.body;
     const room = await Room.findOneAndUpdate(
       { id: req.params.roomId, members: decoded.id },
-      { $addToSet: { members: { $each: memberIds } } }, { new: true }
+      { $addToSet: { members: { $each: memberIds } } }, { returnDocument: 'after' }
     );
     if (!room) return res.status(403).json({ error: '権限なし' });
     // memberDetailsを含めてroom:newを送信
@@ -1517,7 +1519,7 @@ app.delete('/api/rooms/:roomId/members/:userId', async (req, res) => {
       return res.status(403).json({ error: '権限なし' });
     const updated = await Room.findOneAndUpdate(
       { id: req.params.roomId },
-      { $pull: { members: req.params.userId } }, { new: true }
+      { $pull: { members: req.params.userId } }, { returnDocument: 'after' }
     );
     io.to(req.params.roomId).emit('room:members_updated', { roomId: req.params.roomId, members: updated.members, removedId: req.params.userId });
     res.json({ members: updated.members });
@@ -1555,7 +1557,7 @@ app.patch('/api/rooms/:roomId/pin', async (req, res) => {
     const { messageId } = req.body;
     const room = await Room.findOneAndUpdate(
       { id: req.params.roomId, members: decoded.id },
-      { pinned_message_id: messageId || null }, { new: true }
+      { pinned_message_id: messageId || null }, { returnDocument: 'after' }
     );
     if (!room) return res.status(403).json({ error: '権限なし' });
     io.to(req.params.roomId).emit('room:pinned', { roomId: req.params.roomId, messageId: messageId || null });
@@ -1643,7 +1645,7 @@ app.put('/api/rooms/:roomId/note/shared', async (req, res) => {
     const note = await Note.findOneAndUpdate(
       { room_id: req.params.roomId, user_id: null },
       { content: req.body.content, updated_by: decoded.username, updated_at: new Date(), $setOnInsert: { id: uuidv4() } },
-      { upsert: true, new: true }
+      { upsert: true,returnDocument:'after'}
     );
     // リアルタイムで他メンバーに通知
     io.to(req.params.roomId).emit('note:updated', { roomId: req.params.roomId, type: 'shared', content: note.content, updatedBy: decoded.username });
@@ -1825,7 +1827,7 @@ io.on('connection', async (socket) => {
       if (!content || !content.trim() || content.length > 4000) return;
       const msg = await Message.findOneAndUpdate(
         { id: messageId, sender_id: socket.user.id },
-        { content: content.trim(), edited: true }, { new: true }
+        { content: content.trim(), edited: true }, { returnDocument: 'after' }
       );
       if (!msg) return;
       io.to(roomId).emit('message:edited', { messageId, content: content.trim(), roomId });
@@ -1848,7 +1850,7 @@ io.on('connection', async (socket) => {
       const msg = await Message.findOneAndUpdate(
         { id: messageId },
         { $addToSet: { read_by: socket.user.id } },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!msg) return;
       const readers = await User.find({ id: { $in: msg.read_by } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
@@ -1866,12 +1868,12 @@ io.on('connection', async (socket) => {
       let updated;
       if (existing) {
         if (existing.emoji === emoji) {
-          updated = await Message.findOneAndUpdate({ id: messageId }, { $pull: { reactions: { user_id: socket.user.id } } }, { new: true });
+          updated = await Message.findOneAndUpdate({ id: messageId }, { $pull: { reactions: { user_id: socket.user.id } } }, { returnDocument: 'after' });
         } else {
-          updated = await Message.findOneAndUpdate({ id: messageId, 'reactions.user_id': socket.user.id }, { $set: { 'reactions.$.emoji': emoji } }, { new: true });
+          updated = await Message.findOneAndUpdate({ id: messageId, 'reactions.user_id': socket.user.id }, { $set: { 'reactions.$.emoji': emoji } }, { returnDocument: 'after' });
         }
       } else {
-        updated = await Message.findOneAndUpdate({ id: messageId }, { $push: { reactions: { emoji, user_id: socket.user.id } } }, { new: true });
+        updated = await Message.findOneAndUpdate({ id: messageId }, { $push: { reactions: { emoji, user_id: socket.user.id } } }, { returnDocument: 'after' });
       }
       if (!updated) return;
       io.to(roomId).emit('message:reacted', { messageId, reactions: updated.reactions, roomId });
@@ -2204,7 +2206,7 @@ app.patch('/api/events/:eventId/attend', async (req, res) => {
     if (!['going','maybe','notgoing'].includes(status)) return res.status(400).json({ error: '不正なステータス' });
     const event = await Event.findOneAndUpdate(
       { id: req.params.eventId, 'attendees.user_id': decoded.id },
-      { $set: { 'attendees.$.status': status } }, { new: true }
+      { $set: { 'attendees.$.status': status } }, { returnDocument: 'after' }
     );
     if (!event) return res.status(404).json({ error: 'イベントが見つかりません' });
     io.to(event.room_id).emit('event:updated', event);
@@ -2324,7 +2326,7 @@ app.post('/api/game/score', async (req, res) => {
     await GameCoin.findOneAndUpdate(
       { user_id: decoded.id },
       { $inc: { coins: coinsEarned }, updated_at: new Date() },
-      { upsert: true, new: true }
+      { upsert: true,returnDocument:'after'}
     );
     res.json({ ok: true, coinsEarned });
   } catch(e) { res.status(400).json({ error: e.message }); }
@@ -2610,7 +2612,7 @@ app.post('/api/polls/:pollId/vote', async (req, res) => {
 app.post('/api/polls/:pollId/close', async (req, res) => {
   try {
     const decoded = auth(req);
-    const poll = await Poll.findOneAndUpdate({ id: req.params.pollId, creator_id: decoded.id }, { closed: true }, { new: true });
+    const poll = await Poll.findOneAndUpdate({ id: req.params.pollId, creator_id: decoded.id }, { closed: true }, { returnDocument: 'after' });
     if (!poll) return res.status(404).json({ error: '投票が見つかりません' });
     io.to(poll.room_id).emit('poll:updated', poll);
     res.json(poll);
@@ -2670,7 +2672,7 @@ app.patch('/api/tasks/:taskId', async (req, res) => {
     if (req.body.done !== undefined) allowed.done = !!req.body.done;
     if (req.body.title) allowed.title = String(req.body.title).slice(0, 200);
     if (req.body.due !== undefined) allowed.due = req.body.due ? new Date(req.body.due) : null;
-    const updated = await Task.findOneAndUpdate({ id: req.params.taskId }, allowed, { new: true });
+    const updated = await Task.findOneAndUpdate({ id: req.params.taskId }, allowed, { returnDocument: 'after' });
     io.to(updated.room_id).emit('task:updated', updated);
     res.json(updated);
   } catch(e) { res.status(400).json({ error: e.message }); }
