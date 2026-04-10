@@ -82,6 +82,7 @@ const authLimiter = rateLimit({
   max: 500, // 十分に緩め
   message: { error: 'リクエストが多すぎます。しばらく待ってから試してください' },
   standardHeaders: true, legacyHeaders: false,
+  validate: { xForwardedForHeader: false }, // Renderのプロキシ環境でのX-Forwarded-Forエラーを抑制
   skip: (req) => !!req.headers.authorization, // 認証済みはスキップ
 });
 app.use('/api/auth/login', authLimiter);
