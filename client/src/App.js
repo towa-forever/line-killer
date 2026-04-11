@@ -2307,7 +2307,7 @@ export default function App() {
 
   // ChatScreenは常にマウントし続けてdisplay:noneで隠す（アンマウントするとselectedRoomが消えるため）
   const tabVisible = (id) => ({ display: activeTab === id ? 'flex' : 'none', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 });
-  const renderTabs = () => (
+  const tabsElement = (
     <>
       {/* 全タブ常時マウント（タブ切替でstateリセットされないように） */}
       <div style={tabVisible('chat')}>
@@ -2374,7 +2374,7 @@ export default function App() {
           <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',fontSize:24}}>⏳</div>}>
             <Routes>
               <Route path="/videocall/:roomId/:targetUserId" element={<VideoCall currentUser={currentUser} socket={socket} />} />
-              <Route path="*" element={renderTabs()} />
+              <Route path="*" element={tabsElement} />
             </Routes>
           </Suspense></ErrorBoundary>
         </main>
