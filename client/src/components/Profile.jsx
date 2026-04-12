@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import ReactDOM from 'react-dom';
 import axios from 'axios';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 
@@ -583,11 +584,12 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
         .toggle-knob { width:20px; height:20px; border-radius:50%; background:white; position:absolute; top:2px; left:2px; transition:left 0.3s; box-shadow:0 1px 4px rgba(0,0,0,0.2); }
         .toggle.on .toggle-knob { left:22px; }
       `}</style>
-      {/* お問い合わせ - Profile内で開いてRouterの再レンダリングを防ぐ */}
-      {showContact && (
+      {/* お問い合わせ - Portalでbody直下にマウントしてoverflow:hiddenを回避 */}
+      {showContact && ReactDOM.createPortal(
         <Suspense fallback={null}>
           <ContactForm currentUser={currentUser} onClose={() => setShowContact(false)} />
-        </Suspense>
+        </Suspense>,
+        document.body
       )}
     </div>
   );

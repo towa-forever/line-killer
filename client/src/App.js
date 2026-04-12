@@ -339,7 +339,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showNotifSettings, setShowNotifSettings] = useState(false);
   const draftRef = useRef({}); // 下書き一時保存 { roomId: text }
   const selectedRoomRef = useRef(null); // closureで古いselectedRoomを参照しないためのRef
-  const notifSettingsRef = useRef({}); // 通知設定をclosure-safeに参照
+  const notifSettingsRef = useRef((() => { try { return JSON.parse(localStorage.getItem('notifSettings') || '{}'); } catch { return {}; } })()); // 通知設定をclosure-safeに参照（初期値をlocalStorageから即読み）
   const mutedRoomsRef = useRef(new Set()); // ミュートルームをclosure-safeに参照
   useEffect(() => { notifSettingsRef.current = notifSettings; }, [notifSettings]);
   useEffect(() => { mutedRoomsRef.current = mutedRooms; }, [mutedRooms]);
@@ -428,16 +428,17 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       const normalizedMsg = { ...msg, roomId, senderId };
       const isMuted = mutedRoomsRef.current.has(roomId);
       const notifLevel = notifSettingsRef.current[roomId] || 'all';
+      const shouldNotify = !isMuted && notifLevel !== 'mute';
       if (roomId === selectedRoomRef.current?.id) {
         setMessages((prev) => { const next = [...prev, normalizedMsg]; return next.length > 500 ? next.slice(-500) : next; });
         if (senderId !== currentUser.id) {
           socket.emit('message:read', { messageId: msg.id, roomId });
-          if (!isMuted && notifLevel !== 'mute') sounds.receive(soundTheme);
+          if (shouldNotify) sounds.receive(soundTheme);
         }
       } else if (senderId !== currentUser.id) {
         setUnreadCounts((prev) => ({ ...prev, [roomId]: (prev[roomId] || 0) + 1 }));
         // バックグラウンドルームへのブラウザ通知もミュートチェック
-        if (!isMuted && notifLevel !== 'mute') {
+        if (shouldNotify) {
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification(msg.senderName || msg.sender_name || '新着メッセージ', {
               body: msg.content?.slice(0, 80) || '📎 ファイル',
