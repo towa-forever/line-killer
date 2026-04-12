@@ -2339,7 +2339,7 @@ export default function App() {
   };
 
   // ChatScreenは常にマウントし続けてdisplay:noneで隠す（アンマウントするとselectedRoomが消えるため）
-  const tabVisible = (id) => ({ display: activeTab === id ? 'flex' : 'none', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 });
+  const tabVisible = (id) => ({ display: activeTab === id ? 'flex' : 'none', flexDirection: 'column', flex: 1, overflow: 'clip', minHeight: 0 });
   const tabsElement = (
     <>
       {/* 全タブ常時マウント（タブ切替でstateリセットされないように） */}
