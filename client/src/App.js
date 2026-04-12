@@ -513,6 +513,23 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       setRooms((prev) => prev.map(r => r.id === roomId ? { ...r, ...(name && { name }), ...(icon && { icon }) } : r));
       setSelectedRoom((prev) => prev?.id === roomId ? { ...prev, ...(name && { name }), ...(icon && { icon }) } : prev);
     });
+    // 自分がグループを退出した時
+    socket.on('room:left', ({ roomId }) => {
+      setRooms((prev) => prev.filter(r => r.id !== roomId));
+      setSelectedRoom((prev) => prev?.id === roomId ? null : prev);
+      localStorage.removeItem('rooms_cache');
+    });
+    // グループメンバーが変わった時
+    socket.on('room:members_updated', ({ roomId, members, removedId }) => {
+      setRooms((prev) => prev.map(r => r.id === roomId ? { ...r, members } : r));
+      setSelectedRoom((prev) => prev?.id === roomId ? { ...prev, members } : prev);
+      // 自分が削除された場合はルームリストから除外
+      if (removedId === currentUser.id) {
+        setRooms((prev) => prev.filter(r => r.id !== roomId));
+        setSelectedRoom((prev) => prev?.id === roomId ? null : prev);
+        localStorage.removeItem('rooms_cache');
+      }
+    });
     socket.on('poll:updated', (poll) => {
       setPolls(prev => ({ ...prev, [poll.id]: poll }));
     });
@@ -550,6 +567,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       socket.off('message:edited'); socket.off('message:deleted');
       socket.off('room:pinned'); socket.off('poll:updated');
       socket.off('room:announcement'); socket.off('typing:update');
+      socket.off('room:left'); socket.off('room:members_updated');
     };
   }, [socket, selectedRoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2191,6 +2209,20 @@ export default function App() {
     // ギフト受信通知
     s.on('gift:received', (data) => {
       showToast(`🎁 ${data.from}さんから ${data.stampId || data.stamp || '🎁'} ${data.amount}コインもらった！`, 'success');
+    });
+    // 発信側: ビデオ通話が拒否された
+    s.on('call:rejected', () => {
+      stopRingtone();
+      if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
+      setActiveCall(null);
+      showToast('通話が拒否されました', 'info');
+    });
+    // 発信側: 音声通話が拒否された
+    s.on('voice:reject', () => {
+      stopRingtone();
+      if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
+      setVoiceCall(null);
+      showToast('音声通話が拒否されました', 'info');
     });
     setSocket(s);
     return () => s.disconnect();
