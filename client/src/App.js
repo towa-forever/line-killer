@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
 import ErrorBoundary from "./components/ErrorBoundary";
 import VideoCall from "./components/VideoCall";
+import Portal from "./components/Portal";
 import { sounds, startRingtone, stopRingtone } from "./utils/sounds";
 import VoiceMessage, { VoiceMessageBubble } from './components/VoiceMessage';
 import LocationShare, { LocationBubble } from './components/LocationShare';
@@ -1105,7 +1106,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               </div>
             )}
           </div>
-          {showNote && <ErrorBoundary><Suspense fallback={null}><Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} /></Suspense></ErrorBoundary>}
+          {showNote && <Portal><ErrorBoundary><Suspense fallback={null}><Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} /></Suspense></ErrorBoundary></Portal>}
           {showRoomSettings && (
             <div className="modal-overlay" onClick={() => setShowRoomSettings(false)}>
               <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -1263,10 +1264,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           </div>
         </div>
       )}
-      {showEventCal && <ErrorBoundary><Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense></ErrorBoundary>}
+      {showEventCal && <Portal><ErrorBoundary><Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense></ErrorBoundary></Portal>}
       {/* スタンプ自作 */}
       {showStickerMaker && (
-        <ErrorBoundary><Suspense fallback={null}>
+        <Portal><ErrorBoundary><Suspense fallback={null}>
           <StickerMaker
             onSend={(data) => {
               if (socket && selectedRoom) {
@@ -1276,9 +1277,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             }}
             onClose={() => setShowStickerMaker(false)}
           />
-        </Suspense></ErrorBoundary>
+        </Suspense></ErrorBoundary></Portal>
       )}
-      {showMiniGame && <ErrorBoundary><Suspense fallback={null}><MiniGame onSendResult={text => { socket?.emit('message:send', { roomId: selectedRoom?.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense></ErrorBoundary>}
+      {showMiniGame && <Portal><ErrorBoundary><Suspense fallback={null}><MiniGame onSendResult={text => { socket?.emit('message:send', { roomId: selectedRoom?.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense></ErrorBoundary></Portal>}
           {showFavorites && (
             <div className="modal-overlay" onClick={() => setShowFavorites(false)}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
@@ -1348,15 +1349,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
           )}
           {showAI && (
-            <ErrorBoundary><Suspense fallback={null}><AIAssistant
+            <Portal><ErrorBoundary><Suspense fallback={null}><AIAssistant
               messages={messages.filter(m => m.type === 'text').slice(-50)}
               currentRoom={selectedRoom}
               onInsert={text => { setInputText(text); setShowAI(false); }}
               onClose={() => setShowAI(false)}
-            /></Suspense></ErrorBoundary>
+            /></Suspense></ErrorBoundary></Portal>
           )}
           {showTaskPanel && (
-            <ErrorBoundary><Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} showToast={showToast} /></Suspense></ErrorBoundary>
+            <Portal><ErrorBoundary><Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} showToast={showToast} /></Suspense></ErrorBoundary></Portal>
           )}
           {showSchedule && (
             <div className="modal-overlay" onClick={() => setShowSchedule(false)}>
@@ -2062,6 +2063,15 @@ function TabBar({ activeTab, setActiveTab, notifications, onClearNotif }) {
   );
 }
 
+// タブをRoutes外でレンダリングするためのラッパー
+// /videocall パスの時だけ非表示にする
+function LocationAwareTabs({ tabsElement }) {
+  const location = useLocation();
+  const isVideoCall = location.pathname.startsWith('/videocall');
+  if (isVideoCall) return null;
+  return tabsElement;
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [socket, setSocket] = useState(null);
@@ -2339,7 +2349,7 @@ export default function App() {
   };
 
   // ChatScreenは常にマウントし続けてdisplay:noneで隠す（アンマウントするとselectedRoomが消えるため）
-  const tabVisible = (id) => ({ display: activeTab === id ? 'flex' : 'none', flexDirection: 'column', flex: 1, overflow: 'clip', minHeight: 0 });
+  const tabVisible = (id) => ({ display: activeTab === id ? 'flex' : 'none', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 });
   const tabsElement = (
     <>
       {/* 全タブ常時マウント（タブ切替でstateリセットされないように） */}
@@ -2404,12 +2414,11 @@ export default function App() {
       <div className={`app ${darkMode ? 'dark' : ''}`}>
 {/* LINEはタブごとにヘッダーを持つためグローバルヘッダーは非表示 */}
         <main className="app-main">
-          <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',fontSize:24}}>⏳</div>}>
-            <Routes>
-              <Route path="/videocall/:roomId/:targetUserId" element={<VideoCall currentUser={currentUser} socket={socket} />} />
-              <Route path="*" element={tabsElement} />
-            </Routes>
-          </Suspense></ErrorBoundary>
+          <Routes>
+            <Route path="/videocall/:roomId/:targetUserId" element={<VideoCall currentUser={currentUser} socket={socket} />} />
+            <Route path="*" element={null} />
+          </Routes>
+          <LocationAwareTabs tabsElement={tabsElement} />
         </main>
         <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} onClearNotif={(tabId) => setNotifications(p => ({ ...p, [tabId]: 0 }))} />
         {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
