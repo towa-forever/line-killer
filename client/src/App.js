@@ -1107,7 +1107,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             )}
           </div>
           {showNote && <Portal><ErrorBoundary><Suspense fallback={null}><Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} /></Suspense></ErrorBoundary></Portal>}
-          {showRoomSettings && (
+          <Portal>{showRoomSettings && (
             <div className="modal-overlay" onClick={() => setShowRoomSettings(false)}>
               <div className="modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-title">⚙️ トーク設定</div>
@@ -1142,8 +1142,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 </div>
               </div>
             </div>
-          )}
-          {msgMenu && (
+          )}</Portal>
+          <Portal>{msgMenu && (
             <div style={{ position:'fixed', inset:0, zIndex:3000, background:'rgba(0,0,0,0.4)' }} onClick={() => setMsgMenu(null)}>
               {/* リアクションバー */}
               <div style={{
@@ -1241,7 +1241,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 ))}
               </div>
             </div>
-          )}
+          )}</Portal>
           {/* カスタム確認ダイアログ */}
       {confirmDialog && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
@@ -1266,7 +1266,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       )}
       {showEventCal && <Portal><ErrorBoundary><Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense></ErrorBoundary></Portal>}
       {/* スタンプ自作 */}
-      {showStickerMaker && (
+      <Portal>{showStickerMaker && (
         <Portal><ErrorBoundary><Suspense fallback={null}>
           <StickerMaker
             onSend={(data) => {
@@ -1278,9 +1278,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             onClose={() => setShowStickerMaker(false)}
           />
         </Suspense></ErrorBoundary></Portal>
-      )}
+      )}</Portal>
       {showMiniGame && <Portal><ErrorBoundary><Suspense fallback={null}><MiniGame onSendResult={text => { socket?.emit('message:send', { roomId: selectedRoom?.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense></ErrorBoundary></Portal>}
-          {showFavorites && (
+          <Portal>{showFavorites && (
             <div className="modal-overlay" onClick={() => setShowFavorites(false)}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
                 <div className="modal-title">⭐ お気に入り</div>
@@ -1300,8 +1300,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowFavorites(false)}>閉じる</button>
               </div>
             </div>
-          )}
-          {showGlobalSearch && (
+          )}</Portal>
+          <Portal>{showGlobalSearch && (
             <div className="modal-overlay" onClick={() => setShowGlobalSearch(false)}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'85vh', display:'flex', flexDirection:'column' }}>
                 <div className="modal-title">🔍 全トーク検索</div>
@@ -1347,19 +1347,19 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowGlobalSearch(false)}>閉じる</button>
               </div>
             </div>
-          )}
-          {showAI && (
+          )}</Portal>
+          <Portal>{showAI && (
             <Portal><ErrorBoundary><Suspense fallback={null}><AIAssistant
               messages={messages.filter(m => m.type === 'text').slice(-50)}
               currentRoom={selectedRoom}
               onInsert={text => { setInputText(text); setShowAI(false); }}
               onClose={() => setShowAI(false)}
             /></Suspense></ErrorBoundary></Portal>
-          )}
-          {showTaskPanel && (
+          )}</Portal>
+          <Portal>{showTaskPanel && (
             <Portal><ErrorBoundary><Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} showToast={showToast} /></Suspense></ErrorBoundary></Portal>
-          )}
-          {showSchedule && (
+          )}</Portal>
+          <Portal>{showSchedule && (
             <div className="modal-overlay" onClick={() => setShowSchedule(false)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-title">⏰ スケジュール送信</div>
@@ -1382,10 +1382,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 </div>
               </div>
             </div>
-          )}
+          )}</Portal>
 
           {/* 予約送信一覧 */}
-          {showScheduleList && (
+          <Portal>{showScheduleList && (
             <div className="modal-overlay" onClick={() => setShowScheduleList(false)}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflowY:'auto' }}>
                 <div className="modal-title">⏰ 予約送信一覧</div>
@@ -1411,10 +1411,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowScheduleList(false)}>閉じる</button>
               </div>
             </div>
-          )}
+          )}</Portal>
 
           {/* チャットエクスポート */}
-          {showExport && (
+          <Portal>{showExport && (
             <div className="modal-overlay" onClick={() => setShowExport(false)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-title">📤 チャットをエクスポート</div>
@@ -1444,10 +1444,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 </div>
               </div>
             </div>
-          )}
+          )}</Portal>
 
           {/* 通知設定モーダル */}
-          {showNotifSettings && selectedRoom && (
+          <Portal>{showNotifSettings && selectedRoom && (
             <div className="modal-overlay" onClick={() => setShowNotifSettings(false)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-title">🔔 通知設定</div>
@@ -1490,9 +1490,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <button className="btn btn-secondary" style={{ width:'100%', marginTop:16 }} onClick={() => setShowNotifSettings(false)}>完了</button>
               </div>
             </div>
-          )}
+          )}</Portal>
 
-          {showPollCreator && (
+          <Portal>{showPollCreator && (
             <div className="modal-overlay" onClick={() => setShowPollCreator(false)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-title">📊 投票を作成</div>
@@ -1533,9 +1533,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 </div>
               </div>
             </div>
-          )}
+          )}</Portal>
           {/* 既読詳細モーダル */}
-          {showReadDetail && (
+          <Portal>{showReadDetail && (
             <div className="modal-overlay" onClick={() => setShowReadDetail(null)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-title">👁️ 既読メンバー</div>
@@ -1553,10 +1553,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowReadDetail(null)}>閉じる</button>
               </div>
             </div>
-          )}
+          )}</Portal>
 
           {/* ユーザープロフィールモーダル */}
-          {showUserProfile && (
+          <Portal>{showUserProfile && (
             <ErrorBoundary><Suspense fallback={null}>
               <UserProfile
                 username={showUserProfile.name}
@@ -1571,10 +1571,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 onVoiceCall={(user) => { setVoiceCall({ targetUser: user, isIncoming: false, callId: null, roomId: null }); setShowUserProfile(null); }}
               />
             </Suspense></ErrorBoundary>
-          )}
+          )}</Portal>
 
           {/* グループメンバー管理モーダル */}
-          {showMemberMgr && selectedRoom && (
+          <Portal>{showMemberMgr && selectedRoom && (
             <div className="modal-overlay" onClick={() => setShowMemberMgr(false)}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
                 <div className="modal-title">👥 メンバー管理</div>
@@ -1629,17 +1629,17 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowMemberMgr(false)}>閉じる</button>
               </div>
             </div>
-          )}
+          )}</Portal>
 
           {/* メディア一覧モーダル */}
-          {showMediaList && (
+          <Portal>{showMediaList && (
             <MediaListModal
               roomId={selectedRoom?.id}
               serverUrl={SERVER_URL}
               onClose={() => setShowMediaList(false)}
             />
-          )}
-          {showAnnounce && (
+          )}</Portal>
+          <Portal>{showAnnounce && (
             <div className="modal-overlay" onClick={() => setShowAnnounce(false)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-title">📢 アナウンス</div>
@@ -1656,8 +1656,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 </div>
               </div>
             </div>
-          )}
-          {showBookmarks && (
+          )}</Portal>
+          <Portal>{showBookmarks && (
             <div className="modal-overlay" onClick={() => setShowBookmarks(false)}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
                 <div className="modal-title">🔖 ブックマーク</div>
@@ -1679,8 +1679,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowBookmarks(false)}>閉じる</button>
               </div>
             </div>
-          )}
-          {showBgPicker && (
+          )}</Portal>
+          <Portal>{showBgPicker && (
             <div className="modal-overlay" onClick={() => setShowBgPicker(false)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-title">🎨 背景を変更</div>
@@ -1698,7 +1698,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <button className="btn btn-secondary" style={{width:'100%'}} onClick={() => setShowBgPicker(false)}>閉じる</button>
               </div>
             </div>
-          )}
+          )}</Portal>
           {editingMessage && (
             <div className="modal-overlay" onClick={() => setEditingMessage(null)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
@@ -1755,7 +1755,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               </div>
             </div>
           )}
-          {reactionPicker && (
+          <Portal>{reactionPicker && (
             <div style={{ position:'fixed', inset:0, zIndex:3000, background:'rgba(0,0,0,0.3)' }} onClick={() => setReactionPicker(null)}>
               <div style={{
                 position:'fixed',
@@ -1776,8 +1776,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 ))}
               </div>
             </div>
-          )}
-          {showSearch && (
+          )}</Portal>
+          <Portal>{showSearch && (
             <div style={{ position:'fixed', inset:0, background:'var(--bg)', zIndex:2000, display:'flex', flexDirection:'column' }}>
               <div style={{ background:'var(--surface)', borderBottom:'1px solid var(--border)' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px' }}>
@@ -1860,7 +1860,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 ))}
               </div>
             </div>
-          )}
+          )}</Portal>
           {pinnedMessage && (
             <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', background:'var(--surface)', borderBottom:'1px solid var(--border)', cursor:'pointer' }}
               onClick={() => { const el = document.getElementById(`msg-${pinnedMessage.id}`); el?.scrollIntoView({ behavior:'smooth', block:'center' }); }}>
@@ -2023,12 +2023,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         {!selectedRoom && <div className="no-room-selected"><div>💬</div><p>トークを選択してください</p></div>}
       </div>
 
-      {showStats && selectedRoom && (
+      <Portal>{showStats && selectedRoom && (
         <ErrorBoundary><Suspense fallback={null}>
           <ChatStats roomId={selectedRoom.id} roomName={selectedRoom.name} onClose={() => setShowStats(false)} />
         </Suspense></ErrorBoundary>
-      )}
-      {showCreateRoom && (
+      )}</Portal>
+      <Portal>{showCreateRoom && (
         <ErrorBoundary><Suspense fallback={null}><CreateRoom
           currentUser={currentUser}
           friendsList={friendsList}
@@ -2036,7 +2036,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           onClose={() => setShowCreateRoom(false)}
           onCreated={(room) => { setRooms((prev) => prev.find(r => r.id === room.id) ? prev : [room, ...prev]); setSelectedRoom(room); setShowCreateRoom(false); }}
         /></Suspense></ErrorBoundary>
-      )}
+      )}</Portal>
     </div>
   );
 }
