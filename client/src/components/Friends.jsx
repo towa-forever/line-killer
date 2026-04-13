@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import axios from 'axios';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 
@@ -168,7 +169,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
     <div className="page" style={{ overflowY:'auto', paddingBottom:80, background:'var(--bg)' }}>
 
       {/* 確認ダイアログ */}
-      {confirmDialog && (
+      {confirmDialog && ReactDOM.createPortal((
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={() => setConfirmDialog(null)}>
           <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:320 }} onClick={e => e.stopPropagation()}>
@@ -179,7 +180,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
 
       {/* ヘッダー + タブ */}
       <div style={{ background:'#06c755', color:'white', paddingTop:'calc(14px + env(safe-area-inset-top))' }}>
@@ -401,7 +402,7 @@ function FriendRow({ friend, Avatar, onChat, onRemove }) {
           style={{ padding:'8px', background:'none', border:'none', fontSize:20, color:'var(--text2)', cursor:'pointer', borderRadius:8 }}>
           ···
         </button>
-        {showMenu && (
+        {showMenu && ReactDOM.createPortal((
           <>
             <div style={{ position:'fixed', inset:0, zIndex:99 }} onClick={e => { e.stopPropagation(); setShowMenu(false); }} />
             <div style={{ position:'absolute', right:0, top:'100%', background:'var(--surface)', borderRadius:14, boxShadow:'0 6px 20px rgba(0,0,0,0.15)', zIndex:100, minWidth:160, overflow:'hidden', border:'0.5px solid var(--border)' }}
@@ -416,7 +417,7 @@ function FriendRow({ friend, Avatar, onChat, onRemove }) {
               </button>
             </div>
           </>
-        )}
+        ), document.body)}
       </div>
     </div>
   );

@@ -225,7 +225,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   return (
     <div className="page" style={{ overflowY: 'auto', paddingBottom: 80 }}>
       {/* ログアウト確認 */}
-      {showLogoutConfirm && (
+      {showLogoutConfirm && ReactDOM.createPortal((
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={() => setShowLogoutConfirm(false)}>
           <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:300 }} onClick={e => e.stopPropagation()}>
@@ -237,7 +237,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
 
       <div className="page-header">プロフィール</div>
 
@@ -463,7 +463,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
       </div>
 
       {/* セキュリティ詳細モーダル */}
-      {showSecurity && (
+      {showSecurity && ReactDOM.createPortal((
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:9999, display:'flex', alignItems:'flex-end', justifyContent:'center' }}
           onClick={() => setShowSecurity(false)}>
           <div style={{ background:'var(--surface)', borderRadius:'20px 20px 0 0', width:'100%', maxHeight:'80vh', overflow:'hidden', display:'flex', flexDirection:'column' }}
@@ -529,7 +529,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
 
       {/* ===== サブアカウント ===== */}
       <SubAccountSection
@@ -647,7 +647,7 @@ function SubAccountSection({ currentUser, subAccounts, setSubAccounts, showSubMo
   return (
     <div className="card" style={{ margin:10 }}>
       {/* サブアカ削除確認ダイアログ */}
-      {deleteConfirm && (
+      {deleteConfirm && ReactDOM.createPortal((
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={() => setDeleteConfirm(null)}>
           <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:300 }} onClick={e => e.stopPropagation()}>
@@ -659,9 +659,9 @@ function SubAccountSection({ currentUser, subAccounts, setSubAccounts, showSubMo
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
       {/* サブアカ作成モーダル */}
-      {showSubModal && (
+      {showSubModal && ReactDOM.createPortal((
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
           onClick={() => setShowSubModal(false)}>
           <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:340 }} onClick={e => e.stopPropagation()}>
@@ -682,7 +682,7 @@ function SubAccountSection({ currentUser, subAccounts, setSubAccounts, showSubMo
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
 
       <div className="profile-section-title">👤 アカウント管理</div>
 
