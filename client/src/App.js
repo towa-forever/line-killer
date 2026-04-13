@@ -1357,7 +1357,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             /></Suspense></ErrorBoundary></Portal>
           )}</Portal>
           <Portal>{showTaskPanel && (
-            <Portal><ErrorBoundary><Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} showToast={showToast} /></Suspense></ErrorBoundary></Portal>
+            <ErrorBoundary><Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} showToast={showToast} /></Suspense></ErrorBoundary>
           )}</Portal>
           <Portal>{showSchedule && (
             <div className="modal-overlay" onClick={() => setShowSchedule(false)}>
@@ -2349,7 +2349,7 @@ export default function App() {
   };
 
   // ChatScreenは常にマウントし続けてdisplay:noneで隠す（アンマウントするとselectedRoomが消えるため）
-  const tabVisible = (id) => ({ display: activeTab === id ? 'flex' : 'none', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 });
+  const tabVisible = (id) => ({ display: activeTab === id ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 });
   const tabsElement = (
     <>
       {/* 全タブ常時マウント（タブ切替でstateリセットされないように） */}

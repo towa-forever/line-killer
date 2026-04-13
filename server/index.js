@@ -2084,7 +2084,7 @@ function formatDuration(seconds) {
   socket.on('disconnect', () => {
     if (io.onlineUsers) {
       io.onlineUsers.delete(socket.user.id);
-      User.findOneAndUpdate({ id: socket.user.id }, { last_seen: new Date() }).catch(() => {}, {returnDocument:'after'});
+      User.findOneAndUpdate({ id: socket.user.id }, { last_seen: new Date() }, { returnDocument: 'after' }).catch(() => {});
       io.emit('user:offline', { userId: socket.user.id, lastSeen: Date.now() });
     }
     // 入力中インジケーターをクリア（参加してた全ルームに通知）

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import axios from 'axios';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
@@ -134,7 +135,7 @@ export default function Timeline({ currentUser }) {
     <div className="page" style={{ overflowY:'auto', paddingBottom:80, background:'var(--bg)' }}>
 
       {/* 確認ダイアログ */}
-      {confirmDialog && (
+      {confirmDialog && ReactDOM.createPortal((
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={() => setConfirmDialog(null)}>
           <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:320 }} onClick={e => e.stopPropagation()}>
@@ -145,7 +146,7 @@ export default function Timeline({ currentUser }) {
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
 
       {/* パスワード確認モーダルは廃止 - サーバー側で管理者チェック */}
 
