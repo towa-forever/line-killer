@@ -1361,6 +1361,25 @@ app.delete('/api/posts/:postId', async (req, res) => {
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
 
+// コメント削除（自分のコメントのみ）
+app.delete('/api/posts/:postId/comments/:commentId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const post = await Post.findOne({ id: req.params.postId });
+    if (!post) return res.status(404).json({ error: '投稿が見つかりません' });
+    const comment = post.comments.find(c => c.id === req.params.commentId);
+    if (!comment) return res.status(404).json({ error: 'コメントが見つかりません' });
+    if (comment.user_id !== decoded.id) return res.status(403).json({ error: '削除できるのは自分のコメントのみです' });
+    await Post.findOneAndUpdate(
+      { id: req.params.postId },
+      { $pull: { comments: { id: req.params.commentId } } },
+      { returnDocument: 'after' }
+    );
+    io.emit('post:comment_deleted', { postId: req.params.postId, commentId: req.params.commentId });
+    res.json({ ok: true });
+  } catch { res.status(401).json({ error: '認証エラー' }); }
+});
+
 // 部屋
 app.get('/api/rooms', async (req, res) => {
   try {

@@ -267,7 +267,18 @@ export default function Timeline({ currentUser }) {
                     {post.comments?.map((c, i) => (
                       <div key={i} style={{ fontSize:13, padding:'5px 0', display:'flex', gap:8, alignItems:'flex-start' }}>
                         <span style={{ fontWeight:700, flexShrink:0, color:'var(--text)' }}>{c.username || '?'}</span>
-                        <span style={{ color:'var(--text2)', lineHeight:1.5 }}>{c.content}</span>
+                        <span style={{ color:'var(--text2)', lineHeight:1.5, flex:1 }}>{c.content}</span>
+                        {c.user_id === currentUser?.id && (
+                          <button onClick={async () => {
+                            try {
+                              await axios.delete(`/api/posts/${post.id}/comments/${c.id}`);
+                              setPosts(prev => prev.map(p => p.id === post.id
+                                ? { ...p, comments: p.comments.filter(cm => cm.id !== c.id) }
+                                : p
+                              ));
+                            } catch {}
+                          }} style={{ background:'none', border:'none', color:'var(--text2)', cursor:'pointer', fontSize:11, padding:'0 2px', flexShrink:0 }}>✕</button>
+                        )}
                       </div>
                     ))}
                     <div style={{ display:'flex', gap:8, marginTop:8 }}>

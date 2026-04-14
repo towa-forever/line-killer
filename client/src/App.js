@@ -1243,7 +1243,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
           )}</Portal>
           {/* カスタム確認ダイアログ */}
-      {confirmDialog && (
+      <Portal>{confirmDialog && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
           onClick={() => setConfirmDialog(null)}>
           <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:320, boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}
@@ -1263,7 +1263,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
           </div>
         </div>
-      )}
+      )}</Portal>
       {showEventCal && <Portal><ErrorBoundary><Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense></ErrorBoundary></Portal>}
       {/* スタンプ自作 */}
       <Portal>{showStickerMaker && (
