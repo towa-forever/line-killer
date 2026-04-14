@@ -520,6 +520,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       setRooms((prev) => prev.filter(r => r.id !== roomId));
       setSelectedRoom((prev) => prev?.id === roomId ? null : prev);
       localStorage.removeItem('rooms_cache');
+      // 未読カウントをクリア
+      setUnreadCounts((prev) => { const next = { ...prev }; delete next[roomId]; return next; });
+      // messagesCacheも削除
+      delete messagesCache.current[roomId];
+      delete messagesCache.current[roomId + '_time'];
     });
     // グループメンバーが変わった時
     socket.on('room:members_updated', ({ roomId, members, removedId }) => {
@@ -530,6 +535,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         setRooms((prev) => prev.filter(r => r.id !== roomId));
         setSelectedRoom((prev) => prev?.id === roomId ? null : prev);
         localStorage.removeItem('rooms_cache');
+        // 未読カウントをクリア
+        setUnreadCounts((prev) => { const next = { ...prev }; delete next[roomId]; return next; });
+        // messagesCacheも削除
+        delete messagesCache.current[roomId];
+        delete messagesCache.current[roomId + '_time'];
       }
     });
     socket.on('poll:updated', (poll) => {
