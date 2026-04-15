@@ -2536,6 +2536,7 @@ app.post('/api/rooms/:roomId/schedule', async (req, res) => {
     const msg = await ScheduledMessage.create({
       id: 'sched_' + uuidv4(), room_id: req.params.roomId,
       sender_id: decoded.id, sender_name: user.display_name || user.username,
+      sender_avatar: user.avatar || null,
       content: content.trim(), send_at: sendTime
     });
     res.json(msg);
@@ -2752,12 +2753,14 @@ setInterval(async () => {
       const msg = await Message.create({
         id: 'msg_' + uuidv4(), room_id: sm.room_id,
         sender_id: sm.sender_id, sender_name: sm.sender_name,
+        sender_avatar: sm.sender_avatar || null,
         content: sm.content, type: 'text', created_at: now,
         read_by: [sm.sender_id], reactions: [],
       });
       io.to(sm.room_id).emit('message:receive', {
         id: msg.id, roomId: sm.room_id, senderId: sm.sender_id,
-        senderName: sm.sender_name, content: sm.content,
+        senderName: sm.sender_name, senderAvatar: sm.sender_avatar || null,
+        content: sm.content,
         type: 'text', createdAt: now,
         readBy: [sm.sender_id], reactions: [],
       });

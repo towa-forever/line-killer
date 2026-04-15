@@ -131,6 +131,7 @@ const ScheduledMessageSchema = new mongoose.Schema({
   room_id: String,
   sender_id: String,
   sender_name: String,
+  sender_avatar: { type: String, default: null },
   content: String,
   send_at: { type: Date, required: true },
   sent: { type: Boolean, default: false },

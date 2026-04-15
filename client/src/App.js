@@ -259,6 +259,18 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const messagesCache = useRef({});
+  // messagesCacheを最大20ルームに制限するクリーンアップ
+  const trimMessagesCache = useCallback(() => {
+    const cache = messagesCache.current;
+    const roomIds = Object.keys(cache).filter(k => !k.endsWith('_time') && k !== '_current');
+    if (roomIds.length <= 20) return;
+    // 古い順にソートして超過分を削除
+    const sorted = roomIds.sort((a, b) => (cache[a + '_time'] || 0) - (cache[b + '_time'] || 0));
+    sorted.slice(0, roomIds.length - 20).forEach(id => {
+      delete cache[id];
+      delete cache[id + '_time'];
+    });
+  }, []);
   // Refを常に最新に保つ
   useEffect(() => { selectedRoomRef.current = selectedRoom; }, [selectedRoom]);
   const hasMoreMessages = useRef({}); // ルームごとにまだ読めるか
@@ -454,12 +466,16 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         if (!cached.some(m => m.id === normalizedMsg.id)) {
           messagesCache.current[roomId] = [...cached, normalizedMsg].slice(-500);
           messagesCache.current[roomId + '_time'] = Date.now(); // キャッシュ時刻更新
+          trimMessagesCache();
         }
       }
-      setRooms((prev) =>
-        prev.map((r) => r.id === roomId ? { ...r, lastMessage: normalizedMsg, lastActivity: normalizedMsg.createdAt || normalizedMsg.created_at } : r)
-          .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0))
-      );
+      setRooms((prev) => {
+        const updated = prev.map((r) => r.id === roomId ? { ...r, lastMessage: normalizedMsg, lastActivity: normalizedMsg.createdAt || normalizedMsg.created_at } : r);
+        const idx = updated.findIndex(r => r.id === roomId);
+        if (idx <= 0) return updated;
+        const room = updated[idx];
+        return [room, ...updated.slice(0, idx), ...updated.slice(idx + 1)];
+      });
     });
     // message:new は message:receive と同じ処理（サーバーが両方使ってるため）
     socket.on('message:new', (msg) => {
@@ -479,10 +495,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       } else if (senderId !== currentUser.id) {
         setUnreadCounts((prev) => ({ ...prev, [roomId]: (prev[roomId] || 0) + 1 }));
       }
-      setRooms((prev) =>
-        prev.map((r) => r.id === roomId ? { ...r, lastMessage: normalizedMsg, lastActivity: normalizedMsg.createdAt } : r)
-          .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0))
-      );
+      setRooms((prev) => {
+        const updated = prev.map((r) => r.id === roomId ? { ...r, lastMessage: normalizedMsg, lastActivity: normalizedMsg.createdAt } : r);
+        const idx = updated.findIndex(r => r.id === roomId);
+        if (idx <= 0) return updated;
+        const room = updated[idx];
+        return [room, ...updated.slice(0, idx), ...updated.slice(idx + 1)];
+      });
     });
     socket.on('message:read_update', ({ messageId, readBy, readByDetail }) => {
       if (readByDetail) setReadByDetailMap(prev => ({ ...prev, [messageId]: readByDetail }));
@@ -642,6 +661,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         if (messagesCache.current._current !== currentRoomId) return;
         messagesCache.current[currentRoomId] = res.data;
         messagesCache.current[currentRoomId + '_time'] = Date.now();
+        trimMessagesCache();
         setMessages(res.data);
         // ピン留め状態を復元
         if (selectedRoom.pinned_message_id) {
@@ -2388,7 +2408,7 @@ export default function App() {
       </div>
       <div style={tabVisible('timeline')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-          <Timeline currentUser={currentUser} />
+          <Timeline currentUser={currentUser} socket={socket} />
         </Suspense></ErrorBoundary>
       </div>
       <div style={tabVisible('stampshop')}>

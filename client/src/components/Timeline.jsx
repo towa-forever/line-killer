@@ -5,7 +5,7 @@ import axios from 'axios';
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 const ADMIN_USERNAME = 'とわ';
 
-export default function Timeline({ currentUser }) {
+export default function Timeline({ currentUser, socket }) {
   const [posts, setPosts]                   = useState([]);
   const [newPostText, setNewPostText]       = useState('');
   const [newPostImage, setNewPostImage]     = useState(null);
@@ -41,6 +41,32 @@ export default function Timeline({ currentUser }) {
   }, []);
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
+
+  // Socket リアルタイム更新
+  useEffect(() => {
+    if (!socket) return;
+    const onPostNew = (post) => setPosts((prev) => [post, ...prev]);
+    const onPostLiked = ({ postId, likes }) =>
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, likes } : p));
+    const onPostCommented = ({ postId, comment }) =>
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: [...(p.comments || []), comment] } : p));
+    const onPostCommentDeleted = ({ postId, commentId }) =>
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: (p.comments || []).filter((c) => c.id !== commentId) } : p));
+    const onPostDeleted = (postId) => setPosts((prev) => prev.filter((p) => p.id !== postId));
+
+    socket.on('post:new', onPostNew);
+    socket.on('post:liked', onPostLiked);
+    socket.on('post:commented', onPostCommented);
+    socket.on('post:comment_deleted', onPostCommentDeleted);
+    socket.on('post:deleted', onPostDeleted);
+    return () => {
+      socket.off('post:new', onPostNew);
+      socket.off('post:liked', onPostLiked);
+      socket.off('post:commented', onPostCommented);
+      socket.off('post:comment_deleted', onPostCommentDeleted);
+      socket.off('post:deleted', onPostDeleted);
+    };
+  }, [socket]);
 
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
