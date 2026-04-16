@@ -352,6 +352,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showNotifSettings, setShowNotifSettings] = useState(false);
   const draftRef = useRef({}); // 下書き一時保存 { roomId: text }
   const selectedRoomRef = useRef(null); // closureで古いselectedRoomを参照しないためのRef
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   const notifSettingsRef = useRef((() => { try { return JSON.parse(localStorage.getItem('notifSettings') || '{}'); } catch { return {}; } })()); // 通知設定をclosure-safeに参照（初期値をlocalStorageから即読み）
   const mutedRoomsRef = useRef(new Set()); // ミュートルームをclosure-safeに参照
   useEffect(() => { notifSettingsRef.current = notifSettings; }, [notifSettings]);
@@ -2131,7 +2133,8 @@ export default function App() {
   const [friendsList, setFriendsList] = useState([]);
   const [incomingCall, setIncomingCall] = useState(null);
   const callTimeoutRef = useRef(null);
-  const [onlineUsers, setOnlineUsers] = useState(new Set());
+  const currentUserRef = useRef(null);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   const [bookmarks, setBookmarks] = useState(new Set());
   const [mutedRooms, setMutedRooms] = useState(new Set());
   const [activeCall, setActiveCall] = useState(null); // { roomId, targetUserId, isCaller, offer }
@@ -2197,7 +2200,7 @@ export default function App() {
     // 未読メッセージをチャットタブバッジに反映
     s.on('message:receive', (msg) => {
       const senderId = msg.senderId || msg.sender_id;
-      if (senderId !== currentUser?.id && activeTabRef.current !== 'chat') {
+      if (senderId !== currentUserRef.current?.id && activeTabRef.current !== 'chat') {
         setNotifications(prev => ({ ...prev, chat: (prev.chat || 0) + 1 }));
       }
     });
