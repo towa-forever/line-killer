@@ -52,7 +52,7 @@ export default function Timeline({ currentUser, socket }) {
       setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: [...(p.comments || []), comment] } : p));
     const onPostCommentDeleted = ({ postId, commentId }) =>
       setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: (p.comments || []).filter((c) => c.id !== commentId) } : p));
-    const onPostDeleted = (postId) => setPosts((prev) => prev.filter((p) => p.id !== postId));
+    const onPostDeleted = ({ postId }) => setPosts((prev) => prev.filter((p) => p.id !== postId));
 
     socket.on('post:new', onPostNew);
     socket.on('post:liked', onPostLiked);

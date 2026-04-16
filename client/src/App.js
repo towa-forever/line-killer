@@ -600,7 +600,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       socket.off('room:announcement'); socket.off('typing:update');
       socket.off('room:left'); socket.off('room:members_updated');
     };
-  }, [socket, selectedRoom]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // ルーム切り替え時に状態をリセット
