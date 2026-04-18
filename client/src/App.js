@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useReducer, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
@@ -276,59 +276,110 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const hasMoreMessages = useRef({}); // ルームごとにまだ読めるか
   const loadingMoreRef = useRef(false); // 二重ロード防止
   const [inputText, setInputText] = useState('');
-  const [showStampPanel, setShowStampPanel] = useState(false);
-  const [showCreateRoom, setShowCreateRoom] = useState(false);
-  const [showNote, setShowNote] = useState(false);
+  // show* 系フラグをまとめて1つのreducerで管理（個別stateより再レンダリングを抑制）
+  const [modals, dispatchModal] = useReducer((state, action) => {
+    switch (action.type) {
+      case 'SET': return { ...state, [action.key]: action.value };
+      case 'TOGGLE': return { ...state, [action.key]: !state[action.key] };
+      case 'CLOSE_ALL': return { ...state, showStampPanel: false, showHeaderMenu: false, showInputMenu: false, showStylePicker: false };
+      default: return state;
+    }
+  }, {
+    showStampPanel: false, showCreateRoom: false, showNote: false, showSearch: false,
+    showRoomSettings: false, showBgPicker: false, showMediaList: false, showMemberMgr: false,
+    showBookmarks: false, showAnnounce: false, showAI: false, showEventCal: false,
+    showMiniGame: false, showFavorites: false, showGlobalSearch: false, showTaskPanel: false,
+    showVoice: false, showStickerMaker: false, showHeaderMenu: false, showInputMenu: false,
+    showLocation: false, showSecret: false, showStats: false, showStylePicker: false,
+    showSchedule: false, showPollCreator: false, showExport: false, showScheduleList: false,
+    showNotifSettings: false,
+  });
+  // 後方互換のためのshorthand（既存コードを最小限の変更で動かす）
+  const showStampPanel = modals.showStampPanel;
+  const setShowStampPanel = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStampPanel', value: typeof v === 'function' ? v(modals.showStampPanel) : v }), [modals.showStampPanel]);
+  const showCreateRoom = modals.showCreateRoom;
+  const setShowCreateRoom = useCallback((v) => dispatchModal({ type: 'SET', key: 'showCreateRoom', value: typeof v === 'function' ? v(modals.showCreateRoom) : v }), [modals.showCreateRoom]);
+  const showNote = modals.showNote;
+  const setShowNote = useCallback((v) => dispatchModal({ type: 'SET', key: 'showNote', value: typeof v === 'function' ? v(modals.showNote) : v }), [modals.showNote]);
+  const showSearch = modals.showSearch;
+  const setShowSearch = useCallback((v) => dispatchModal({ type: 'SET', key: 'showSearch', value: typeof v === 'function' ? v(modals.showSearch) : v }), [modals.showSearch]);
+  const showRoomSettings = modals.showRoomSettings;
+  const setShowRoomSettings = useCallback((v) => dispatchModal({ type: 'SET', key: 'showRoomSettings', value: typeof v === 'function' ? v(modals.showRoomSettings) : v }), [modals.showRoomSettings]);
+  const showBgPicker = modals.showBgPicker;
+  const setShowBgPicker = useCallback((v) => dispatchModal({ type: 'SET', key: 'showBgPicker', value: typeof v === 'function' ? v(modals.showBgPicker) : v }), [modals.showBgPicker]);
+  const showMediaList = modals.showMediaList;
+  const setShowMediaList = useCallback((v) => dispatchModal({ type: 'SET', key: 'showMediaList', value: typeof v === 'function' ? v(modals.showMediaList) : v }), [modals.showMediaList]);
+  const showMemberMgr = modals.showMemberMgr;
+  const setShowMemberMgr = useCallback((v) => dispatchModal({ type: 'SET', key: 'showMemberMgr', value: typeof v === 'function' ? v(modals.showMemberMgr) : v }), [modals.showMemberMgr]);
+  const showBookmarks = modals.showBookmarks;
+  const setShowBookmarks = useCallback((v) => dispatchModal({ type: 'SET', key: 'showBookmarks', value: typeof v === 'function' ? v(modals.showBookmarks) : v }), [modals.showBookmarks]);
+  const showAnnounce = modals.showAnnounce;
+  const setShowAnnounce = useCallback((v) => dispatchModal({ type: 'SET', key: 'showAnnounce', value: typeof v === 'function' ? v(modals.showAnnounce) : v }), [modals.showAnnounce]);
+  const showAI = modals.showAI;
+  const setShowAI = useCallback((v) => dispatchModal({ type: 'SET', key: 'showAI', value: typeof v === 'function' ? v(modals.showAI) : v }), [modals.showAI]);
+  const showEventCal = modals.showEventCal;
+  const setShowEventCal = useCallback((v) => dispatchModal({ type: 'SET', key: 'showEventCal', value: typeof v === 'function' ? v(modals.showEventCal) : v }), [modals.showEventCal]);
+  const showMiniGame = modals.showMiniGame;
+  const setShowMiniGame = useCallback((v) => dispatchModal({ type: 'SET', key: 'showMiniGame', value: typeof v === 'function' ? v(modals.showMiniGame) : v }), [modals.showMiniGame]);
+  const showFavorites = modals.showFavorites;
+  const setShowFavorites = useCallback((v) => dispatchModal({ type: 'SET', key: 'showFavorites', value: typeof v === 'function' ? v(modals.showFavorites) : v }), [modals.showFavorites]);
+  const showGlobalSearch = modals.showGlobalSearch;
+  const setShowGlobalSearch = useCallback((v) => dispatchModal({ type: 'SET', key: 'showGlobalSearch', value: typeof v === 'function' ? v(modals.showGlobalSearch) : v }), [modals.showGlobalSearch]);
+  const showTaskPanel = modals.showTaskPanel;
+  const setShowTaskPanel = useCallback((v) => dispatchModal({ type: 'SET', key: 'showTaskPanel', value: typeof v === 'function' ? v(modals.showTaskPanel) : v }), [modals.showTaskPanel]);
+  const showVoice = modals.showVoice;
+  const setShowVoice = useCallback((v) => dispatchModal({ type: 'SET', key: 'showVoice', value: typeof v === 'function' ? v(modals.showVoice) : v }), [modals.showVoice]);
+  const showStickerMaker = modals.showStickerMaker;
+  const setShowStickerMaker = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStickerMaker', value: typeof v === 'function' ? v(modals.showStickerMaker) : v }), [modals.showStickerMaker]);
+  const showHeaderMenu = modals.showHeaderMenu;
+  const setShowHeaderMenu = useCallback((v) => dispatchModal({ type: 'SET', key: 'showHeaderMenu', value: typeof v === 'function' ? v(modals.showHeaderMenu) : v }), [modals.showHeaderMenu]);
+  const showInputMenu = modals.showInputMenu;
+  const setShowInputMenu = useCallback((v) => dispatchModal({ type: 'SET', key: 'showInputMenu', value: typeof v === 'function' ? v(modals.showInputMenu) : v }), [modals.showInputMenu]);
+  const showLocation = modals.showLocation;
+  const setShowLocation = useCallback((v) => dispatchModal({ type: 'SET', key: 'showLocation', value: typeof v === 'function' ? v(modals.showLocation) : v }), [modals.showLocation]);
+  const showSecret = modals.showSecret;
+  const setShowSecret = useCallback((v) => dispatchModal({ type: 'SET', key: 'showSecret', value: typeof v === 'function' ? v(modals.showSecret) : v }), [modals.showSecret]);
+  const showStats = modals.showStats;
+  const setShowStats = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStats', value: typeof v === 'function' ? v(modals.showStats) : v }), [modals.showStats]);
+  const showStylePicker = modals.showStylePicker;
+  const setShowStylePicker = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStylePicker', value: typeof v === 'function' ? v(modals.showStylePicker) : v }), [modals.showStylePicker]);
+  const showSchedule = modals.showSchedule;
+  const setShowSchedule = useCallback((v) => dispatchModal({ type: 'SET', key: 'showSchedule', value: typeof v === 'function' ? v(modals.showSchedule) : v }), [modals.showSchedule]);
+  const showPollCreator = modals.showPollCreator;
+  const setShowPollCreator = useCallback((v) => dispatchModal({ type: 'SET', key: 'showPollCreator', value: typeof v === 'function' ? v(modals.showPollCreator) : v }), [modals.showPollCreator]);
+  const showExport = modals.showExport;
+  const setShowExport = useCallback((v) => dispatchModal({ type: 'SET', key: 'showExport', value: typeof v === 'function' ? v(modals.showExport) : v }), [modals.showExport]);
+  const showScheduleList = modals.showScheduleList;
+  const setShowScheduleList = useCallback((v) => dispatchModal({ type: 'SET', key: 'showScheduleList', value: typeof v === 'function' ? v(modals.showScheduleList) : v }), [modals.showScheduleList]);
+  const showNotifSettings = modals.showNotifSettings;
+  const setShowNotifSettings = useCallback((v) => dispatchModal({ type: 'SET', key: 'showNotifSettings', value: typeof v === 'function' ? v(modals.showNotifSettings) : v }), [modals.showNotifSettings]);
   const [typingUsers, setTypingUsers] = useState([]);
   const [replyTo, setReplyTo] = useState(null); // 返信先メッセージ
-  const [showSearch, setShowSearch] = useState(false);
   const [reactionPicker, setReactionPicker] = useState(null); // { msgId, x, y }
   const [translating, setTranslating] = useState({}); // { msgId: translated text }
   const QUICK_REACTIONS = ['👍','❤️','😂','😮','😢','🔥'];
   const [pinnedMessage, setPinnedMessage] = useState(null); // ピン留めメッセージ
   const [unreadCounts, setUnreadCounts] = useState({}); // { roomId: count }
-  const [showRoomSettings, setShowRoomSettings] = useState(false);
   const [forwardMsg, setForwardMsg] = useState(null); // 転送するメッセージ
   const roomIconInputRef = useRef(null);
   const longPressTimer = useRef(null);
   const [msgMenu, setMsgMenu] = useState(null); // { msg, x, y } 長押しメニュー
   const [editingMessage, setEditingMessage] = useState(null); // { id, content }
-  const [showBgPicker, setShowBgPicker] = useState(false);
   const [showReadDetail, setShowReadDetail] = useState(null); // { msgId, readers: [] }
-  const [showMediaList, setShowMediaList] = useState(false);
-  const [showMemberMgr, setShowMemberMgr] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(null); // { id, name, avatar, status }
   const [readByDetailMap, setReadByDetailMap] = useState({}); // msgId -> [{id,name,avatar}]
-  const [showBookmarks, setShowBookmarks] = useState(false);
   const [bookmarkedMsgs, setBookmarkedMsgs] = useState([]);
-  const [showAnnounce, setShowAnnounce] = useState(false);
   const [announceText, setAnnounceText] = useState('');
-  const [showAI, setShowAI] = useState(false);
-  const [showEventCal, setShowEventCal] = useState(false);
-  const [showMiniGame, setShowMiniGame] = useState(false);
-  const [showFavorites, setShowFavorites] = useState(false);
   const [favoritesList, setFavoritesList] = useState([]);
-  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [globalQuery, setGlobalQuery] = useState('');
   const [globalResults, setGlobalResults] = useState([]);
   const [globalSearching, setGlobalSearching] = useState(false);
-  const [showTaskPanel, setShowTaskPanel] = useState(false);
-  const [showVoice, setShowVoice] = useState(false);
-  const [showStickerMaker, setShowStickerMaker] = useState(false);
-  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null); // { message, onOk }
   const appConfirm = (message, onOk) => setConfirmDialog({ message, onOk });
-  const [showInputMenu, setShowInputMenu] = useState(false);
-  const [showLocation, setShowLocation] = useState(false);
-  const [showSecret, setShowSecret] = useState(false);
-  const [showStats, setShowStats] = useState(false);
   const [msgStyle, setMsgStyle] = useState(() => JSON.parse(localStorage.getItem('msgStyle') || '{"font":"default","color":""}'));
-  const [showStylePicker, setShowStylePicker] = useState(false);
   const [lang, setLang] = useState(() => localStorage.getItem('lang') || 'ja');
-  const [showSchedule, setShowSchedule] = useState(false);
   const [scheduleText, setScheduleText] = useState('');
   const [scheduleAt, setScheduleAt] = useState('');
-  const [showPollCreator, setShowPollCreator] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
   const [pollMulti, setPollMulti] = useState(false);
@@ -340,8 +391,6 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [mentionSuggestions, setMentionSuggestions] = useState([]); // @補完候補
-  const [showExport, setShowExport] = useState(false); // チャットエクスポート
-  const [showScheduleList, setShowScheduleList] = useState(false); // スケジュール一覧
   const [scheduleList, setScheduleList] = useState([]); // スケジュール済みメッセージ
   const [searchSender, setSearchSender] = useState(''); // 検索：送信者フィルター
   const [searchDate, setSearchDate] = useState(''); // 検索：日付フィルター
@@ -349,7 +398,6 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [notifSettings, setNotifSettings] = useState(() => { // 通知設定
     try { return JSON.parse(localStorage.getItem('notifSettings') || '{}'); } catch { return {}; }
   });
-  const [showNotifSettings, setShowNotifSettings] = useState(false);
   const draftRef = useRef({}); // 下書き一時保存 { roomId: text }
   const selectedRoomRef = useRef(null); // closureで古いselectedRoomを参照しないためのRef
   const currentUserRef = useRef(currentUser);
@@ -698,7 +746,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, [messages]);
 
   // 過去メッセージを追加読み込み
-  const loadMoreMessages = async () => {
+  const loadMoreMessages = useCallback(async () => {
     if (!selectedRoom || loadingMoreRef.current) return;
     if (hasMoreMessages.current[selectedRoom.id] === false) return;
     const oldest = messages[0];
@@ -728,9 +776,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       });
     } catch (e) { console.error(e); }
     finally { loadingMoreRef.current = false; }
-  };
+  }, [selectedRoom, messages]);
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     if (!inputText.trim() || !selectedRoom || !socket) return;
     sounds.send(soundTheme);
     socket.emit('message:send', { roomId: selectedRoom.id, content: inputText, type: 'text', replyTo: replyTo ? { id: replyTo.id, content: replyTo.content, senderName: replyTo.senderName } : null });
@@ -744,9 +792,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     // textareaの高さをリセット
     const ta = document.querySelector('.message-input');
     if (ta) { ta.style.height = 'auto'; }
-  };
+  }, [inputText, selectedRoom, socket, soundTheme, replyTo]);
 
-  const handleSendStamp = (stampSet, stamp) => {
+  const handleSendStamp = useCallback((stampSet, stamp) => {
     if (!selectedRoom || !socket) return;
     socket.emit('message:send', {
       roomId: selectedRoom.id,
@@ -755,9 +803,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       stampLabel: stamp.label
     });
     setShowStampPanel(false);
-  };
+  }, [selectedRoom, socket]);
 
-  const handleFileUpload = async (e) => {
+  const handleFileUpload = useCallback(async (e) => {
     const file = e.target.files[0];
     if (!file || !selectedRoom) return;
     // ファイルサイズ制限（50MB）
@@ -778,9 +826,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       });
     } catch (err) { console.error(err); showToast?.('ファイルのアップロードに失敗したで', 'error'); }
     e.target.value = '';
-  };
+  }, [selectedRoom, socket, showToast]);
 
-  const handleTyping = (e) => {
+  const handleTyping = useCallback((e) => {
     const val = e.target.value;
     setInputText(val);
     // textareaの高さを自動調整
@@ -805,9 +853,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     socket.emit('typing:start', { roomId: selectedRoom.id });
     clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => socket.emit('typing:stop', { roomId: selectedRoom.id }), 2000);
-  };
+  }, [selectedRoom, socket, currentUser.id]);
 
-  const handleMentionSelect = (member) => {
+  const handleMentionSelect = useCallback((member) => {
     const ta = document.querySelector('.message-input');
     const cursor = ta?.selectionStart ?? inputText.length;
     const textBefore = inputText.slice(0, cursor);
@@ -815,7 +863,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     setInputText(replaced + inputText.slice(cursor));
     setMentionSuggestions([]);
     setTimeout(() => ta?.focus(), 0);
-  };
+  }, [inputText]);
 
   const renderMessage = useCallback((msg) => {
     const isMine = (msg.senderId || msg.sender_id) === currentUser.id;
@@ -2135,6 +2183,7 @@ export default function App() {
   const callTimeoutRef = useRef(null);
   const currentUserRef = useRef(null);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+  const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [bookmarks, setBookmarks] = useState(new Set());
   const [mutedRooms, setMutedRooms] = useState(new Set());
   const [activeCall, setActiveCall] = useState(null); // { roomId, targetUserId, isCaller, offer }
@@ -2332,80 +2381,105 @@ export default function App() {
     return () => clearInterval(timer);
   }, [currentUser]);
 
-  const handleLogin = async (user) => {
+  const handleLogin = useCallback(async (user) => {
     setCurrentUser(user);
     // PINが設定されてたら確認画面（pin_enabled / pinEnabled 両対応）
     if (user.pin_enabled || user.pinEnabled) setPinVerified(false);
     else setPinVerified(true);
-  };
+  }, []);
 
-
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.removeItem('token');
     delete axios.defaults.headers.common['Authorization'];
     if (socket) socket.disconnect();
     setSocket(null); setCurrentUser(null);
-  };
+  }, [socket]);
 
   if (!currentUser) return <AuthScreen onLogin={handleLogin} />;
 
-  const handleAcceptCall = () => {
+  const handleAcceptCall = useCallback(() => {
     if (!incomingCall) return;
     if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     stopRingtone();
     const { from, roomId, offer } = incomingCall;
     setIncomingCall(null);
     setActiveCall({ roomId, targetUserId: from, isCaller: false, offer });
-  };
+  }, [incomingCall]);
 
-  const handleRejectCall = () => {
+  const handleRejectCall = useCallback(() => {
     if (!incomingCall) return;
     if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     stopRingtone();
     socket?.emit('call:reject', { to: incomingCall.from });
     setIncomingCall(null);
-  };
+  }, [incomingCall, socket]);
 
-  const handleAcceptVoice = () => {
+  const handleAcceptVoice = useCallback(() => {
     if (!voiceCall) return;
     if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     stopRingtone();
     setVoiceCall(prev => ({ ...prev, _accepted: true }));
-  };
+  }, [voiceCall]);
 
-  const handleRejectVoice = () => {
+  const handleRejectVoice = useCallback(() => {
     if (!voiceCall) return;
     if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     stopRingtone();
     socket?.emit('voice:reject', { to: voiceCall.targetUser?.id, callId: voiceCall.callId });
     setVoiceCall(null);
-  };
+  }, [voiceCall, socket]);
 
   // ChatScreenは常にマウントし続けてdisplay:noneで隠す（アンマウントするとselectedRoomが消えるため）
-  const tabVisible = (id) => ({ display: activeTab === id ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 });
+  const tabVisible = useCallback((id) => ({ display: activeTab === id ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }), [activeTab]);
+
+  const handleReadRoom = useCallback(() => setNotifications(p => ({ ...p, chat: 0 })), []);
+  const handleClearFriendNotif = useCallback(() => setNotifications(p => ({ ...p, friends: 0 })), []);
+  const handleClearNotif = useCallback((tabId) => setNotifications(p => ({ ...p, [tabId]: 0 })), []);
+  const handleStartChat = useCallback(async (friend) => {
+    try {
+      const res = await axios.post('/api/rooms/dm', { targetUserId: friend.id || friend._id });
+      if (res.data) {
+        axios.get('/api/friends').then(r => setFriendsList(r.data)).catch(() => {});
+        localStorage.removeItem('rooms_cache');
+        setActiveTab('chat');
+      }
+    } catch (e) { console.error('DM失敗', e); }
+  }, []);
+  const handleStampAcquire = useCallback((id) => setAcquiredStampIds(prev => [...prev, id]), []);
+  const handleNavigateRoom = useCallback(() => setActiveTab('chat'), []);
+  const handleProfileUpdate = useCallback((u) => setCurrentUser(u), []);
+  const handleContactOpen = useCallback(() => setShowContact(true), []);
+  const handleToggleDark = useCallback(() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(d => !d); }, []);
+  const handleToggleAuto = useCallback(() => {
+    const v = !darkAutoMode;
+    setDarkAutoMode(v);
+    localStorage.setItem('darkAutoMode', v);
+    if (v) setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }, [darkAutoMode]);
+  const handleOpenPinSetup = useCallback(() => setShowPinSetup(true), []);
+  const handleSwitchAccount = useCallback((token, user) => {
+    localStorage.setItem('token', token);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    setCurrentUser(user);
+    window.location.reload();
+  }, []);
+  const handleGroupCallEnd = useCallback(() => { setGroupCall(null); setCallMinimized(false); }, []);
+  const handleGroupCallMinimize = useCallback(() => setCallMinimized(m => !m), []);
+  const handleActiveCallEnd = useCallback(() => { setActiveCall(null); setCallMinimized(false); }, []);
+
   const tabsElement = (
     <>
       {/* 全タブ常時マウント（タブ切替でstateリセットされないように） */}
       <div style={tabVisible('chat')}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} onNavigate={setActiveTab} onReadRoom={() => setNotifications(p => ({ ...p, chat: 0 }))} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} onNavigate={setActiveTab} onReadRoom={handleReadRoom} />
       </div>
       <div style={tabVisible('friends')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
           <Friends
             currentUser={currentUser}
             socket={socket}
-            onClearNotif={() => setNotifications((p) => ({ ...p, friends: 0 }))}
-            onStartChat={async (friend) => {
-              try {
-                const res = await axios.post('/api/rooms/dm', { targetUserId: friend.id || friend._id });
-                if (res.data) {
-                  // friendsListも更新 + キャッシュ削除して最新ルーム取得
-                  axios.get('/api/friends').then(r => setFriendsList(r.data)).catch(() => {});
-                  localStorage.removeItem('rooms_cache');
-                  setActiveTab('chat');
-                }
-              } catch (e) { console.error('DM失敗', e); }
-            }}
+            onClearNotif={handleClearFriendNotif}
+            onStartChat={handleStartChat}
           />
         </Suspense></ErrorBoundary>
       </div>
@@ -2416,7 +2490,7 @@ export default function App() {
       </div>
       <div style={tabVisible('stampshop')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-          <StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={(id) => setAcquiredStampIds(prev => [...prev, id])} />
+          <StampShop currentUser={currentUser} acquiredStampIds={acquiredStampIds} onAcquire={handleStampAcquire} />
         </Suspense></ErrorBoundary>
       </div>
       <div style={tabVisible('album')}>
@@ -2426,17 +2500,17 @@ export default function App() {
       </div>
       <div style={tabVisible('dashboard')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-          <Dashboard currentUser={currentUser} onNavigateRoom={() => setActiveTab('chat')} />
+          <Dashboard currentUser={currentUser} onNavigateRoom={handleNavigateRoom} />
         </Suspense></ErrorBoundary>
       </div>
       <div style={tabVisible('profile')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-          <Profile currentUser={currentUser} onUpdate={(u) => setCurrentUser(u)} onLogout={handleLogout} onContact={() => setShowContact(true)}
-            darkMode={darkMode} onToggleDark={() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(!darkMode); }}
-            darkAutoMode={darkAutoMode} onToggleAuto={() => { const v = !darkAutoMode; setDarkAutoMode(v); localStorage.setItem('darkAutoMode', v); if (v) setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches); }}
-            onOpenPinSetup={() => setShowPinSetup(true)}
+          <Profile currentUser={currentUser} onUpdate={handleProfileUpdate} onLogout={handleLogout} onContact={handleContactOpen}
+            darkMode={darkMode} onToggleDark={handleToggleDark}
+            darkAutoMode={darkAutoMode} onToggleAuto={handleToggleAuto}
+            onOpenPinSetup={handleOpenPinSetup}
             onNavigate={setActiveTab}
-            onSwitchAccount={(token, user) => { localStorage.setItem('token', token); axios.defaults.headers.common['Authorization'] = `Bearer ${token}`; setCurrentUser(user); window.location.reload(); }} />
+            onSwitchAccount={handleSwitchAccount} />
         </Suspense></ErrorBoundary>
       </div>
     </>
@@ -2453,7 +2527,7 @@ export default function App() {
           </Routes>
           <LocationAwareTabs tabsElement={tabsElement} />
         </main>
-        <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} onClearNotif={(tabId) => setNotifications(p => ({ ...p, [tabId]: 0 }))} />
+        <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} onClearNotif={handleClearNotif} />
         {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
         {groupCall && (
           <ErrorBoundary><Suspense fallback={null}>
@@ -2463,9 +2537,9 @@ export default function App() {
               roomId={groupCall.roomId}
               members={groupCall.members}
               roomName={groupCall.roomName}
-              onEnd={() => { setGroupCall(null); setCallMinimized(false); }}
+              onEnd={handleGroupCallEnd}
               minimized={callMinimized}
-              onToggleMinimize={() => setCallMinimized(m => !m)}
+              onToggleMinimize={handleGroupCallMinimize}
             />
           </Suspense></ErrorBoundary>
         )}
@@ -2478,9 +2552,9 @@ export default function App() {
               targetUserId={activeCall.targetUserId}
               isCaller={activeCall.isCaller}
               incomingOffer={activeCall.offer}
-              onEnd={() => { setActiveCall(null); setCallMinimized(false); }}
+              onEnd={handleActiveCallEnd}
               minimized={callMinimized}
-              onToggleMinimize={() => setCallMinimized(m => !m)}
+              onToggleMinimize={handleGroupCallMinimize}
             />
           </ErrorBoundary>
         )}
