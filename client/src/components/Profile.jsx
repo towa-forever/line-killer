@@ -32,93 +32,12 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
     setSelectedSound(currentUser.soundTheme || 'default');
     setStatusText(currentUser.status || '');
   }, [currentUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [subAccounts, setSubAccounts] = useState([]);
-  const [showSubModal, setShowSubModal] = useState(false);
-  const [subForm, setSubForm] = useState({ username:'', password:'', displayName:'' });
-  const [subError, setSubError] = useState('');
-  const [subLoading, setSubLoading] = useState(false);
   // QRスキャン
-  const [qrResult, setQrResult] = useState('');
-  const [qrSending, setQrSending] = useState(false);
+  const [qrResult, setQrResult] = React.useState('');
+  const [qrSending, setQrSending] = React.useState(false);
   const fileInputRef = useRef(null);
   const coverInputRef = useRef(null);
   const qrInputRef = useRef(null);
-
-  // セキュリティ設定
-  const [showSecurity, setShowSecurity] = useState(false);
-  const [loginHistory, setLoginHistory] = useState([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [blockedUsers, setBlockedUsers] = useState([]);
-  const [loadingBlocked, setLoadingBlocked] = useState(false);
-  const [recoveryEmail, setRecoveryEmail] = useState('');
-  const [secSaving, setSecSaving] = useState(false);
-  const [secMsg, setSecMsg] = useState('');
-  const [showSecForm, setShowSecForm] = useState(false);
-
-  const loadLoginHistory = async () => {
-    setLoadingHistory(true);
-    try {
-      const res = await axios.get('/api/auth/login-history');
-      setLoginHistory(res.data || []);
-    } catch { setLoginHistory([]); }
-    finally { setLoadingHistory(false); }
-  };
-
-  const loadBlockedUsers = async () => {
-    setLoadingBlocked(true);
-    try {
-      // currentUserから直接取得（APIコール省略）
-      setBlockedUsers(currentUser?.blockedUsers || []);
-    } catch { setBlockedUsers([]); }
-    finally { setLoadingBlocked(false); }
-  };
-
-  const handleOpenSecurity = () => {
-    setShowSecurity(true);
-    loadLoginHistory();
-    loadBlockedUsers();
-  };
-
-  const handleUnblock = async (userId) => {
-    try {
-      await axios.post(`/api/users/${userId}/block`);
-      setBlockedUsers(prev => prev.filter(u => u.id !== userId && u !== userId));
-    } catch {}
-  };
-
-  const handleSaveRecoveryEmail = async () => {
-    if (!recoveryEmail.trim() || !recoveryEmail.includes('@')) { setSecMsg('正しいメールアドレスを入力してや'); return; }
-    setSecSaving(true); setSecMsg('');
-    try {
-      await axios.post('/api/auth/recovery-email', { email: recoveryEmail });
-      setSecMsg('リカバリーメールを設定したで！');
-      setTimeout(() => setShowSecForm(false), 1500);
-    } catch (e) { setSecMsg(e.response?.data?.error || '保存に失敗した...'); }
-    finally { setSecSaving(false); }
-  };
-
-  // パスワード変更
-  const [showPwForm, setShowPwForm] = useState(false);
-  const [currentPw, setCurrentPw] = useState('');
-  const [newPw, setNewPw] = useState('');
-  const [newPw2, setNewPw2] = useState('');
-  const [pwMsg, setPwMsg] = useState('');
-  const [pwSaving, setPwSaving] = useState(false);
-
-  const handleChangePw = async () => {
-    if (!currentPw) { setPwMsg('現在のパスワードを入力してや'); return; }
-    if (!newPw) { setPwMsg('新しいパスワードを入力してや'); return; }
-    if (newPw.length < 6) { setPwMsg('パスワードは6文字以上にしてや'); return; }
-    if (newPw !== newPw2) { setPwMsg('新しいパスワードが一致してへんで'); return; }
-    setPwSaving(true); setPwMsg('');
-    try {
-      await axios.post('/api/auth/change-password', { currentPassword: currentPw, newPassword: newPw });
-      setPwMsg('パスワードを変更したで！');
-      setShowPwForm(false);
-      setCurrentPw(''); setNewPw(''); setNewPw2('');
-    } catch (e) { setPwMsg(e.response?.data?.error || '変更に失敗した...'); }
-    finally { setPwSaving(false); }
-  };
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
@@ -404,6 +323,133 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
         </div>
       </div>
 
+      <SecuritySection currentUser={currentUser} onOpenPinSetup={onOpenPinSetup} />
+      {/* ===== サブアカウント ===== */}
+      <SubAccountSection currentUser={currentUser} onSwitchAccount={onSwitchAccount} />
+
+      <div style={{ padding:'0 10px 8px' }}>
+        {/* クイックナビゲーション */}
+        {onNavigate && (
+          <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+            {[
+              { icon:'📢', label:'お知らせ', tab:'timeline' },
+              { icon:'📊', label:'ダッシュボード', tab:'dashboard' },
+            ].map(item => (
+              <button key={item.tab} onClick={() => onNavigate(item.tab)}
+                style={{ flex:1, padding:'10px 4px', borderRadius:14, background:'var(--surface)', border:'1px solid var(--border)', fontSize:13, fontWeight:600, cursor:'pointer', color:'var(--text)', display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                <span style={{ fontSize:20 }}>{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <button onClick={() => setShowContact(true)}
+          style={{ width:'100%', padding:14, borderRadius:14, background:'var(--surface)', border:'1px solid var(--border)', fontSize:15, fontWeight:600, cursor:'pointer', color:'var(--text)', display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:10 }}>
+          <span>📨</span><span>お問い合わせ</span><span style={{ marginLeft:'auto', color:'var(--text2)', fontSize:18 }}>›</span>
+        </button>
+        <button className="btn btn-danger" style={{ width:'100%', padding:14, borderRadius:14, fontSize:15 }} onClick={() => setShowLogoutConfirm(true)}>
+          ログアウト
+        </button>
+      </div>
+
+      <style>{`
+        .profile-avatar { width:80px; height:80px; border-radius:50%; background:var(--primary); color:white; display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:700; margin:0 auto; border:3px solid var(--surface); }
+        .profile-name { font-size:22px; font-weight:700; }
+        .profile-username { font-size:14px; color:var(--text2); margin-top:4px; }
+        .profile-bio { font-size:13px; color:var(--text2); margin-top:8px; line-height:1.5; }
+        .profile-section-title { font-size:13px; font-weight:700; color:var(--text2); margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px; }
+        .setting-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; cursor:pointer; font-size:15px; border-bottom:1px solid var(--border); }
+        .toggle { width:44px; height:24px; border-radius:12px; background:var(--border); position:relative; transition:background 0.3s; flex-shrink:0; }
+        .toggle.on { background:var(--primary); }
+        .toggle-knob { width:20px; height:20px; border-radius:50%; background:white; position:absolute; top:2px; left:2px; transition:left 0.3s; box-shadow:0 1px 4px rgba(0,0,0,0.2); }
+        .toggle.on .toggle-knob { left:22px; }
+      `}</style>
+      {/* お問い合わせ - Portalでbody直下にマウントしてoverflow:hiddenを回避 */}
+      {showContact && ReactDOM.createPortal(
+        <Suspense fallback={null}>
+          <ContactForm currentUser={currentUser} onClose={() => setShowContact(false)} />
+        </Suspense>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+function SecuritySection({ currentUser, onOpenPinSetup }) {
+  const [showSecurity, setShowSecurity] = React.useState(false);
+  const [loginHistory, setLoginHistory] = React.useState([]);
+  const [loadingHistory, setLoadingHistory] = React.useState(false);
+  const [blockedUsers, setBlockedUsers] = React.useState([]);
+  const [loadingBlocked, setLoadingBlocked] = React.useState(false);
+  const [recoveryEmail, setRecoveryEmail] = React.useState('');
+  const [secSaving, setSecSaving] = React.useState(false);
+  const [secMsg, setSecMsg] = React.useState('');
+  const [showSecForm, setShowSecForm] = React.useState(false);
+  const [showPwForm, setShowPwForm] = React.useState(false);
+  const [currentPw, setCurrentPw] = React.useState('');
+  const [newPw, setNewPw] = React.useState('');
+  const [newPw2, setNewPw2] = React.useState('');
+  const [pwMsg, setPwMsg] = React.useState('');
+  const [pwSaving, setPwSaving] = React.useState(false);
+
+  const loadLoginHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await axios.get('/api/auth/login-history');
+      setLoginHistory(res.data || []);
+    } catch { setLoginHistory([]); }
+    finally { setLoadingHistory(false); }
+  };
+
+  const loadBlockedUsers = async () => {
+    setLoadingBlocked(true);
+    try {
+      setBlockedUsers(currentUser?.blockedUsers || []);
+    } catch { setBlockedUsers([]); }
+    finally { setLoadingBlocked(false); }
+  };
+
+  const handleOpenSecurity = () => {
+    setShowSecurity(true);
+    loadLoginHistory();
+    loadBlockedUsers();
+  };
+
+  const handleUnblock = async (userId) => {
+    try {
+      await axios.post(`/api/users/${userId}/block`);
+      setBlockedUsers(prev => prev.filter(u => u.id !== userId && u !== userId));
+    } catch {}
+  };
+
+  const handleSaveRecoveryEmail = async () => {
+    if (!recoveryEmail.trim() || !recoveryEmail.includes('@')) { setSecMsg('正しいメールアドレスを入力してや'); return; }
+    setSecSaving(true); setSecMsg('');
+    try {
+      await axios.post('/api/auth/recovery-email', { email: recoveryEmail });
+      setSecMsg('リカバリーメールを設定したで！');
+      setTimeout(() => setShowSecForm(false), 1500);
+    } catch (e) { setSecMsg(e.response?.data?.error || '保存に失敗した...'); }
+    finally { setSecSaving(false); }
+  };
+
+  const handleChangePw = async () => {
+    if (!currentPw) { setPwMsg('現在のパスワードを入力してや'); return; }
+    if (!newPw) { setPwMsg('新しいパスワードを入力してや'); return; }
+    if (newPw.length < 6) { setPwMsg('パスワードは6文字以上にしてや'); return; }
+    if (newPw !== newPw2) { setPwMsg('新しいパスワードが一致してへんで'); return; }
+    setPwSaving(true); setPwMsg('');
+    try {
+      await axios.post('/api/auth/change-password', { currentPassword: currentPw, newPassword: newPw });
+      setPwMsg('パスワードを変更したで！');
+      setShowPwForm(false);
+      setCurrentPw(''); setNewPw(''); setNewPw2('');
+    } catch (e) { setPwMsg(e.response?.data?.error || '変更に失敗した...'); }
+    finally { setPwSaving(false); }
+  };
+
+  return (
+    <>
       {/* ===== セキュリティ設定 ===== */}
       <div className="card" style={{ margin:10 }}>
         <div className="profile-section-title">🔐 セキュリティ</div>
@@ -473,12 +519,9 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
               <button onClick={() => setShowSecurity(false)} style={{ background:'none', border:'none', fontSize:22, color:'var(--text2)', cursor:'pointer', lineHeight:1 }}>✕</button>
             </div>
             <div style={{ overflowY:'auto', flex:1, padding:16 }}>
-
               {/* ログイン履歴 */}
               <div style={{ marginBottom:20 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:'var(--text2)', marginBottom:10, textTransform:'uppercase', letterSpacing:0.5 }}>
-                  📋 ログイン履歴
-                </div>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--text2)', marginBottom:10, textTransform:'uppercase', letterSpacing:0.5 }}>📋 ログイン履歴</div>
                 {loadingHistory ? (
                   <div style={{ textAlign:'center', padding:20, color:'var(--text2)', fontSize:14 }}>読み込み中...</div>
                 ) : loginHistory.length === 0 ? (
@@ -486,26 +529,17 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
                 ) : loginHistory.slice(0, 10).map((h, i) => (
                   <div key={i} style={{ padding:'10px 0', borderBottom:'1px solid var(--border)', fontSize:13 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:2 }}>
-                      <span style={{ fontWeight:600, color: i === 0 ? 'var(--primary)' : 'var(--text)' }}>
-                        {i === 0 ? '🟢 最新' : `#${i + 1}`}
-                      </span>
-                      <span style={{ color:'var(--text2)', fontSize:12 }}>
-                        {h.at ? new Date(h.at).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '不明'}
-                      </span>
+                      <span style={{ fontWeight:600, color: i === 0 ? 'var(--primary)' : 'var(--text)' }}>{i === 0 ? '🟢 最新' : `#${i + 1}`}</span>
+                      <span style={{ color:'var(--text2)', fontSize:12 }}>{h.at ? new Date(h.at).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '不明'}</span>
                     </div>
                     <div style={{ color:'var(--text2)', fontSize:12 }}>🌐 IP: {h.ip || '不明'}</div>
-                    <div style={{ color:'var(--text2)', fontSize:11, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                      📱 {h.ua ? h.ua.slice(0, 60) + (h.ua.length > 60 ? '...' : '') : '不明'}
-                    </div>
+                    <div style={{ color:'var(--text2)', fontSize:11, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>📱 {h.ua ? h.ua.slice(0, 60) + (h.ua.length > 60 ? '...' : '') : '不明'}</div>
                   </div>
                 ))}
               </div>
-
               {/* ブロックリスト */}
               <div>
-                <div style={{ fontSize:13, fontWeight:700, color:'var(--text2)', marginBottom:10, textTransform:'uppercase', letterSpacing:0.5 }}>
-                  🚫 ブロックリスト
-                </div>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--text2)', marginBottom:10, textTransform:'uppercase', letterSpacing:0.5 }}>🚫 ブロックリスト</div>
                 {loadingBlocked ? (
                   <div style={{ textAlign:'center', padding:20, color:'var(--text2)', fontSize:14 }}>読み込み中...</div>
                 ) : blockedUsers.length === 0 ? (
@@ -530,72 +564,16 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
           </div>
         </div>
       ), document.body)}
-
-      {/* ===== サブアカウント ===== */}
-      <SubAccountSection
-        currentUser={currentUser}
-        subAccounts={subAccounts}
-        setSubAccounts={setSubAccounts}
-        showSubModal={showSubModal}
-        setShowSubModal={setShowSubModal}
-        subForm={subForm}
-        setSubForm={setSubForm}
-        subError={subError}
-        setSubError={setSubError}
-        subLoading={subLoading}
-        setSubLoading={setSubLoading}
-        onSwitchAccount={onSwitchAccount}
-      />
-
-      <div style={{ padding:'0 10px 8px' }}>
-        {/* クイックナビゲーション */}
-        {onNavigate && (
-          <div style={{ display:'flex', gap:8, marginBottom:12 }}>
-            {[
-              { icon:'📢', label:'お知らせ', tab:'timeline' },
-              { icon:'📊', label:'ダッシュボード', tab:'dashboard' },
-            ].map(item => (
-              <button key={item.tab} onClick={() => onNavigate(item.tab)}
-                style={{ flex:1, padding:'10px 4px', borderRadius:14, background:'var(--surface)', border:'1px solid var(--border)', fontSize:13, fontWeight:600, cursor:'pointer', color:'var(--text)', display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-                <span style={{ fontSize:20 }}>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        <button onClick={() => setShowContact(true)}
-          style={{ width:'100%', padding:14, borderRadius:14, background:'var(--surface)', border:'1px solid var(--border)', fontSize:15, fontWeight:600, cursor:'pointer', color:'var(--text)', display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:10 }}>
-          <span>📨</span><span>お問い合わせ</span><span style={{ marginLeft:'auto', color:'var(--text2)', fontSize:18 }}>›</span>
-        </button>
-        <button className="btn btn-danger" style={{ width:'100%', padding:14, borderRadius:14, fontSize:15 }} onClick={() => setShowLogoutConfirm(true)}>
-          ログアウト
-        </button>
-      </div>
-
-      <style>{`
-        .profile-avatar { width:80px; height:80px; border-radius:50%; background:var(--primary); color:white; display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:700; margin:0 auto; border:3px solid var(--surface); }
-        .profile-name { font-size:22px; font-weight:700; }
-        .profile-username { font-size:14px; color:var(--text2); margin-top:4px; }
-        .profile-bio { font-size:13px; color:var(--text2); margin-top:8px; line-height:1.5; }
-        .profile-section-title { font-size:13px; font-weight:700; color:var(--text2); margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px; }
-        .setting-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; cursor:pointer; font-size:15px; border-bottom:1px solid var(--border); }
-        .toggle { width:44px; height:24px; border-radius:12px; background:var(--border); position:relative; transition:background 0.3s; flex-shrink:0; }
-        .toggle.on { background:var(--primary); }
-        .toggle-knob { width:20px; height:20px; border-radius:50%; background:white; position:absolute; top:2px; left:2px; transition:left 0.3s; box-shadow:0 1px 4px rgba(0,0,0,0.2); }
-        .toggle.on .toggle-knob { left:22px; }
-      `}</style>
-      {/* お問い合わせ - Portalでbody直下にマウントしてoverflow:hiddenを回避 */}
-      {showContact && ReactDOM.createPortal(
-        <Suspense fallback={null}>
-          <ContactForm currentUser={currentUser} onClose={() => setShowContact(false)} />
-        </Suspense>,
-        document.body
-      )}
-    </div>
+    </>
   );
 }
 
-function SubAccountSection({ currentUser, subAccounts, setSubAccounts, showSubModal, setShowSubModal, subForm, setSubForm, subError, setSubError, subLoading, setSubLoading, onSwitchAccount }) {
+function SubAccountSection({ currentUser, onSwitchAccount }) {
+  const [subAccounts, setSubAccounts] = React.useState([]);
+  const [showSubModal, setShowSubModal] = React.useState(false);
+  const [subForm, setSubForm] = React.useState({ username:'', password:'', displayName:'' });
+  const [subError, setSubError] = React.useState('');
+  const [subLoading, setSubLoading] = React.useState(false);
   const isSubAccount = !!currentUser?.parentAccountId;
   const [deleteConfirm, setDeleteConfirm] = React.useState(null); // subIdを保持
 
