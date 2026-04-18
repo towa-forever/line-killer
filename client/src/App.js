@@ -296,63 +296,63 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   });
   // 後方互換のためのshorthand（既存コードを最小限の変更で動かす）
   const showStampPanel = modals.showStampPanel;
-  const setShowStampPanel = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStampPanel', value: typeof v === 'function' ? v(modals.showStampPanel) : v }), [modals.showStampPanel]);
+  const setShowStampPanel = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStampPanel', value: v }), []);
   const showCreateRoom = modals.showCreateRoom;
-  const setShowCreateRoom = useCallback((v) => dispatchModal({ type: 'SET', key: 'showCreateRoom', value: typeof v === 'function' ? v(modals.showCreateRoom) : v }), [modals.showCreateRoom]);
+  const setShowCreateRoom = useCallback((v) => dispatchModal({ type: 'SET', key: 'showCreateRoom', value: v }), []);
   const showNote = modals.showNote;
-  const setShowNote = useCallback((v) => dispatchModal({ type: 'SET', key: 'showNote', value: typeof v === 'function' ? v(modals.showNote) : v }), [modals.showNote]);
+  const setShowNote = useCallback((v) => dispatchModal({ type: 'SET', key: 'showNote', value: v }), []);
   const showSearch = modals.showSearch;
-  const setShowSearch = useCallback((v) => dispatchModal({ type: 'SET', key: 'showSearch', value: typeof v === 'function' ? v(modals.showSearch) : v }), [modals.showSearch]);
+  const setShowSearch = useCallback((v) => dispatchModal({ type: 'SET', key: 'showSearch', value: v }), []);
   const showRoomSettings = modals.showRoomSettings;
-  const setShowRoomSettings = useCallback((v) => dispatchModal({ type: 'SET', key: 'showRoomSettings', value: typeof v === 'function' ? v(modals.showRoomSettings) : v }), [modals.showRoomSettings]);
+  const setShowRoomSettings = useCallback((v) => dispatchModal({ type: 'SET', key: 'showRoomSettings', value: v }), []);
   const showBgPicker = modals.showBgPicker;
-  const setShowBgPicker = useCallback((v) => dispatchModal({ type: 'SET', key: 'showBgPicker', value: typeof v === 'function' ? v(modals.showBgPicker) : v }), [modals.showBgPicker]);
+  const setShowBgPicker = useCallback((v) => dispatchModal({ type: 'SET', key: 'showBgPicker', value: v }), []);
   const showMediaList = modals.showMediaList;
-  const setShowMediaList = useCallback((v) => dispatchModal({ type: 'SET', key: 'showMediaList', value: typeof v === 'function' ? v(modals.showMediaList) : v }), [modals.showMediaList]);
+  const setShowMediaList = useCallback((v) => dispatchModal({ type: 'SET', key: 'showMediaList', value: v }), []);
   const showMemberMgr = modals.showMemberMgr;
-  const setShowMemberMgr = useCallback((v) => dispatchModal({ type: 'SET', key: 'showMemberMgr', value: typeof v === 'function' ? v(modals.showMemberMgr) : v }), [modals.showMemberMgr]);
+  const setShowMemberMgr = useCallback((v) => dispatchModal({ type: 'SET', key: 'showMemberMgr', value: v }), []);
   const showBookmarks = modals.showBookmarks;
-  const setShowBookmarks = useCallback((v) => dispatchModal({ type: 'SET', key: 'showBookmarks', value: typeof v === 'function' ? v(modals.showBookmarks) : v }), [modals.showBookmarks]);
+  const setShowBookmarks = useCallback((v) => dispatchModal({ type: 'SET', key: 'showBookmarks', value: v }), []);
   const showAnnounce = modals.showAnnounce;
-  const setShowAnnounce = useCallback((v) => dispatchModal({ type: 'SET', key: 'showAnnounce', value: typeof v === 'function' ? v(modals.showAnnounce) : v }), [modals.showAnnounce]);
+  const setShowAnnounce = useCallback((v) => dispatchModal({ type: 'SET', key: 'showAnnounce', value: v }), []);
   const showAI = modals.showAI;
-  const setShowAI = useCallback((v) => dispatchModal({ type: 'SET', key: 'showAI', value: typeof v === 'function' ? v(modals.showAI) : v }), [modals.showAI]);
+  const setShowAI = useCallback((v) => dispatchModal({ type: 'SET', key: 'showAI', value: v }), []);
   const showEventCal = modals.showEventCal;
-  const setShowEventCal = useCallback((v) => dispatchModal({ type: 'SET', key: 'showEventCal', value: typeof v === 'function' ? v(modals.showEventCal) : v }), [modals.showEventCal]);
+  const setShowEventCal = useCallback((v) => dispatchModal({ type: 'SET', key: 'showEventCal', value: v }), []);
   const showMiniGame = modals.showMiniGame;
-  const setShowMiniGame = useCallback((v) => dispatchModal({ type: 'SET', key: 'showMiniGame', value: typeof v === 'function' ? v(modals.showMiniGame) : v }), [modals.showMiniGame]);
+  const setShowMiniGame = useCallback((v) => dispatchModal({ type: 'SET', key: 'showMiniGame', value: v }), []);
   const showFavorites = modals.showFavorites;
-  const setShowFavorites = useCallback((v) => dispatchModal({ type: 'SET', key: 'showFavorites', value: typeof v === 'function' ? v(modals.showFavorites) : v }), [modals.showFavorites]);
+  const setShowFavorites = useCallback((v) => dispatchModal({ type: 'SET', key: 'showFavorites', value: v }), []);
   const showGlobalSearch = modals.showGlobalSearch;
-  const setShowGlobalSearch = useCallback((v) => dispatchModal({ type: 'SET', key: 'showGlobalSearch', value: typeof v === 'function' ? v(modals.showGlobalSearch) : v }), [modals.showGlobalSearch]);
+  const setShowGlobalSearch = useCallback((v) => dispatchModal({ type: 'SET', key: 'showGlobalSearch', value: v }), []);
   const showTaskPanel = modals.showTaskPanel;
-  const setShowTaskPanel = useCallback((v) => dispatchModal({ type: 'SET', key: 'showTaskPanel', value: typeof v === 'function' ? v(modals.showTaskPanel) : v }), [modals.showTaskPanel]);
+  const setShowTaskPanel = useCallback((v) => dispatchModal({ type: 'SET', key: 'showTaskPanel', value: v }), []);
   const showVoice = modals.showVoice;
-  const setShowVoice = useCallback((v) => dispatchModal({ type: 'SET', key: 'showVoice', value: typeof v === 'function' ? v(modals.showVoice) : v }), [modals.showVoice]);
+  const setShowVoice = useCallback((v) => dispatchModal({ type: 'SET', key: 'showVoice', value: v }), []);
   const showStickerMaker = modals.showStickerMaker;
-  const setShowStickerMaker = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStickerMaker', value: typeof v === 'function' ? v(modals.showStickerMaker) : v }), [modals.showStickerMaker]);
+  const setShowStickerMaker = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStickerMaker', value: v }), []);
   const showHeaderMenu = modals.showHeaderMenu;
-  const setShowHeaderMenu = useCallback((v) => dispatchModal({ type: 'SET', key: 'showHeaderMenu', value: typeof v === 'function' ? v(modals.showHeaderMenu) : v }), [modals.showHeaderMenu]);
+  const setShowHeaderMenu = useCallback((v) => dispatchModal({ type: 'SET', key: 'showHeaderMenu', value: v }), []);
   const showInputMenu = modals.showInputMenu;
-  const setShowInputMenu = useCallback((v) => dispatchModal({ type: 'SET', key: 'showInputMenu', value: typeof v === 'function' ? v(modals.showInputMenu) : v }), [modals.showInputMenu]);
+  const setShowInputMenu = useCallback((v) => dispatchModal({ type: 'SET', key: 'showInputMenu', value: v }), []);
   const showLocation = modals.showLocation;
-  const setShowLocation = useCallback((v) => dispatchModal({ type: 'SET', key: 'showLocation', value: typeof v === 'function' ? v(modals.showLocation) : v }), [modals.showLocation]);
+  const setShowLocation = useCallback((v) => dispatchModal({ type: 'SET', key: 'showLocation', value: v }), []);
   const showSecret = modals.showSecret;
-  const setShowSecret = useCallback((v) => dispatchModal({ type: 'SET', key: 'showSecret', value: typeof v === 'function' ? v(modals.showSecret) : v }), [modals.showSecret]);
+  const setShowSecret = useCallback((v) => dispatchModal({ type: 'SET', key: 'showSecret', value: v }), []);
   const showStats = modals.showStats;
-  const setShowStats = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStats', value: typeof v === 'function' ? v(modals.showStats) : v }), [modals.showStats]);
+  const setShowStats = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStats', value: v }), []);
   const showStylePicker = modals.showStylePicker;
-  const setShowStylePicker = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStylePicker', value: typeof v === 'function' ? v(modals.showStylePicker) : v }), [modals.showStylePicker]);
+  const setShowStylePicker = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStylePicker', value: v }), []);
   const showSchedule = modals.showSchedule;
-  const setShowSchedule = useCallback((v) => dispatchModal({ type: 'SET', key: 'showSchedule', value: typeof v === 'function' ? v(modals.showSchedule) : v }), [modals.showSchedule]);
+  const setShowSchedule = useCallback((v) => dispatchModal({ type: 'SET', key: 'showSchedule', value: v }), []);
   const showPollCreator = modals.showPollCreator;
-  const setShowPollCreator = useCallback((v) => dispatchModal({ type: 'SET', key: 'showPollCreator', value: typeof v === 'function' ? v(modals.showPollCreator) : v }), [modals.showPollCreator]);
+  const setShowPollCreator = useCallback((v) => dispatchModal({ type: 'SET', key: 'showPollCreator', value: v }), []);
   const showExport = modals.showExport;
-  const setShowExport = useCallback((v) => dispatchModal({ type: 'SET', key: 'showExport', value: typeof v === 'function' ? v(modals.showExport) : v }), [modals.showExport]);
+  const setShowExport = useCallback((v) => dispatchModal({ type: 'SET', key: 'showExport', value: v }), []);
   const showScheduleList = modals.showScheduleList;
-  const setShowScheduleList = useCallback((v) => dispatchModal({ type: 'SET', key: 'showScheduleList', value: typeof v === 'function' ? v(modals.showScheduleList) : v }), [modals.showScheduleList]);
+  const setShowScheduleList = useCallback((v) => dispatchModal({ type: 'SET', key: 'showScheduleList', value: v }), []);
   const showNotifSettings = modals.showNotifSettings;
-  const setShowNotifSettings = useCallback((v) => dispatchModal({ type: 'SET', key: 'showNotifSettings', value: typeof v === 'function' ? v(modals.showNotifSettings) : v }), [modals.showNotifSettings]);
+  const setShowNotifSettings = useCallback((v) => dispatchModal({ type: 'SET', key: 'showNotifSettings', value: v }), []);
   const [typingUsers, setTypingUsers] = useState([]);
   const [replyTo, setReplyTo] = useState(null); // 返信先メッセージ
   const [reactionPicker, setReactionPicker] = useState(null); // { msgId, x, y }
@@ -1045,6 +1045,23 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     );
   }, [currentUser, polls, selectedRoom, onlineUsers, bookmarks, socket, setReplyTo, showToast, soundTheme]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // メッセージリスト全体をuseMemoでキャッシュ（messages/translating/editingMessage変化時のみ再計算）
+  const renderedMessages = React.useMemo(() => {
+    return messages.reduce((acc, msg, i) => {
+      const d = new Date(msg.createdAt || msg.created_at);
+      if (isNaN(d.getTime())) { acc.push(renderMessage(msg, i)); return acc; }
+      const dateStr = d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+      const prevMsg = messages[i - 1];
+      const prevD = prevMsg ? new Date(prevMsg.createdAt || prevMsg.created_at) : null;
+      const prevDate = prevD && !isNaN(prevD.getTime()) ? prevD.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' }) : null;
+      if (!prevDate || prevDate !== d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' })) {
+        acc.push(<div key={`date-${i}`} className="date-divider">{dateStr}</div>);
+      }
+      acc.push(renderMessage(msg, i));
+      return acc;
+    }, []);
+  }, [messages, renderMessage]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="chat-screen">
       <div className={`room-list ${selectedRoom ? "hidden" : ""}`}>
@@ -1073,7 +1090,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <div className="room-empty-text">まだトークがないで！<br/>右上の ✏️ からトークを始めよう</div>
             </div>
           )}
-          {rooms.map((room) => {
+          {React.useMemo(() => rooms.map((room) => {
             const lastMsg = room.lastMessage;
             // DMの場合は相手のアバターを表示
             const isDM = room.members?.length === 2;
@@ -1121,7 +1138,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 </div>
               </div>
             );
-          })}
+          }), [rooms, selectedRoom, currentUser, onlineUsers, unreadCounts, mutedRooms])}
         </div>
       </div>
 
@@ -1141,7 +1158,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 if(other) onCall({ roomId: selectedRoom.id, targetUserId: other, isCaller: true, offer: null });
               }
             }}>📞</button>
-            <button className="icon-btn header-menu-btn" onClick={() => setShowHeaderMenu(v=>!v)} title="メニュー">⋯</button>
+            <button className="icon-btn header-menu-btn" onClick={() => dispatchModal({ type: 'TOGGLE', key: 'showHeaderMenu' })} title="メニュー">⋯</button>
             {showHeaderMenu && (
               <div className="header-menu-dropdown" onClick={() => setShowHeaderMenu(false)}>
                 {[
@@ -1966,19 +1983,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               backgroundColor: chatBg.startsWith('#') ? chatBg : undefined,
               backgroundSize: 'cover', backgroundPosition: 'center',
             } : {}}>
-            {messages.reduce((acc, msg, i) => {
-              const d = new Date(msg.createdAt || msg.created_at);
-              if (isNaN(d.getTime())) { acc.push(renderMessage(msg, i)); return acc; }
-              const dateStr = d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
-              const prevMsg = messages[i - 1];
-              const prevD = prevMsg ? new Date(prevMsg.createdAt || prevMsg.created_at) : null;
-              const prevDate = prevD && !isNaN(prevD.getTime()) ? prevD.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' }) : null;
-              if (!prevDate || prevDate !== d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' })) {
-                acc.push(<div key={`date-${i}`} className="date-divider">{dateStr}</div>);
-              }
-              acc.push(renderMessage(msg, i));
-              return acc;
-            }, [])}
+            {renderedMessages}
             {typingUsers.length > 0 && (
               <div className="typing-indicator">
                 <span className="typing-dots"><span/><span/><span/></span>
