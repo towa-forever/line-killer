@@ -693,7 +693,7 @@ app.get('/api/read-later', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
-    const msgs = await Message.find({ id: { $in: user?.read_later || [] } }).limit(100);
+    const msgs = await Message.find({ id: { $in: user?.read_later || [] } }).limit(100).lean();
     res.json(msgs);
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -806,12 +806,12 @@ app.get('/api/ice-servers', (req, res) => {
 app.post('/api/rooms/:roomId/invite', async (req, res) => {
   try {
     const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    let room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1, invite_code: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
     if (!room.invite_code) {
-      
-      room.invite_code = uuidv4().replace(/-/g, '').slice(0, 12);
-      await room.save();
+      const code = uuidv4().replace(/-/g, '').slice(0, 12);
+      await Room.updateOne({ id: req.params.roomId }, { $set: { invite_code: code } });
+      room = { ...room, invite_code: code };
     }
     res.json({ inviteCode: room.invite_code, inviteUrl: `${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/invite/${room.invite_code}` });
   } catch { res.status(401).json({ error: '認証エラー' }); }
@@ -1038,7 +1038,7 @@ app.get('/api/users/search', async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     auth(req); // 認証必須
-    const users = await User.find({}, { id: 1, username: 1, display_name: 1, avatar: 1, status: 1, is_official: 1 }).limit(500);
+    const users = await User.find({}, { id: 1, username: 1, display_name: 1, avatar: 1, status: 1, is_official: 1 }).limit(500).lean();
     res.json(users);
   } catch (e) { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -1174,8 +1174,8 @@ app.post('/api/friend-requests/:requestId/reject', async (req, res) => {
 app.get('/api/friends', async (req, res) => {
   try {
     const decoded = auth(req);
-    const friends = await Friend.find({ user_id: decoded.id });
-    const users = await User.find({ id: { $in: friends.map(f => f.friend_id) } }, { password: 0 });
+    const friends = await Friend.find({ user_id: decoded.id }).lean();
+    const users = await User.find({ id: { $in: friends.map(f => f.friend_id) } }, { password: 0 }).lean();
     // idフィールドを確実に含める（MongoDBの_idとカスタムidを両方返す）
     const result = users.map(u => ({
       id: u.id,
@@ -1255,7 +1255,7 @@ app.get('/api/bookmarks', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
-    const msgs = await Message.find({ id: { $in: user.bookmarked_messages || [] } }).limit(100);
+    const msgs = await Message.find({ id: { $in: user.bookmarked_messages || [] } }).limit(100).lean();
     res.json(msgs.map(m => ({ id: m.id, content: m.content, type: m.type, senderId: m.sender_id, senderName: m.sender_name, roomId: m.room_id, createdAt: m.created_at })));
   } catch { res.status(400).json({ error: 'エラー' }); }
 });
@@ -1384,7 +1384,7 @@ app.delete('/api/posts/:postId/comments/:commentId', async (req, res) => {
 app.get('/api/rooms', async (req, res) => {
   try {
     const decoded = auth(req);
-    const rooms = await Room.find({ members: decoded.id });
+    const rooms = await Room.find({ members: decoded.id }).lean();
     if (rooms.length === 0) return res.json([]);
 
     const roomIds = rooms.map(r => r.id);
@@ -1392,7 +1392,7 @@ app.get('/api/rooms', async (req, res) => {
     // 全メンバーIDを収集して一括取得（N+1解消）
     const allMemberIds = [...new Set(rooms.flatMap(r => r.members))];
     const [allUsers, lastMsgs] = await Promise.all([
-      User.find({ id: { $in: allMemberIds } }, { id: 1, username: 1, display_name: 1, avatar: 1 }),
+      User.find({ id: { $in: allMemberIds } }, { id: 1, username: 1, display_name: 1, avatar: 1 }).lean(),
       // 各ルームの最新メッセージを集約で一括取得
       Message.aggregate([
         { $match: { room_id: { $in: roomIds }, deleted: false } },
@@ -1551,7 +1551,7 @@ app.post('/api/rooms/:roomId/forward', async (req, res) => {
   try {
     const decoded = auth(req);
     const { content, type, fileData } = req.body;
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
     const id = uuidv4();
     const msg = await Message.create({
@@ -1589,13 +1589,13 @@ app.patch('/api/rooms/:roomId/pin', async (req, res) => {
 app.get('/api/rooms/:roomId/messages', async (req, res) => {
   try {
     const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const before = req.query.before; // ページネーション用
     const query = { room_id: req.params.roomId };
     if (before) query.created_at = { $lt: new Date(before) };
-    const msgs = await Message.find(query).sort({ created_at: -1 }).limit(limit).then(r => r.reverse());
+    const msgs = await Message.find(query).sort({ created_at: -1 }).limit(limit).lean().then(r => r.reverse());
     // senderId/senderNameに統一して返す（clietとの整合性）
     res.json(msgs.map(m => ({
       id: m.id, room_id: m.room_id,
@@ -1618,7 +1618,7 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
 app.get('/api/rooms/:roomId/search', async (req, res) => {
   try {
     const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
     const q = req.query.q || '';
     const sender = req.query.sender || '';
@@ -1634,7 +1634,7 @@ app.get('/api/rooms/:roomId/search', async (req, res) => {
       const end = new Date(date); end.setHours(23, 59, 59, 999);
       query.created_at = { $gte: start, $lte: end };
     }
-    const msgs = await Message.find(query).sort({ created_at: -1 }).limit(100);
+    const msgs = await Message.find(query).sort({ created_at: -1 }).limit(100).lean();
     res.json(msgs.reverse().map(m => ({
       id: m.id, content: m.content, type: m.type,
       senderId: m.sender_id, senderName: m.sender_name,
@@ -1649,7 +1649,7 @@ app.get('/api/rooms/:roomId/search', async (req, res) => {
 app.get('/api/rooms/:roomId/note/shared', async (req, res) => {
   try {
     const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
     const note = await Note.findOne({ room_id: req.params.roomId, user_id: null });
     res.json({ content: note?.content || '', updatedBy: note?.updated_by || null, updatedAt: note?.updated_at || null });
@@ -1660,7 +1660,7 @@ app.get('/api/rooms/:roomId/note/shared', async (req, res) => {
 app.put('/api/rooms/:roomId/note/shared', async (req, res) => {
   try {
     const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
     const note = await Note.findOneAndUpdate(
       { room_id: req.params.roomId, user_id: null },
@@ -1677,7 +1677,7 @@ app.put('/api/rooms/:roomId/note/shared', async (req, res) => {
 app.get('/api/rooms/:roomId/note/mine', async (req, res) => {
   try {
     const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
     const note = await Note.findOne({ room_id: req.params.roomId, user_id: decoded.id });
     res.json({ content: note?.content || '' });
@@ -1688,7 +1688,7 @@ app.get('/api/rooms/:roomId/note/mine', async (req, res) => {
 app.put('/api/rooms/:roomId/note/mine', async (req, res) => {
   try {
     const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
     await Note.findOneAndUpdate(
       { room_id: req.params.roomId, user_id: decoded.id },
@@ -1703,7 +1703,7 @@ app.put('/api/rooms/:roomId/note/mine', async (req, res) => {
 app.get('/api/album', async (req, res) => {
   try {
     const decoded = auth(req);
-    const rooms = await Room.find({ members: decoded.id });
+    const rooms = await Room.find({ members: decoded.id }).lean();
     const roomIds = rooms.map(r => r.id);
     const roomMap = Object.fromEntries(rooms.map(r => [r.id, r.name || 'ルーム']));
     const imgs = await Message.find({ room_id: { $in: roomIds }, type: { $in: ['image', 'file'] }, deleted: false })
@@ -1715,9 +1715,9 @@ app.get('/api/album', async (req, res) => {
 app.get('/api/rooms/:roomId/album', async (req, res) => {
   try {
     const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
-    const imgs = await Message.find({ room_id: req.params.roomId, type: { $in: ['image', 'file'] }, deleted: false }).sort({ created_at: -1 }).limit(200);
+    const imgs = await Message.find({ room_id: req.params.roomId, type: { $in: ['image', 'file'] }, deleted: false }).sort({ created_at: -1 }).limit(200).lean();
     res.json(imgs);
   } catch { res.status(401).json({ error: '認証エラー' }); }
 });
@@ -1755,7 +1755,7 @@ io.on('connection', async (socket) => {
   if (!io.onlineUsers) io.onlineUsers = new Map();
   io.onlineUsers.set(socket.user.id, { name: socket.user.username, since: Date.now() });
   io.emit('user:online', { userId: socket.user.id });
-  const myRooms = await Room.find({ members: socket.user.id });
+  const myRooms = await Room.find({ members: socket.user.id }, { id: 1 }).lean();
   myRooms.forEach(r => socket.join(r.id));
 
   socket.on('room:join', async (roomId) => {
@@ -1780,7 +1780,7 @@ io.on('connection', async (socket) => {
     // バリデーション: テキストは4000文字まで、空メッセージはファイル系のみ許可
     if (type === 'text' && (!content || !content.trim())) return;
     if (content && content.length > 4000) return;
-    const room = await Room.findOne({ id: roomId, members: socket.user.id });
+    const room = await Room.findOne({ id: roomId, members: socket.user.id }, { id: 1, members: 1, name: 1 }).lean();
     if (!room) return;
     const id = uuidv4();
     const msg = await Message.create({
@@ -2132,7 +2132,7 @@ app.get('/api/search', async (req, res) => {
     const q = req.query.q || '';
     if (!q.trim()) return res.json([]);
     // 自分が参加しているルームを取得
-    const rooms = await Room.find({ members: decoded.id });
+    const rooms = await Room.find({ members: decoded.id }).lean();
     const roomIds = rooms.map(r => r.id);
     const roomMap = Object.fromEntries(rooms.map(r => [r.id, r]));
     // 全ルームのメッセージを検索
@@ -2140,7 +2140,7 @@ app.get('/api/search', async (req, res) => {
     const msgs = await Message.find({
       room_id: { $in: roomIds }, deleted: false,
       $or: [{ content: new RegExp(safeQ, 'i') }, { sender_name: new RegExp(safeQ, 'i') }]
-    }).sort({ created_at: -1 }).limit(50);
+    }).sort({ created_at: -1 }).limit(50).lean();
     res.json(msgs.map(m => ({
       id: m.id, content: m.content, type: m.type,
       senderId: m.sender_id, senderName: m.sender_name,
@@ -2154,19 +2154,23 @@ app.get('/api/search', async (req, res) => {
 app.get('/api/dashboard', async (req, res) => {
   try {
     const decoded = auth(req);
-    const rooms = await Room.find({ members: decoded.id });
+    const rooms = await Room.find({ members: decoded.id }).lean();
     const roomIds = rooms.map(r => r.id);
     // 未読メッセージ数（ルームごと）
-    const unreadByRoom = await Promise.all(rooms.map(async r => {
-      const count = await Message.countDocuments({ room_id: r.id, deleted: false, read_by: { $ne: decoded.id }, sender_id: { $ne: decoded.id } });
-      return { roomId: r.id, roomName: r.name, count };
-    }));
+    // 未読数をaggregateで一括取得（N+1解消）
+    const unreadAgg = await Message.aggregate([
+      { $match: { room_id: { $in: roomIds }, deleted: false, read_by: { $ne: decoded.id }, sender_id: { $ne: decoded.id } } },
+      { $group: { _id: '$room_id', count: { $sum: 1 } } }
+    ]);
+    const unreadMap = Object.fromEntries(unreadAgg.map(r => [r._id, r.count]));
+    const roomNameMap = Object.fromEntries(rooms.map(r => [r.id, r.name]));
+    const unreadByRoom = Object.entries(unreadMap).map(([roomId, count]) => ({ roomId, roomName: roomNameMap[roomId] || '', count }));
     // 未完了タスク
-    const tasks = await Task.find({ room_id: { $in: roomIds }, done: false }).sort({ due: 1 }).limit(5);
+    const tasks = await Task.find({ room_id: { $in: roomIds }, done: false }).sort({ due: 1 }).limit(5).lean();
     // 今後のイベント
-    const events = await Event.find({ room_id: { $in: roomIds }, start_at: { $gte: new Date() } }).sort({ start_at: 1 }).limit(5);
+    const events = await Event.find({ room_id: { $in: roomIds }, start_at: { $gte: new Date() } }).sort({ start_at: 1 }).limit(5).lean();
     // スケジュール送信
-    const scheduled = await ScheduledMessage.find({ sender_id: decoded.id, sent: false }).sort({ send_at: 1 }).limit(3);
+    const scheduled = await ScheduledMessage.find({ sender_id: decoded.id, sent: false }).sort({ send_at: 1 }).limit(3).lean();
     res.json({
       unread: unreadByRoom.filter(r => r.count > 0),
       tasks: tasks.map(t => ({ id: t.id, title: t.title, roomId: t.room_id, due: t.due, assigneeName: t.assignee_name })),
@@ -2202,7 +2206,7 @@ app.post('/api/rooms/:roomId/events', async (req, res) => {
     const decoded = auth(req);
     
     const { title, description, startAt, endAt } = req.body;
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
     const event = await Event.create({
       id: 'evt_' + uuidv4(), room_id: req.params.roomId, creator_id: decoded.id,
@@ -2239,9 +2243,9 @@ app.patch('/api/events/:eventId/attend', async (req, res) => {
 app.get('/api/rooms/:roomId/stats', async (req, res) => {
   try {
     const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
-    const msgs = await Message.find({ room_id: req.params.roomId, deleted: false }).sort({ created_at: -1 }).limit(2000);
+    const msgs = await Message.find({ room_id: req.params.roomId, deleted: false }).sort({ created_at: -1 }).limit(2000).lean();
     // 送信数ランキング
     const countMap = {};
     const typeMap = {};
@@ -2530,7 +2534,7 @@ app.post('/api/rooms/:roomId/schedule', async (req, res) => {
     const sendTime = new Date(sendAt);
     if (isNaN(sendTime.getTime())) return res.status(400).json({ error: '日時の形式が正しくありません' });
     if (sendTime <= new Date()) return res.status(400).json({ error: '送信日時は未来の日時を指定してください' });
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id });
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
     const user = await User.findOne({ id: decoded.id });
     const msg = await ScheduledMessage.create({
