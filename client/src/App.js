@@ -2044,6 +2044,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             showLocation={showLocation}
             showSecret={showSecret}
             showStylePicker={showStylePicker}
+            setShowStylePicker={setShowStylePicker}
             msgStyle={msgStyle}
             lang={lang}
             setLang={setLang}
@@ -2089,15 +2090,15 @@ const InputArea = React.memo(function InputArea({
   handleSendStamp, mentionSuggestions, replyTo, setReplyTo,
   fileInputRef, showInputMenu, setShowInputMenu,
   showStampPanel, setShowStampPanel, showVoice, showLocation, showSecret,
-  showStylePicker, msgStyle, lang, setLang,
+  showStylePicker, setShowStylePicker, msgStyle, lang, setLang,
   setShowVoice, setShowLocation, setShowSecret,
   setShowPollCreator, setShowSchedule, setScheduleText,
   selectedRoom, socket, currentUser, soundTheme, myStampSets, allStampSets, acquiredStampIds, showToast,
 }) {
   return (
-<div className="input-area">
-  {/* @メンション候補 */}
-  {mentionSuggestions.length > 0 && (
+    <div className="input-area">
+      {/* @メンション候補 */}
+      {mentionSuggestions.length > 0 && (
     <div style={{
       position:'absolute', bottom:'100%', left:0, right:0, background:'var(--surface)',
       border:'1px solid var(--border)', borderRadius:'12px 12px 0 0', boxShadow:'0 -4px 16px rgba(0,0,0,0.12)',
@@ -2119,8 +2120,8 @@ const InputArea = React.memo(function InputArea({
         </button>
       ))}
     </div>
-  )}
-  {replyTo && (
+      )}
+      {replyTo && (
     <div className="reply-bar">
       <div className="reply-bar-content">
         <span className="reply-bar-name">↩ {replyTo.senderName}</span>
@@ -2128,8 +2129,8 @@ const InputArea = React.memo(function InputArea({
       </div>
       <button className="reply-bar-close" onClick={() => setReplyTo(null)}>✕</button>
     </div>
-  )}
-  {showStampPanel && (
+      )}
+      {showStampPanel && (
     <div className="stamp-panel">
       {myStampSets.length === 0
         ? <span className="no-stamps">ショップでスタンプを追加しよう！</span>
@@ -2142,15 +2143,15 @@ const InputArea = React.memo(function InputArea({
         ))
       }
     </div>
-  )}
-  {/* 音声メッセージ */}
-  {showVoice && <ErrorBoundary><VoiceMessage roomId={selectedRoom.id} currentUser={currentUser} socket={socket} onSent={() => setShowVoice(false)} onCancel={() => setShowVoice(false)} /></ErrorBoundary>}
-  {/* 位置情報 */}
-  {showLocation && <ErrorBoundary><LocationShare socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowLocation(false)} onCancel={() => setShowLocation(false)} /></ErrorBoundary>}
-  {/* 秘密メッセージ */}
-  {showSecret && <ErrorBoundary><Suspense fallback={null}><SecretMessage socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowSecret(false)} onCancel={() => setShowSecret(false)} /></Suspense></ErrorBoundary>}
-  {/* 文字スタイルパネル */}
-  {showStylePicker && (
+      )}
+      {/* 音声メッセージ */}
+      {showVoice && <ErrorBoundary><VoiceMessage roomId={selectedRoom.id} currentUser={currentUser} socket={socket} onSent={() => setShowVoice(false)} onCancel={() => setShowVoice(false)} /></ErrorBoundary>}
+      {/* 位置情報 */}
+      {showLocation && <ErrorBoundary><LocationShare socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowLocation(false)} onCancel={() => setShowLocation(false)} /></ErrorBoundary>}
+      {/* 秘密メッセージ */}
+      {showSecret && <ErrorBoundary><Suspense fallback={null}><SecretMessage socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowSecret(false)} onCancel={() => setShowSecret(false)} /></Suspense></ErrorBoundary>}
+      {/* 文字スタイルパネル */}
+      {showStylePicker && (
     <div style={{ padding:'10px 12px', background:'var(--surface2)', borderTop:'1px solid var(--border)', display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
       <span style={{ fontSize:12, color:'var(--text2)', fontWeight:600 }}>フォント:</span>
       {[['default','デフォルト'],['serif','明朝体'],['monospace','等幅'],['cursive','手書き']].map(([f,label]) => (
@@ -2163,8 +2164,8 @@ const InputArea = React.memo(function InputArea({
           style={{ padding:'4px 10px', borderRadius:10, border:'1.5px solid', borderColor: lang===l?'var(--primary)':'var(--border)', background: lang===l?'var(--primary)':'transparent', color: lang===l?'white':'var(--text)', fontSize:14, cursor:'pointer' }}>{flag}</button>
       ))}
     </div>
-  )}
-  <div className="input-row">
+      )}
+      <div className="input-row">
     <button className="plus-btn icon-btn" onClick={() => setShowInputMenu(v=>!v)} title="その他">
       {showInputMenu ? '✕' : '➕'}
     </button>
@@ -2174,8 +2175,8 @@ const InputArea = React.memo(function InputArea({
       onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
       placeholder={lang === "en" ? "Type a message..." : lang === "zh" ? "输入消息..." : lang === "ko" ? "메시지 입력..." : "メッセージを入力..."} rows={1} />
     <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>➤</button>
-  </div>
-  {showInputMenu && (
+      </div>
+      {showInputMenu && (
     <div className="input-menu-grid" style={{
       position:'fixed', left:0, right:0,
       bottom: 'calc(env(safe-area-inset-bottom) + 56px)',
@@ -2205,8 +2206,8 @@ const InputArea = React.memo(function InputArea({
         </button>
       ))}
     </div>
-  )}
-</div>
+      )}
+    </div>
   );
 });
 
