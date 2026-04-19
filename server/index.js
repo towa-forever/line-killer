@@ -2550,14 +2550,14 @@ app.post('/api/rooms/:roomId/schedule', async (req, res) => {
 app.get('/api/rooms/:roomId/schedules', async (req, res) => {
   try {
     const decoded = auth(req);
-    const msgs = await ScheduledMessage.find({ room_id: req.params.roomId, sender_id: decoded.id, sent: false }).sort({ send_at: 1 });
+    const msgs = await ScheduledMessage.find({ room_id: req.params.roomId, sender_id: decoded.id, sent: false }).sort({ send_at: 1 }).lean();
     res.json(msgs);
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 app.get('/api/rooms/:roomId/scheduled', async (req, res) => {
   try {
     const decoded = auth(req);
-    const msgs = await ScheduledMessage.find({ room_id: req.params.roomId, sender_id: decoded.id, sent: false }).sort({ send_at: 1 });
+    const msgs = await ScheduledMessage.find({ room_id: req.params.roomId, sender_id: decoded.id, sent: false }).sort({ send_at: 1 }).lean();
     res.json(msgs);
   } catch(e) { res.status(400).json({ error: e.message }); }
 });

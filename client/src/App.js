@@ -900,10 +900,6 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, [msgMenu, socket, selectedRoom]);
 
   // 呼び出し系ボタン
-  const handleStartCall = useCallback(() => {
-    if (!selectedRoom || !socket) return;
-    socket.emit('call:start', { roomId: selectedRoom.id, targetUserId: selectedRoom.members?.find(m => m !== currentUser.id) });
-  }, [selectedRoom, socket, currentUser.id]);
 
   const renderMessage = useCallback((msg) => {
     const isMine = (msg.senderId || msg.sender_id) === currentUser.id;
