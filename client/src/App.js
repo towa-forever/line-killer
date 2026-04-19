@@ -865,6 +865,46 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     setTimeout(() => ta?.focus(), 0);
   }, [inputText]);
 
+  // ヘッダー系
+  const handleBackToList = useCallback(() => setSelectedRoom(null), []);
+  const handleOpenRoomSettings = useCallback(() => setShowRoomSettings(true), []);
+  const handleCloseRoomSettings = useCallback(() => setShowRoomSettings(false), []);
+  const handleSearchToggle = useCallback(() => {
+    setShowSearch(v => !v);
+    setSearchQuery('');
+    setSearchResults([]);
+  }, []);
+  const handleCloseMsgMenu = useCallback(() => setMsgMenu(null), []);
+  const handleCloseConfirm = useCallback(() => setConfirmDialog(null), []);
+  const handleConfirmOk = useCallback(() => {
+    confirmDialog?.onOk();
+    setConfirmDialog(null);
+  }, [confirmDialog]);
+
+  // グローバル検索
+  const handleGlobalSearch = useCallback(() => {
+    if (!globalQuery.trim()) return;
+    setGlobalSearching(true);
+    axios.get('/api/search?q=' + encodeURIComponent(globalQuery))
+      .then(r => { setGlobalResults(r.data); setGlobalSearching(false); })
+      .catch(() => setGlobalSearching(false));
+  }, [globalQuery]);
+  const handleCloseGlobalSearch = useCallback(() => setShowGlobalSearch(false), []);
+  const handleCloseFavorites = useCallback(() => setShowFavorites(false), []);
+
+  // リアクション（msgMenu用）
+  const handleReactFromMenu = useCallback((emoji) => {
+    if (!msgMenu) return;
+    socket?.emit('message:react', { messageId: msgMenu.msg.id, roomId: selectedRoom?.id, emoji });
+    setMsgMenu(null);
+  }, [msgMenu, socket, selectedRoom]);
+
+  // 呼び出し系ボタン
+  const handleStartCall = useCallback(() => {
+    if (!selectedRoom || !socket) return;
+    socket.emit('call:start', { roomId: selectedRoom.id, targetUserId: selectedRoom.members?.find(m => m !== currentUser.id) });
+  }, [selectedRoom, socket, currentUser.id]);
+
   const renderMessage = useCallback((msg) => {
     const isMine = (msg.senderId || msg.sender_id) === currentUser.id;
     // 投票メッセージ
@@ -1145,11 +1185,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       <div className={`message-area ${selectedRoom ? "visible" : ""}`}>
         {selectedRoom && <>
           <div className="chat-header">
-            <button className="icon-btn back-btn" onClick={() => setSelectedRoom(null)}>←</button>
-            <div className="chat-header-name" onClick={() => setShowRoomSettings(true)} style={{ cursor:'pointer' }}>
+            <button className="icon-btn back-btn" onClick={handleBackToList}>←</button>
+            <div className="chat-header-name" onClick={handleOpenRoomSettings} style={{ cursor:'pointer' }}>
               {selectedRoom.name} <span style={{ fontSize:12, color:'var(--text2)' }}>⚙️</span>
             </div>
-            <button className="icon-btn" onClick={() => { setShowSearch(!showSearch); setSearchQuery(''); setSearchResults([]); }}>🔍</button>
+            <button className="icon-btn" onClick={handleSearchToggle}>🔍</button>
             <button className="call-icon-btn" onClick={() => {
               if (selectedRoom.members?.length > 2) {
                 setGroupCall && setGroupCall({ roomId: selectedRoom.id, members: selectedRoom.members, roomName: selectedRoom.name });
@@ -1205,7 +1245,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           </div>
           {showNote && <Portal><ErrorBoundary><Suspense fallback={null}><Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} /></Suspense></ErrorBoundary></Portal>}
           <Portal>{showRoomSettings && (
-            <div className="modal-overlay" onClick={() => setShowRoomSettings(false)}>
+            <div className="modal-overlay" onClick={handleCloseRoomSettings}>
               <div className="modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-title">⚙️ トーク設定</div>
                 {/* アイコン変更 */}
@@ -1235,13 +1275,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 {/* グループ名変更 */}
                 <RoomNameEditor room={selectedRoom} onClose={() => setShowRoomSettings(false)} />
                 <div className="modal-actions">
-                  <button className="btn btn-secondary" onClick={() => setShowRoomSettings(false)}>閉じる</button>
+                  <button className="btn btn-secondary" onClick={handleCloseRoomSettings}>閉じる</button>
                 </div>
               </div>
             </div>
           )}</Portal>
           <Portal>{msgMenu && (
-            <div style={{ position:'fixed', inset:0, zIndex:3000, background:'rgba(0,0,0,0.4)' }} onClick={() => setMsgMenu(null)}>
+            <div style={{ position:'fixed', inset:0, zIndex:3000, background:'rgba(0,0,0,0.4)' }} onClick={handleCloseMsgMenu}>
               {/* リアクションバー */}
               <div style={{
                 position:'fixed',
@@ -1252,7 +1292,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 boxShadow:'0 4px 24px rgba(0,0,0,0.25)', zIndex:3002
               }} onClick={e => e.stopPropagation()}>
                 {QUICK_REACTIONS.map(emoji => (
-                  <button key={emoji} onClick={() => { socket.emit('message:react', { messageId: msgMenu.msg.id, roomId: selectedRoom.id, emoji }); setMsgMenu(null); }}
+                  <button key={emoji} onClick={() => handleReactFromMenu(emoji)}
                     style={{ fontSize:26, padding:'4px 6px', border:'none', background:'none', cursor:'pointer', borderRadius:12, WebkitTapHighlightColor:'transparent' }}>{emoji}
                   </button>
                 ))}
@@ -1342,18 +1382,18 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           {/* カスタム確認ダイアログ */}
       <Portal>{confirmDialog && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
-          onClick={() => setConfirmDialog(null)}>
+          onClick={handleCloseConfirm}>
           <div style={{ background:'var(--surface)', borderRadius:20, padding:24, width:'100%', maxWidth:320, boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontSize:15, fontWeight:500, color:'var(--text)', marginBottom:20, textAlign:'center', lineHeight:1.6 }}>
               {confirmDialog.message}
             </div>
             <div style={{ display:'flex', gap:10 }}>
-              <button onClick={() => setConfirmDialog(null)}
+              <button onClick={handleCloseConfirm}
                 style={{ flex:1, padding:'12px', borderRadius:12, background:'var(--surface2)', color:'var(--text)', border:'none', fontSize:15, fontWeight:600, cursor:'pointer' }}>
                 キャンセル
               </button>
-              <button onClick={() => { confirmDialog.onOk(); setConfirmDialog(null); }}
+              <button onClick={handleConfirmOk}
                 style={{ flex:1, padding:'12px', borderRadius:12, background:'var(--danger)', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer' }}>
                 OK
               </button>
@@ -1378,7 +1418,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       )}</Portal>
       {showMiniGame && <Portal><ErrorBoundary><Suspense fallback={null}><MiniGame onSendResult={text => { socket?.emit('message:send', { roomId: selectedRoom?.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense></ErrorBoundary></Portal>}
           <Portal>{showFavorites && (
-            <div className="modal-overlay" onClick={() => setShowFavorites(false)}>
+            <div className="modal-overlay" onClick={handleCloseFavorites}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
                 <div className="modal-title">⭐ お気に入り</div>
                 {favoritesList.length === 0
@@ -1394,26 +1434,19 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     </div>
                   ))
                 }
-                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowFavorites(false)}>閉じる</button>
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={handleCloseFavorites}>閉じる</button>
               </div>
             </div>
           )}</Portal>
           <Portal>{showGlobalSearch && (
-            <div className="modal-overlay" onClick={() => setShowGlobalSearch(false)}>
+            <div className="modal-overlay" onClick={handleCloseGlobalSearch}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'85vh', display:'flex', flexDirection:'column' }}>
                 <div className="modal-title">🔍 全トーク検索</div>
                 <div style={{ display:'flex', gap:8, marginBottom:12 }}>
                   <input className="form-input" style={{ flex:1, marginBottom:0 }} value={globalQuery}
                     onChange={e => setGlobalQuery(e.target.value)} placeholder="キーワードを入力..."
-                    onKeyDown={e => { if (e.key === 'Enter' && globalQuery.trim()) {
-                      setGlobalSearching(true);
-                      axios.get('/api/search?q=' + encodeURIComponent(globalQuery)).then(r => { setGlobalResults(r.data); setGlobalSearching(false); }).catch(() => setGlobalSearching(false));
-                    }}} autoFocus />
-                  <button className="btn btn-primary" style={{ padding:'0 14px' }} onClick={() => {
-                    if (!globalQuery.trim()) return;
-                    setGlobalSearching(true);
-                    axios.get('/api/search?q=' + encodeURIComponent(globalQuery)).then(r => { setGlobalResults(r.data); setGlobalSearching(false); }).catch(() => setGlobalSearching(false));
-                  }}>検索</button>
+                    onKeyDown={e => { if (e.key === 'Enter') handleGlobalSearch(); }} autoFocus />
+                  <button className="btn btn-primary" style={{ padding:'0 14px' }} onClick={handleGlobalSearch}>検索</button>
                 </div>
                 <div style={{ overflowY:'auto', flex:1 }}>
                   {globalSearching && <div style={{ textAlign:'center', color:'var(--text2)', padding:20 }}>検索中...</div>}
@@ -1441,7 +1474,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     </div>
                   ))}
                 </div>
-                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowGlobalSearch(false)}>閉じる</button>
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={handleCloseGlobalSearch}>閉じる</button>
               </div>
             </div>
           )}</Portal>
