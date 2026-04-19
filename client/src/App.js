@@ -1083,7 +1083,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         </div>
       </div>
     );
-  }, [currentUser, polls, selectedRoom, onlineUsers, bookmarks, socket, setReplyTo, showToast, soundTheme]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentUser, polls, selectedRoom, onlineUsers, bookmarks, socket, setReplyTo, showToast, soundTheme, msgStyle, translating, replyTo, readByDetailMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // メッセージリスト全体をuseMemoでキャッシュ（messages/translating/editingMessage変化時のみ再計算）
   const renderedMessages = React.useMemo(() => {

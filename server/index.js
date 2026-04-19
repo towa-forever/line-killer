@@ -457,7 +457,7 @@ app.post('/api/auth/recovery-email', async (req, res) => {
     if (!email || !email.includes('@')) return res.status(400).json({ error: '正しいメールアドレスを入力してください' });
     await User.findOneAndUpdate({ id: decoded.id }, { recovery_email: email.trim().toLowerCase() }, {returnDocument:'after'});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // リカバリーメール確認（パスワードリセット用）
@@ -498,7 +498,7 @@ app.post('/api/auth/secret-question', async (req, res) => {
     const hashed = await bcrypt.hash(answer.trim().toLowerCase(), 10);
     await User.findOneAndUpdate({ id: decoded.id }, { secret_question: question, secret_answer: hashed }, {returnDocument:'after'});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== 2段階認証（PIN） =====
@@ -510,7 +510,7 @@ app.post('/api/auth/pin/setup', async (req, res) => {
     const hashed = await bcrypt.hash(pin, 10);
     await User.findOneAndUpdate({ id: decoded.id }, { pin_code: hashed, pin_enabled: true }, {returnDocument:'after'});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.post('/api/auth/pin/disable', async (req, res) => {
@@ -518,7 +518,7 @@ app.post('/api/auth/pin/disable', async (req, res) => {
     const decoded = auth(req);
     await User.findOneAndUpdate({ id: decoded.id }, { pin_code: '', pin_enabled: false }, {returnDocument:'after'});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.post('/api/auth/pin/verify', async (req, res) => {
@@ -529,7 +529,7 @@ app.post('/api/auth/pin/verify', async (req, res) => {
     const ok = await bcrypt.compare(String(req.body.pin), user.pin_code);
     if (!ok) return res.status(401).json({ error: 'PINが違います' });
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== パスワード変更 =====
@@ -555,7 +555,7 @@ app.get('/api/auth/login-history', async (req, res) => {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
     res.json(user?.login_history?.slice(-10).reverse() || []);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== 認証 =====
@@ -629,7 +629,7 @@ app.get('/api/auth/me', async (req, res) => {
       blockedUsers: user.blocked_users || [], showOnline: user.show_online !== false,
       coins: user.coins || 0,
     }});
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // /api/users/me のエイリアス（GETのみ）
@@ -647,7 +647,7 @@ app.get('/api/users/me', async (req, res) => {
       pinEnabled: user.pin_enabled || false, secretQuestion: user.secret_question || '',
       blockedUsers: user.blocked_users || [], coins: user.coins || 0,
     });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== 下書き保存 =====
@@ -661,7 +661,7 @@ app.put('/api/drafts/:roomId', async (req, res) => {
     else delete drafts[req.params.roomId];
     await User.findOneAndUpdate({ id: decoded.id }, { drafts }, {returnDocument:'after'});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.get('/api/drafts', async (req, res) => {
@@ -669,7 +669,7 @@ app.get('/api/drafts', async (req, res) => {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
     res.json(user?.drafts || {});
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== 後で読む =====
@@ -678,7 +678,7 @@ app.post('/api/read-later/:msgId', async (req, res) => {
     const decoded = auth(req);
     await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { read_later: req.params.msgId } }, {returnDocument:'after'});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.delete('/api/read-later/:msgId', async (req, res) => {
@@ -686,7 +686,7 @@ app.delete('/api/read-later/:msgId', async (req, res) => {
     const decoded = auth(req);
     await User.findOneAndUpdate({ id: decoded.id }, { $pull: { read_later: req.params.msgId } }, {returnDocument:'after'});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.get('/api/read-later', async (req, res) => {
@@ -695,7 +695,7 @@ app.get('/api/read-later', async (req, res) => {
     const user = await User.findOne({ id: decoded.id });
     const msgs = await Message.find({ id: { $in: user?.read_later || [] } }).limit(100).lean();
     res.json(msgs);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== ギフト送信 =====
@@ -724,7 +724,7 @@ app.get('/api/users/me/coins', async (req, res) => {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
     res.json({ coins: user?.coins || 0, gift_sent: user?.gift_sent || 0, gift_received: user?.gift_received || 0 });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // Push通知API
@@ -741,7 +741,7 @@ app.post('/api/push/subscribe', async (req, res) => {
     // DBにも保存（再起動対策）
     PushSubscription.findOneAndUpdate({ user_id: decoded.id }, { user_id: decoded.id, subscription: req.body, updated_at: new Date() }, { upsert: true,returnDocument:'after'}).catch(() => {});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.delete('/api/push/subscribe', async (req, res) => {
@@ -752,7 +752,7 @@ app.delete('/api/push/subscribe', async (req, res) => {
     pushSubscriptions.delete(decoded.id);
     PushSubscription.deleteOne({ user_id: decoded.id }).catch(() => {});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.get('/api/stamps', (req, res) => res.json(STAMP_SETS));
@@ -763,7 +763,7 @@ app.post('/api/stamps/acquire', async (req, res) => {
     const { setId } = req.body;
     await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { acquired_stamps: setId } }, {returnDocument:'after'});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.get('/api/stamps/mysets', async (req, res) => {
@@ -778,7 +778,7 @@ app.get('/api/stamps/mysets', async (req, res) => {
       await User.findOneAndUpdate({ id: decoded.id }, { acquired_stamps: acquired }, {returnDocument:'after'});
     }
     res.json({ acquired });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ICEサーバー情報を提供（将来的に動的TURN認証に差し替え可能）
@@ -814,7 +814,7 @@ app.post('/api/rooms/:roomId/invite', async (req, res) => {
       room = { ...room, invite_code: code };
     }
     res.json({ inviteCode: room.invite_code, inviteUrl: `${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/invite/${room.invite_code}` });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.post('/api/invite/:code/join', async (req, res) => {
@@ -827,7 +827,7 @@ app.post('/api/invite/:code/join', async (req, res) => {
     await room.save();
     io.to('room_' + room.id).emit('room:member_joined', { roomId: room.id, userId: decoded.id, username: decoded.username });
     res.json({ ok: true, roomId: room.id, roomName: room.name });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== ユーザープロフィール表示 =====
@@ -846,7 +846,7 @@ app.get('/api/users/:username/profile', async (req, res) => {
       lastSeen: user.last_seen,
       showOnline: user.show_online !== false,
     });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== チャットテーマカラー =====
@@ -862,7 +862,7 @@ app.patch('/api/rooms/:roomId/theme', async (req, res) => {
     if (!room) return res.status(403).json({ error: '権限なし' });
     io.to('room_' + req.params.roomId).emit('room:theme_changed', { roomId: req.params.roomId, themeColor: themeColor || '' });
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== サブアカウント =====
@@ -875,7 +875,7 @@ app.get('/api/sub-accounts', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
     const subs = await User.find({ id: { $in: user.sub_accounts || [] } }, { password: 0 });
     res.json(subs.map(s => ({ id: s.id, username: s.username, displayName: s.display_name || s.username, avatar: s.avatar, bio: s.bio })));
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // サブアカ作成
@@ -932,7 +932,7 @@ app.post('/api/sub-accounts/:subId/switch', async (req, res) => {
       avatar: sub.avatar, bio: sub.bio || '', status: sub.status || '',
       parentAccountId: sub.parent_account_id,
     }});
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // サブアカ削除
@@ -945,7 +945,7 @@ app.delete('/api/sub-accounts/:subId', async (req, res) => {
     parent.sub_accounts = (parent.sub_accounts || []).filter(id => id !== req.params.subId);
     await parent.save();
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== お問い合わせ =====
@@ -984,7 +984,7 @@ app.get('/api/contact', async (req, res) => {
     if (!user || user.username !== ADMIN_USERNAME) return res.status(403).json({ error: '権限がありません' });
     const contacts = await Contact.find().sort({ created_at: -1 }).limit(100);
     res.json(contacts);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== パスワード照合（管理者投稿前確認用）=====
@@ -998,7 +998,7 @@ app.post('/api/auth/verify-password', async (req, res) => {
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ error: 'パスワードが違います' });
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // QRコードで友達追加（ユーザー名で検索して申請）
@@ -1032,7 +1032,7 @@ app.get('/api/users/search', async (req, res) => {
       { id: 1, username: 1, display_name: 1, avatar: 1, status: 1, bio: 1, is_official: 1 }
     ).limit(20);
     res.json(users);
-  } catch { res.status(401).json({ error: 'unauthorized' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.get('/api/users', async (req, res) => {
@@ -1040,7 +1040,7 @@ app.get('/api/users', async (req, res) => {
     auth(req); // 認証必須
     const users = await User.find({}, { id: 1, username: 1, display_name: 1, avatar: 1, status: 1, is_official: 1 }).limit(500).lean();
     res.json(users);
-  } catch (e) { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
@@ -1122,7 +1122,7 @@ app.get('/api/friend-requests', async (req, res) => {
       return { ...r.toObject(), from_avatar: fromUser?.avatar || null, from_display_name: fromUser?.display_name || r.from_name };
     }));
     res.json(withAvatar);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.post('/api/friend-requests', async (req, res) => {
@@ -1138,7 +1138,7 @@ app.post('/api/friend-requests', async (req, res) => {
     const request = await FriendRequest.create({ id, from_id: decoded.id, from_name: decoded.username, to_id: toId });
     io.to('user_' + toId).emit('friend:request', { id, from_id: decoded.id, from_name: decoded.username });
     res.json(request);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.post('/api/friend-requests/:requestId/accept', async (req, res) => {
@@ -1159,7 +1159,7 @@ app.post('/api/friend-requests/:requestId/accept', async (req, res) => {
     );
     io.to('user_' + request.from_id).emit('friend:accepted', { by_id: decoded.id, by_name: decoded.username });
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.post('/api/friend-requests/:requestId/reject', async (req, res) => {
@@ -1167,7 +1167,7 @@ app.post('/api/friend-requests/:requestId/reject', async (req, res) => {
     const decoded = auth(req);
     await FriendRequest.findOneAndUpdate({ id: req.params.requestId, to_id: decoded.id }, { status: 'rejected' }, {returnDocument:'after'});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // 友だち
@@ -1187,7 +1187,7 @@ app.get('/api/friends', async (req, res) => {
       bio: u.bio || '',
     }));
     res.json(result);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.delete('/api/friends/:friendId', async (req, res) => {
@@ -1196,7 +1196,7 @@ app.delete('/api/friends/:friendId', async (req, res) => {
     await Friend.deleteOne({ user_id: decoded.id, friend_id: req.params.friendId });
     await Friend.deleteOne({ user_id: req.params.friendId, friend_id: decoded.id });
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ブロック
@@ -1207,7 +1207,7 @@ app.post('/api/users/:userId/block', async (req, res) => {
     await Friend.deleteOne({ user_id: decoded.id, friend_id: req.params.userId });
     await Friend.deleteOne({ user_id: req.params.userId, friend_id: decoded.id });
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.delete('/api/users/:userId/block', async (req, res) => {
@@ -1215,7 +1215,7 @@ app.delete('/api/users/:userId/block', async (req, res) => {
     const decoded = auth(req);
     await User.findOneAndUpdate({ id: decoded.id }, { $pull: { blocked_users: req.params.userId } }, {returnDocument:'after'});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.get('/api/users/blocked', async (req, res) => {
@@ -1224,7 +1224,7 @@ app.get('/api/users/blocked', async (req, res) => {
     const user = await User.findOne({ id: decoded.id });
     const blocked = await User.find({ id: { $in: user.blocked_users || [] } }, { password: 0 });
     res.json(blocked);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // 通知OFF
@@ -1233,7 +1233,7 @@ app.post('/api/rooms/:roomId/mute', async (req, res) => {
     const decoded = auth(req);
     await User.findOneAndUpdate({ id: decoded.id }, { $addToSet: { muted_rooms: req.params.roomId } }, {returnDocument:'after'});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ブックマーク追加・削除
@@ -1279,7 +1279,7 @@ app.delete('/api/rooms/:roomId/mute', async (req, res) => {
     const decoded = auth(req);
     await User.findOneAndUpdate({ id: decoded.id }, { $pull: { muted_rooms: req.params.roomId } }, {returnDocument:'after'});
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // タイムライン
@@ -1288,7 +1288,7 @@ app.get('/api/posts', async (req, res) => {
     auth(req);
     const posts = await Post.find().sort({ created_at: -1 }).limit(50);
     res.json(posts);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.post('/api/posts', upload.single('image'), async (req, res) => {
@@ -1336,7 +1336,7 @@ app.post('/api/posts/:postId/like', async (req, res) => {
     const updated = await Post.findOne({ id: req.params.postId });
     io.emit('post:liked', { postId: req.params.postId, likes: updated.likes });
     res.json({ likes: updated.likes });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.post('/api/posts/:postId/comments', async (req, res) => {
@@ -1349,7 +1349,7 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
     io.emit('post:commented', { postId: req.params.postId, comment });
     const updatedPost = await Post.findOne({ id: req.params.postId });
     res.json({ comments: updatedPost.comments });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.delete('/api/posts/:postId', async (req, res) => {
@@ -1358,7 +1358,7 @@ app.delete('/api/posts/:postId', async (req, res) => {
     await Post.deleteOne({ id: req.params.postId, user_id: decoded.id });
     io.emit('post:deleted', { postId: req.params.postId });
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // コメント削除（自分のコメントのみ）
@@ -1377,7 +1377,7 @@ app.delete('/api/posts/:postId/comments/:commentId', async (req, res) => {
     );
     io.emit('post:comment_deleted', { postId: req.params.postId, commentId: req.params.commentId });
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // 部屋
@@ -1424,7 +1424,7 @@ app.get('/api/rooms', async (req, res) => {
     });
     roomsWithLast.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
     res.json(roomsWithLast);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== DM: 友達とのトークルームを取得または作成 =====
@@ -1492,7 +1492,7 @@ app.patch('/api/rooms/:roomId/name', async (req, res) => {
     if (!room) return res.status(403).json({ error: '権限なし' });
     io.to(req.params.roomId).emit('room:updated', { roomId: room.id, name: room.name, icon: room.icon });
     res.json(room);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.post('/api/rooms/:roomId/icon', upload.single('icon'), async (req, res) => {
@@ -1506,7 +1506,7 @@ app.post('/api/rooms/:roomId/icon', upload.single('icon'), async (req, res) => {
     if (!room) return res.status(403).json({ error: '権限なし' });
     io.to(req.params.roomId).emit('room:updated', { roomId: req.params.roomId, icon });
     res.json({ icon });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.post('/api/rooms/:roomId/members', async (req, res) => {
@@ -1525,7 +1525,7 @@ app.post('/api/rooms/:roomId/members', async (req, res) => {
     memberIds.forEach(mid => io.to('user_' + mid).emit('room:new', roomObj));
     io.to(req.params.roomId).emit('room:members_updated', { roomId: req.params.roomId, members: room.members });
     res.json({ members: room.members });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // メンバー削除API
@@ -1543,7 +1543,7 @@ app.delete('/api/rooms/:roomId/members/:userId', async (req, res) => {
     );
     io.to(req.params.roomId).emit('room:members_updated', { roomId: req.params.roomId, members: updated.members, removedId: req.params.userId });
     res.json({ members: updated.members });
-  } catch(e) { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // メッセージ転送API
@@ -1582,7 +1582,7 @@ app.patch('/api/rooms/:roomId/pin', async (req, res) => {
     if (!room) return res.status(403).json({ error: '権限なし' });
     io.to(req.params.roomId).emit('room:pinned', { roomId: req.params.roomId, messageId: messageId || null });
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // メッセージ
@@ -1612,7 +1612,7 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
       read_by: m.read_by, reactions: m.reactions,
       created_at: m.created_at, createdAt: m.created_at,
     })));
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.get('/api/rooms/:roomId/search', async (req, res) => {
@@ -1641,7 +1641,7 @@ app.get('/api/rooms/:roomId/search', async (req, res) => {
       createdAt: m.created_at, roomId: m.room_id,
       highlight: q,
     })));
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ノートAPI
@@ -1653,7 +1653,7 @@ app.get('/api/rooms/:roomId/note/shared', async (req, res) => {
     if (!room) return res.status(403).json({ error: '権限なし' });
     const note = await Note.findOne({ room_id: req.params.roomId, user_id: null });
     res.json({ content: note?.content || '', updatedBy: note?.updated_by || null, updatedAt: note?.updated_at || null });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // 共有ノート保存
@@ -1670,7 +1670,7 @@ app.put('/api/rooms/:roomId/note/shared', async (req, res) => {
     // リアルタイムで他メンバーに通知
     io.to(req.params.roomId).emit('note:updated', { roomId: req.params.roomId, type: 'shared', content: note.content, updatedBy: decoded.username });
     res.json({ content: note.content, updatedBy: decoded.username, updatedAt: note.updated_at });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // 個人ノート取得
@@ -1681,7 +1681,7 @@ app.get('/api/rooms/:roomId/note/mine', async (req, res) => {
     if (!room) return res.status(403).json({ error: '権限なし' });
     const note = await Note.findOne({ room_id: req.params.roomId, user_id: decoded.id });
     res.json({ content: note?.content || '' });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // 個人ノート保存
@@ -1696,7 +1696,7 @@ app.put('/api/rooms/:roomId/note/mine', async (req, res) => {
       { upsert: true, returnDocument: 'after' }
     );
     res.json({ ok: true });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // 全ルームの画像一括取得（アルバム用）
@@ -1709,7 +1709,7 @@ app.get('/api/album', async (req, res) => {
     const imgs = await Message.find({ room_id: { $in: roomIds }, type: { $in: ['image', 'file'] }, deleted: false })
       .sort({ created_at: -1 }).limit(500);
     res.json(imgs.map(img => ({ ...img.toObject(), roomName: roomMap[img.room_id] || 'ルーム' })));
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.get('/api/rooms/:roomId/album', async (req, res) => {
@@ -1719,7 +1719,7 @@ app.get('/api/rooms/:roomId/album', async (req, res) => {
     if (!room) return res.status(403).json({ error: '権限なし' });
     const imgs = await Message.find({ room_id: req.params.roomId, type: { $in: ['image', 'file'] }, deleted: false }).sort({ created_at: -1 }).limit(200).lean();
     res.json(imgs);
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.post('/api/upload', upload.single('file'), (req, res) => {
@@ -1735,7 +1735,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
       size: req.file.size,
       isImage, isAudio
     });
-  } catch { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // Socket.io
@@ -2274,7 +2274,7 @@ app.get('/api/stories', async (req, res) => {
     auth(req);
     const stories = await Story.find({ expires_at: { $gt: new Date() } }).sort({ created_at: -1 });
     res.json(stories);
-  } catch(e) { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 app.post('/api/stories', async (req, res) => {
@@ -2325,7 +2325,7 @@ app.get('/api/game/coins', async (req, res) => {
     let wallet = await GameCoin.findOne({ user_id: decoded.id });
     if (!wallet) wallet = await GameCoin.create({ user_id: decoded.id, coins: 100 });
     res.json({ coins: wallet.coins });
-  } catch(e) { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // スコア送信 → コイン付与
@@ -2381,7 +2381,7 @@ app.get('/api/game/ranking/:game/friends', async (req, res) => {
     const best = {};
     scores.forEach(s => { if (!best[s.user_id] || best[s.user_id].score < s.score) best[s.user_id] = s; });
     res.json(Object.values(best).sort((a, b) => b.score - a.score));
-  } catch(e) { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ショップアイテム購入
@@ -2409,7 +2409,7 @@ app.get('/api/game/items', async (req, res) => {
     const items = await GameItem.find({ user_id: decoded.id });
     const wallet = await GameCoin.findOne({ user_id: decoded.id });
     res.json({ items, coins: wallet?.coins || 0 });
-  } catch(e) { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // プレイヤー情報（ゲームアプリのログイン用）
@@ -2426,7 +2426,7 @@ app.get('/api/game/me', async (req, res) => {
       coins: wallet?.coins ?? 100,
       avatarFrame: user?.avatar_frame,
     });
-  } catch(e) { res.status(401).json({ error: '認証エラー' }); }
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
 // ===== ヘルスチェック =====
