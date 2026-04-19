@@ -2025,118 +2025,43 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             )}
             <div ref={messagesEndRef} />
           </div>
-          <div className="input-area">
-            {/* @メンション候補 */}
-            {mentionSuggestions.length > 0 && (
-              <div style={{
-                position:'absolute', bottom:'100%', left:0, right:0, background:'var(--surface)',
-                border:'1px solid var(--border)', borderRadius:'12px 12px 0 0', boxShadow:'0 -4px 16px rgba(0,0,0,0.12)',
-                zIndex:200, overflow:'hidden', marginBottom:2
-              }}>
-                {mentionSuggestions.map(m => (
-                  <button key={m.id} onClick={() => handleMentionSelect(m)} style={{
-                    display:'flex', alignItems:'center', gap:10, width:'100%', padding:'10px 16px',
-                    background:'none', border:'none', borderBottom:'1px solid var(--border)', cursor:'pointer',
-                    fontSize:14, color:'var(--text)', WebkitTapHighlightColor:'transparent'
-                  }}>
-                    <div style={{ width:32, height:32, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, flexShrink:0 }}>
-                      {(m.displayName || m.username || '?')[0]}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight:600 }}>{m.displayName || m.username}</div>
-                      <div style={{ fontSize:12, color:'var(--text2)' }}>@{m.username}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-            {replyTo && (
-              <div className="reply-bar">
-                <div className="reply-bar-content">
-                  <span className="reply-bar-name">↩ {replyTo.senderName}</span>
-                  <span className="reply-bar-text">{replyTo.content?.slice(0, 50)}</span>
-                </div>
-                <button className="reply-bar-close" onClick={() => setReplyTo(null)}>✕</button>
-              </div>
-            )}
-            {showStampPanel && (
-              <div className="stamp-panel">
-                {myStampSets.length === 0
-                  ? <span className="no-stamps">ショップでスタンプを追加しよう！</span>
-                  : myStampSets.map((stampSet) => (
-                    stampSet.stamps.map((stamp, i) => (
-                      <span key={`${stampSet.id}-${i}`} style={{ fontSize: 32, cursor: 'pointer', padding: 4 }}
-                        title={stamp.label}
-                        onClick={() => handleSendStamp(stampSet, stamp)}>{stamp.emoji}</span>
-                    ))
-                  ))
-                }
-              </div>
-            )}
-            {/* 音声メッセージ */}
-            {showVoice && <ErrorBoundary><VoiceMessage roomId={selectedRoom.id} currentUser={currentUser} socket={socket} onSent={() => setShowVoice(false)} onCancel={() => setShowVoice(false)} /></ErrorBoundary>}
-            {/* 位置情報 */}
-            {showLocation && <ErrorBoundary><LocationShare socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowLocation(false)} onCancel={() => setShowLocation(false)} /></ErrorBoundary>}
-            {/* 秘密メッセージ */}
-            {showSecret && <ErrorBoundary><Suspense fallback={null}><SecretMessage socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowSecret(false)} onCancel={() => setShowSecret(false)} /></Suspense></ErrorBoundary>}
-            {/* 文字スタイルパネル */}
-            {showStylePicker && (
-              <div style={{ padding:'10px 12px', background:'var(--surface2)', borderTop:'1px solid var(--border)', display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
-                <span style={{ fontSize:12, color:'var(--text2)', fontWeight:600 }}>フォント:</span>
-                {[['default','デフォルト'],['serif','明朝体'],['monospace','等幅'],['cursive','手書き']].map(([f,label]) => (
-                  <button key={f} onClick={() => { const s={...msgStyle,font:f}; setMsgStyle(s); localStorage.setItem('msgStyle',JSON.stringify(s)); }}
-                    style={{ padding:'4px 10px', borderRadius:10, border:'1.5px solid', borderColor: msgStyle.font===f?'var(--primary)':'var(--border)', background: msgStyle.font===f?'var(--primary)':'transparent', color: msgStyle.font===f?'white':'var(--text)', fontSize:13, cursor:'pointer', fontFamily:f==='default'?undefined:f }}>{label}</button>
-                ))}
-                <span style={{ fontSize:12, color:'var(--text2)', fontWeight:600, marginLeft:8 }}>言語:</span>
-                {[['ja','🇯🇵'],['en','🇺🇸'],['zh','🇨🇳'],['ko','🇰🇷']].map(([l,flag]) => (
-                  <button key={l} onClick={() => { setLang(l); localStorage.setItem('lang',l); }}
-                    style={{ padding:'4px 10px', borderRadius:10, border:'1.5px solid', borderColor: lang===l?'var(--primary)':'var(--border)', background: lang===l?'var(--primary)':'transparent', color: lang===l?'white':'var(--text)', fontSize:14, cursor:'pointer' }}>{flag}</button>
-                ))}
-              </div>
-            )}
-            <div className="input-row">
-              <button className="plus-btn icon-btn" onClick={() => setShowInputMenu(v=>!v)} title="その他">
-                {showInputMenu ? '✕' : '➕'}
-              </button>
-              <button className="icon-btn" onClick={() => setShowStampPanel(!showStampPanel)} title="スタンプ">🎫</button>
-              <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,video/*,audio/*,.pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onChange={handleFileUpload} />
-              <textarea className="message-input" value={inputText} onChange={handleTyping}
-                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-                placeholder={lang === "en" ? "Type a message..." : lang === "zh" ? "输入消息..." : lang === "ko" ? "메시지 입력..." : "メッセージを入力..."} rows={1} />
-              <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>➤</button>
-            </div>
-            {showInputMenu && (
-              <div className="input-menu-grid" style={{
-                position:'fixed', left:0, right:0,
-                bottom: 'calc(env(safe-area-inset-bottom) + 56px)',
-                zIndex:3000, background:'var(--surface)',
-                borderTop:'1px solid var(--border)',
-                display:'grid', gridTemplateColumns:'repeat(4,1fr)',
-                boxShadow:'0 -4px 16px rgba(0,0,0,0.12)',
-                animation:'menuSlideUp 0.2s ease',
-              }}>
-                {/* ファイルはlabelで直接input操作 */}
-                <label className="input-menu-item" style={{ cursor:'pointer' }} onClick={() => setShowInputMenu(false)}>
-                  <span className="input-menu-icon">📎</span>
-                  <span className="input-menu-label">ファイル</span>
-                  <input type="file" accept="image/*,video/*,audio/*,.pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" style={{ display:'none' }} onChange={handleFileUpload} />
-                </label>
-                {[
-                  { icon:'🎤', label:'音声', action: () => { setShowVoice(v=>!v); setShowInputMenu(false); } },
-                  { icon:'📍', label:'位置情報', action: () => { setShowLocation(v=>!v); setShowInputMenu(false); } },
-                  { icon:'🔐', label:'秘密', action: () => { setShowSecret(v=>!v); setShowInputMenu(false); } },
-                  { icon:'📊', label:'投票', action: () => { setShowPollCreator(true); setShowInputMenu(false); } },
-                  { icon:'⏰', label:'予約送信', action: () => { setScheduleText(inputText); setShowSchedule(true); setShowInputMenu(false); } },
-                  { icon:'🎨', label:'文字スタイル', action: () => { setShowStylePicker(v=>!v); setShowInputMenu(false); } },
-                ].map(item => (
-                  <button key={item.label} className="input-menu-item" onClick={item.action}>
-                    <span className="input-menu-icon">{item.icon}</span>
-                    <span className="input-menu-label">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <InputArea
+            inputText={inputText}
+            handleTyping={handleTyping}
+            handleSend={handleSend}
+            handleFileUpload={handleFileUpload}
+            handleMentionSelect={handleMentionSelect}
+            handleSendStamp={handleSendStamp}
+            mentionSuggestions={mentionSuggestions}
+            replyTo={replyTo}
+            setReplyTo={setReplyTo}
+            fileInputRef={fileInputRef}
+            showInputMenu={showInputMenu}
+            setShowInputMenu={setShowInputMenu}
+            showStampPanel={showStampPanel}
+            setShowStampPanel={setShowStampPanel}
+            showVoice={showVoice}
+            showLocation={showLocation}
+            showSecret={showSecret}
+            showStylePicker={showStylePicker}
+            msgStyle={msgStyle}
+            lang={lang}
+            setLang={setLang}
+            setShowVoice={setShowVoice}
+            setShowLocation={setShowLocation}
+            setShowSecret={setShowSecret}
+            setShowPollCreator={setShowPollCreator}
+            setShowSchedule={setShowSchedule}
+            setScheduleText={setScheduleText}
+            selectedRoom={selectedRoom}
+            socket={socket}
+            currentUser={currentUser}
+            soundTheme={soundTheme}
+            myStampSets={myStampSets}
+            allStampSets={allStampSets}
+            acquiredStampIds={acquiredStampIds}
+            showToast={showToast}
+          />
         </>}
         {!selectedRoom && <div className="no-room-selected"><div>💬</div><p>トークを選択してください</p></div>}
       </div>
@@ -2158,6 +2083,132 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     </div>
   );
 }
+
+const InputArea = React.memo(function InputArea({
+  inputText, handleTyping, handleSend, handleFileUpload, handleMentionSelect,
+  handleSendStamp, mentionSuggestions, replyTo, setReplyTo,
+  fileInputRef, showInputMenu, setShowInputMenu,
+  showStampPanel, setShowStampPanel, showVoice, showLocation, showSecret,
+  showStylePicker, msgStyle, lang, setLang,
+  setShowVoice, setShowLocation, setShowSecret,
+  setShowPollCreator, setShowSchedule, setScheduleText,
+  selectedRoom, socket, currentUser, soundTheme, myStampSets, allStampSets, acquiredStampIds, showToast,
+}) {
+  return (
+<div className="input-area">
+  {/* @メンション候補 */}
+  {mentionSuggestions.length > 0 && (
+    <div style={{
+      position:'absolute', bottom:'100%', left:0, right:0, background:'var(--surface)',
+      border:'1px solid var(--border)', borderRadius:'12px 12px 0 0', boxShadow:'0 -4px 16px rgba(0,0,0,0.12)',
+      zIndex:200, overflow:'hidden', marginBottom:2
+    }}>
+      {mentionSuggestions.map(m => (
+        <button key={m.id} onClick={() => handleMentionSelect(m)} style={{
+          display:'flex', alignItems:'center', gap:10, width:'100%', padding:'10px 16px',
+          background:'none', border:'none', borderBottom:'1px solid var(--border)', cursor:'pointer',
+          fontSize:14, color:'var(--text)', WebkitTapHighlightColor:'transparent'
+        }}>
+          <div style={{ width:32, height:32, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, flexShrink:0 }}>
+            {(m.displayName || m.username || '?')[0]}
+          </div>
+          <div>
+            <div style={{ fontWeight:600 }}>{m.displayName || m.username}</div>
+            <div style={{ fontSize:12, color:'var(--text2)' }}>@{m.username}</div>
+          </div>
+        </button>
+      ))}
+    </div>
+  )}
+  {replyTo && (
+    <div className="reply-bar">
+      <div className="reply-bar-content">
+        <span className="reply-bar-name">↩ {replyTo.senderName}</span>
+        <span className="reply-bar-text">{replyTo.content?.slice(0, 50)}</span>
+      </div>
+      <button className="reply-bar-close" onClick={() => setReplyTo(null)}>✕</button>
+    </div>
+  )}
+  {showStampPanel && (
+    <div className="stamp-panel">
+      {myStampSets.length === 0
+        ? <span className="no-stamps">ショップでスタンプを追加しよう！</span>
+        : myStampSets.map((stampSet) => (
+          stampSet.stamps.map((stamp, i) => (
+            <span key={`${stampSet.id}-${i}`} style={{ fontSize: 32, cursor: 'pointer', padding: 4 }}
+              title={stamp.label}
+              onClick={() => handleSendStamp(stampSet, stamp)}>{stamp.emoji}</span>
+          ))
+        ))
+      }
+    </div>
+  )}
+  {/* 音声メッセージ */}
+  {showVoice && <ErrorBoundary><VoiceMessage roomId={selectedRoom.id} currentUser={currentUser} socket={socket} onSent={() => setShowVoice(false)} onCancel={() => setShowVoice(false)} /></ErrorBoundary>}
+  {/* 位置情報 */}
+  {showLocation && <ErrorBoundary><LocationShare socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowLocation(false)} onCancel={() => setShowLocation(false)} /></ErrorBoundary>}
+  {/* 秘密メッセージ */}
+  {showSecret && <ErrorBoundary><Suspense fallback={null}><SecretMessage socket={socket} roomId={selectedRoom.id} currentUser={currentUser} onSent={() => setShowSecret(false)} onCancel={() => setShowSecret(false)} /></Suspense></ErrorBoundary>}
+  {/* 文字スタイルパネル */}
+  {showStylePicker && (
+    <div style={{ padding:'10px 12px', background:'var(--surface2)', borderTop:'1px solid var(--border)', display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
+      <span style={{ fontSize:12, color:'var(--text2)', fontWeight:600 }}>フォント:</span>
+      {[['default','デフォルト'],['serif','明朝体'],['monospace','等幅'],['cursive','手書き']].map(([f,label]) => (
+        <button key={f} onClick={() => { const s={...msgStyle,font:f}; setMsgStyle(s); localStorage.setItem('msgStyle',JSON.stringify(s)); }}
+          style={{ padding:'4px 10px', borderRadius:10, border:'1.5px solid', borderColor: msgStyle.font===f?'var(--primary)':'var(--border)', background: msgStyle.font===f?'var(--primary)':'transparent', color: msgStyle.font===f?'white':'var(--text)', fontSize:13, cursor:'pointer', fontFamily:f==='default'?undefined:f }}>{label}</button>
+      ))}
+      <span style={{ fontSize:12, color:'var(--text2)', fontWeight:600, marginLeft:8 }}>言語:</span>
+      {[['ja','🇯🇵'],['en','🇺🇸'],['zh','🇨🇳'],['ko','🇰🇷']].map(([l,flag]) => (
+        <button key={l} onClick={() => { setLang(l); localStorage.setItem('lang',l); }}
+          style={{ padding:'4px 10px', borderRadius:10, border:'1.5px solid', borderColor: lang===l?'var(--primary)':'var(--border)', background: lang===l?'var(--primary)':'transparent', color: lang===l?'white':'var(--text)', fontSize:14, cursor:'pointer' }}>{flag}</button>
+      ))}
+    </div>
+  )}
+  <div className="input-row">
+    <button className="plus-btn icon-btn" onClick={() => setShowInputMenu(v=>!v)} title="その他">
+      {showInputMenu ? '✕' : '➕'}
+    </button>
+    <button className="icon-btn" onClick={() => setShowStampPanel(!showStampPanel)} title="スタンプ">🎫</button>
+    <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,video/*,audio/*,.pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onChange={handleFileUpload} />
+    <textarea className="message-input" value={inputText} onChange={handleTyping}
+      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+      placeholder={lang === "en" ? "Type a message..." : lang === "zh" ? "输入消息..." : lang === "ko" ? "메시지 입력..." : "メッセージを入力..."} rows={1} />
+    <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>➤</button>
+  </div>
+  {showInputMenu && (
+    <div className="input-menu-grid" style={{
+      position:'fixed', left:0, right:0,
+      bottom: 'calc(env(safe-area-inset-bottom) + 56px)',
+      zIndex:3000, background:'var(--surface)',
+      borderTop:'1px solid var(--border)',
+      display:'grid', gridTemplateColumns:'repeat(4,1fr)',
+      boxShadow:'0 -4px 16px rgba(0,0,0,0.12)',
+      animation:'menuSlideUp 0.2s ease',
+    }}>
+      {/* ファイルはlabelで直接input操作 */}
+      <label className="input-menu-item" style={{ cursor:'pointer' }} onClick={() => setShowInputMenu(false)}>
+        <span className="input-menu-icon">📎</span>
+        <span className="input-menu-label">ファイル</span>
+        <input type="file" accept="image/*,video/*,audio/*,.pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" style={{ display:'none' }} onChange={handleFileUpload} />
+      </label>
+      {[
+        { icon:'🎤', label:'音声', action: () => { setShowVoice(v=>!v); setShowInputMenu(false); } },
+        { icon:'📍', label:'位置情報', action: () => { setShowLocation(v=>!v); setShowInputMenu(false); } },
+        { icon:'🔐', label:'秘密', action: () => { setShowSecret(v=>!v); setShowInputMenu(false); } },
+        { icon:'📊', label:'投票', action: () => { setShowPollCreator(true); setShowInputMenu(false); } },
+        { icon:'⏰', label:'予約送信', action: () => { setScheduleText(inputText); setShowSchedule(true); setShowInputMenu(false); } },
+        { icon:'🎨', label:'文字スタイル', action: () => { setShowStylePicker(v=>!v); setShowInputMenu(false); } },
+      ].map(item => (
+        <button key={item.label} className="input-menu-item" onClick={item.action}>
+          <span className="input-menu-icon">{item.icon}</span>
+          <span className="input-menu-label">{item.label}</span>
+        </button>
+      ))}
+    </div>
+  )}
+</div>
+  );
+});
 
 function TabBar({ activeTab, setActiveTab, notifications, onClearNotif }) {
   const tabs = [
