@@ -2751,7 +2751,7 @@ app.post('/api/rooms/:roomId/ephemeral', async (req, res) => {
 setInterval(async () => {
   try {
     const now = new Date();
-    const due = await ScheduledMessage.find({ sent: false, send_at: { $lte: now } });
+    const due = await ScheduledMessage.find({ sent: false, send_at: { $lte: now } }).lean();
     for (const sm of due) {
       
       const msg = await Message.create({

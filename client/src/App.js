@@ -1045,7 +1045,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 msg.reactions.reduce((acc, r) => { acc[r.emoji] = (acc[r.emoji] || []); acc[r.emoji].push(r.user_id); return acc; }, {})
               ).map(([emoji, users]) => (
                 <button key={emoji} className={`reaction-btn ${users.includes(currentUser.id) ? 'mine' : ''}`}
-                  onClick={() => { socket.emit('message:react', { messageId: msg.id, roomId: selectedRoom.id, emoji }); }}>
+                  onClick={() => { socket?.emit('message:react', { messageId: msg.id, roomId: selectedRoom.id, emoji }); }}>
                   {emoji} {users.length}
                 </button>
               ))}
@@ -1359,11 +1359,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   ] : []),
                   ...(msgMenu.msg.senderId === currentUser.id ? [
                     { icon:'↩️', label:'送信取消', danger: true, action: () => {
-                      appConfirm('送信を取り消しますか？', () => socket.emit('message:delete', { roomId: selectedRoom.id, messageId: msgMenu.msg.id, recall: true }));
+                      appConfirm('送信を取り消しますか？', () => socket?.emit('message:delete', { roomId: selectedRoom.id, messageId: msgMenu.msg.id, recall: true }));
                     }},
                     { icon:'✏️', label:'編集', action: () => { setEditingMessage(msgMenu.msg); setEditText(msgMenu.msg.content || ''); } },
                     { icon:'🗑️', label:'削除', danger: true, action: () => {
-                      appConfirm('このメッセージを削除しますか？', () => socket.emit('message:delete', { roomId: selectedRoom.id, messageId: msgMenu.msg.id }));
+                      appConfirm('このメッセージを削除しますか？', () => socket?.emit('message:delete', { roomId: selectedRoom.id, messageId: msgMenu.msg.id }));
                     }},
                   ] : []),
                 ].map(item => (
@@ -1408,7 +1408,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           <StickerMaker
             onSend={(data) => {
               if (socket && selectedRoom) {
-                socket.emit('message:send', { roomId: selectedRoom.id, content: data.content, type: 'image', fileData: data.fileData });
+                socket?.emit('message:send', { roomId: selectedRoom.id, content: data.content, type: 'image', fileData: data.fileData });
                 setShowStickerMaker(false);
               }
             }}
@@ -1839,7 +1839,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   <button className="btn btn-secondary" onClick={() => setEditingMessage(null)}>キャンセル</button>
                   <button className="btn btn-primary" onClick={() => {
                     if (editText.trim()) {
-                      socket.emit('message:edit', { roomId: selectedRoom.id, messageId: editingMessage.id, content: editText.trim() });
+                      socket?.emit('message:edit', { roomId: selectedRoom.id, messageId: editingMessage.id, content: editText.trim() });
                       setEditingMessage(null);
                     }
                   }}>保存</button>
@@ -1897,7 +1897,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               }} onClick={(e) => e.stopPropagation()}>
                 {['❤️','👍','😂','😮','😢','🔥','👏','🎉'].map(emoji => (
                   <button key={emoji} onClick={() => {
-                    socket.emit('message:react', { messageId: reactionPicker.msgId, roomId: selectedRoom.id, emoji });
+                    socket?.emit('message:react', { messageId: reactionPicker.msgId, roomId: selectedRoom.id, emoji });
                     setReactionPicker(null);
                   }} style={{ fontSize:26, background:'none', border:'none', cursor:'pointer', padding:'4px 6px', borderRadius:10, WebkitTapHighlightColor:'transparent', transition:'transform 0.1s' }}
                     onMouseEnter={e => e.target.style.transform='scale(1.3)'}
