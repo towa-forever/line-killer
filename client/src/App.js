@@ -1255,7 +1255,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               </div>
             )}
           </div>
-          {showNote && <Portal><ErrorBoundary><Suspense fallback={null}><Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowNote(false)} /></Suspense></ErrorBoundary></Portal>}
+          {showNote && <Portal><ErrorBoundary><Suspense fallback={null}><Note room={selectedRoom} currentUser={currentUser} socket={socket} onClose={handleCloseNote} /></Suspense></ErrorBoundary></Portal>}
           <Portal>{showRoomSettings && (
             <div className="modal-overlay" onClick={handleCloseRoomSettings}>
               <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -1285,7 +1285,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   />
                 </div>
                 {/* グループ名変更 */}
-                <RoomNameEditor room={selectedRoom} onClose={() => setShowRoomSettings(false)} />
+                <RoomNameEditor room={selectedRoom} onClose={handleCloseRoomSettings} />
                 <div className="modal-actions">
                   <button className="btn btn-secondary" onClick={handleCloseRoomSettings}>閉じる</button>
                 </div>
@@ -1413,7 +1413,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           </div>
         </div>
       )}</Portal>
-      {showEventCal && <Portal><ErrorBoundary><Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowEventCal(false)} /></Suspense></ErrorBoundary></Portal>}
+      {showEventCal && <Portal><ErrorBoundary><Suspense fallback={null}><EventCalendar room={selectedRoom} currentUser={currentUser} socket={socket} onClose={handleCloseEventCal} /></Suspense></ErrorBoundary></Portal>}
       {/* スタンプ自作 */}
       <Portal>{showStickerMaker && (
         <Portal><ErrorBoundary><Suspense fallback={null}>
@@ -1424,11 +1424,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 setShowStickerMaker(false);
               }
             }}
-            onClose={() => setShowStickerMaker(false)}
+            onClose={handleCloseStickerMaker}
           />
         </Suspense></ErrorBoundary></Portal>
       )}</Portal>
-      {showMiniGame && <Portal><ErrorBoundary><Suspense fallback={null}><MiniGame onSendResult={text => { socket?.emit('message:send', { roomId: selectedRoom?.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={() => setShowMiniGame(false)} /></Suspense></ErrorBoundary></Portal>}
+      {showMiniGame && <Portal><ErrorBoundary><Suspense fallback={null}><MiniGame onSendResult={text => { socket?.emit('message:send', { roomId: selectedRoom?.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={handleCloseMiniGame} /></Suspense></ErrorBoundary></Portal>}
           <Portal>{showFavorites && (
             <div className="modal-overlay" onClick={handleCloseFavorites}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
@@ -1495,11 +1495,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               messages={messages.filter(m => m.type === 'text').slice(-50)}
               currentRoom={selectedRoom}
               onInsert={text => { setInputText(text); setShowAI(false); }}
-              onClose={() => setShowAI(false)}
+              onClose={handleCloseAI}
             /></Suspense></ErrorBoundary></Portal>
           )}</Portal>
           <Portal>{showTaskPanel && (
-            <ErrorBoundary><Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={() => setShowTaskPanel(false)} showToast={showToast} /></Suspense></ErrorBoundary>
+            <ErrorBoundary><Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={handleCloseTaskPanel} showToast={showToast} /></Suspense></ErrorBoundary>
           )}</Portal>
           <Portal>{showSchedule && (
             <div className="modal-overlay" onClick={() => setShowSchedule(false)}>
@@ -1703,7 +1703,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <UserProfile
                 username={showUserProfile.name}
                 currentUser={currentUser}
-                onClose={() => setShowUserProfile(null)}
+                onClose={handleCloseUserProfile}
                 onStartChat={async (user) => {
                   const res = await axios.post('/api/rooms/dm', { targetUserId: user.id || showUserProfile.id }).catch(() => null);
                   if (res?.data) { setRooms(prev => prev.find(r => r.id === res.data.id) ? prev : [res.data, ...prev]); setSelectedRoom(res.data); }
@@ -1778,7 +1778,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             <MediaListModal
               roomId={selectedRoom?.id}
               serverUrl={SERVER_URL}
-              onClose={() => setShowMediaList(false)}
+              onClose={handleCloseMediaList}
             />
           )}</Portal>
           <Portal>{showAnnounce && (
@@ -2081,7 +2081,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
       <Portal>{showStats && selectedRoom && (
         <ErrorBoundary><Suspense fallback={null}>
-          <ChatStats roomId={selectedRoom.id} roomName={selectedRoom.name} onClose={() => setShowStats(false)} />
+          <ChatStats roomId={selectedRoom.id} roomName={selectedRoom.name} onClose={handleCloseStats} />
         </Suspense></ErrorBoundary>
       )}</Portal>
       <Portal>{showCreateRoom && (
@@ -2568,6 +2568,17 @@ export default function App() {
   const handleGroupCallEnd = useCallback(() => { setGroupCall(null); setCallMinimized(false); }, []);
   const handleGroupCallMinimize = useCallback(() => setCallMinimized(m => !m), []);
   const handleActiveCallEnd = useCallback(() => { setActiveCall(null); setCallMinimized(false); }, []);
+  const handleCloseSubAccounts = useCallback(() => setShowSubAccounts(false), []);
+  const handlePinSuccess = useCallback(() => setPinVerified(true), []);
+  const handlePinCancel = useCallback(() => { setCurrentUser(null); setPinVerified(false); }, []);
+  const handleClosePinSetup = useCallback(() => {
+    setShowPinSetup(false);
+    axios.get('/api/auth/me').then(r => setCurrentUser(r.data.user)).catch(() => {});
+  }, []);
+  const handleCloseGift = useCallback(() => setShowGift(null), []);
+  const handleCloseReadLater = useCallback(() => setShowReadLater(false), []);
+  const handleCloseContact = useCallback(() => setShowContact(false), []);
+  const handleCloseVoiceCall = useCallback(() => { stopRingtone(); setVoiceCall(null); }, []);
 
   const tabsElement = (
     <>
@@ -2670,7 +2681,7 @@ export default function App() {
                 setShowSubAccounts(false);
                 setTimeout(() => window.location.reload(), 100);
               }}
-              onClose={() => setShowSubAccounts(false)}
+              onClose={handleCloseSubAccounts}
             />
           </Suspense></ErrorBoundary>
         )}
@@ -2679,8 +2690,8 @@ export default function App() {
         {currentUser && !pinVerified && (
           <ErrorBoundary><Suspense fallback={null}>
             <PinVerify
-              onSuccess={() => setPinVerified(true)}
-              onCancel={() => { setCurrentUser(null); setPinVerified(false); }}
+              onSuccess={handlePinSuccess}
+              onCancel={handlePinCancel}
             />
           </Suspense></ErrorBoundary>
         )}
@@ -2688,11 +2699,7 @@ export default function App() {
         {/* PIN設定 */}
         {showPinSetup && (
           <ErrorBoundary><Suspense fallback={null}>
-            <PinSetup enabled={!!currentUser?.pinEnabled} onClose={() => {
-              setShowPinSetup(false);
-              // PIN設定後にcurrentUserを更新
-              axios.get('/api/auth/me').then(r => setCurrentUser(r.data.user)).catch(() => {});
-            }} />
+            <PinSetup enabled={!!currentUser?.pinEnabled} onClose={handleClosePinSetup} />
           </Suspense></ErrorBoundary>
         )}
 
@@ -2702,7 +2709,7 @@ export default function App() {
             <GiftModal
               targetUser={showGift}
               currentUser={currentUser}
-              onClose={() => setShowGift(null)}
+              onClose={handleCloseGift}
             />
           </Suspense></ErrorBoundary>
         )}
@@ -2710,14 +2717,14 @@ export default function App() {
         {/* 後で読む */}
         {showReadLater && (
           <ErrorBoundary><Suspense fallback={null}>
-            <ReadLater currentUser={currentUser} onClose={() => setShowReadLater(false)} />
+            <ReadLater currentUser={currentUser} onClose={handleCloseReadLater} />
           </Suspense></ErrorBoundary>
         )}
 
         {/* お問い合わせ */}
         {showContact && (
           <ErrorBoundary><Suspense fallback={null}>
-            <ContactForm currentUser={currentUser} onClose={() => setShowContact(false)} />
+            <ContactForm currentUser={currentUser} onClose={handleCloseContact} />
           </Suspense></ErrorBoundary>
         )}
 
@@ -2732,7 +2739,7 @@ export default function App() {
               isIncoming={voiceCall.isIncoming}
               callId={voiceCall.callId}
               incomingOffer={voiceCall.incomingOffer}
-              onClose={() => { stopRingtone(); setVoiceCall(null); }}
+              onClose={handleCloseVoiceCall}
             />
           </Suspense></ErrorBoundary>
         )}
