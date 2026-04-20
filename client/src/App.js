@@ -406,6 +406,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const mutedRoomsRef = useRef(new Set()); // ミュートルームをclosure-safeに参照
   useEffect(() => { notifSettingsRef.current = notifSettings; }, [notifSettings]);
   useEffect(() => { mutedRoomsRef.current = mutedRooms; }, [mutedRooms]);
+  // renderMessage内で最新値を参照するためのRef（依存配列から外すことでrenderedMessagesの不要な再計算を防ぐ）
+  const translatingRef = useRef({});
+  useEffect(() => { translatingRef.current = translating; }, [translating]);
+  const readByDetailMapRef = useRef({});
+  useEffect(() => { readByDetailMapRef.current = readByDetailMap; }, [readByDetailMap]);
+  const msgStyleRef = useRef(msgStyle);
+  useEffect(() => { msgStyleRef.current = msgStyle; }, [msgStyle]);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -1009,7 +1016,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     } else if (msg.type === 'secret') {
       content = <SecretBubble msg={msg} isMine={isMine} />;
     } else {
-      content = <span style={msgStyle.font !== 'default' ? { fontFamily: msgStyle.font } : {}}>{msg.content}</span>;
+      content = <span style={msgStyleRef.current.font !== 'default' ? { fontFamily: msgStyleRef.current.font } : {}}>{msg.content}</span>;
     }
     return (
       <div key={msg.id} id={`msg-${msg.id}`} className={`message ${isMine ? 'mine' : 'theirs'}`}
@@ -1044,9 +1051,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           })()}
           <div style={{ position:'relative' }}>
             <div className="message-bubble">{content}
-            {translating[msg.id] && (
-              <div style={{ marginTop:6, paddingTop:6, borderTop:'1px solid rgba(0,0,0,0.1)', fontSize:12, color: translating[msg.id] === '翻訳中...' ? 'var(--text2)' : 'var(--text)', fontStyle:'italic' }}>
-                🌐 {translating[msg.id]}
+            {translatingRef.current[msg.id] && (
+              <div style={{ marginTop:6, paddingTop:6, borderTop:'1px solid rgba(0,0,0,0.1)', fontSize:12, color: translatingRef.current[msg.id] === '翻訳中...' ? 'var(--text2)' : 'var(--text)', fontStyle:'italic' }}>
+                🌐 {translatingRef.current[msg.id]}
               </div>
             )}
             </div>
@@ -1071,7 +1078,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <span
                   style={{ fontSize:11, color:'#06c755', marginRight:4, fontWeight:600, cursor:'pointer' }}
                   onClick={() => {
-                    const detail = readByDetailMap[msg.id];
+                    const detail = readByDetailMapRef.current[msg.id];
                     if (detail && detail.length > 0) {
                       const readers = detail.filter(r => r.id !== currentUser.id);
                       setShowReadDetail({ msgId: msg.id, readers });
@@ -1095,7 +1102,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         </div>
       </div>
     );
-  }, [currentUser, polls, selectedRoom, onlineUsers, bookmarks, socket, setReplyTo, showToast, soundTheme, msgStyle, translating, replyTo, readByDetailMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentUser, polls, selectedRoom, onlineUsers, bookmarks, socket, setReplyTo, showToast, soundTheme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // メッセージリスト全体をuseMemoでキャッシュ（messages/translating/editingMessage変化時のみ再計算）
   const renderedMessages = React.useMemo(() => {
@@ -1112,7 +1119,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       acc.push(renderMessage(msg, i));
       return acc;
     }, []);
-  }, [messages, renderMessage]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [messages, renderMessage, translating]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="chat-screen">
