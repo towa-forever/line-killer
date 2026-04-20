@@ -524,7 +524,7 @@ app.post('/api/auth/pin/disable', async (req, res) => {
 app.post('/api/auth/pin/verify', async (req, res) => {
   try {
     const decoded = auth(req);
-    const user = await User.findOne({ id: decoded.id });
+    const user = await User.findOne({ id: decoded.id }, { display_name: 1, username: 1, avatar: 1 }).lean();
     if (!user || !user.pin_enabled) return res.json({ ok: true }); // PIN未設定は通過
     const ok = await bcrypt.compare(String(req.body.pin), user.pin_code);
     if (!ok) return res.status(401).json({ error: 'PINが違います' });
@@ -1014,7 +1014,7 @@ app.post('/api/friends/by-qr', async (req, res) => {
     const target = await User.findOne({ username });
     if (!target) return res.status(404).json({ error: 'ユーザーが見つかりません' });
     if (target.id === decoded.id) return res.status(400).json({ error: '自分自身には送れません' });
-    const already = await Friend.findOne({ user_id: decoded.id, friend_id: target.id });
+    const already = await Friend.findOne({ user_id: decoded.id, friend_id: target.id }).lean();
     if (already) return res.json({ ok: true, message: 'すでに友達です' });
     
     const id = uuidv4();
@@ -1137,9 +1137,9 @@ app.post('/api/friend-requests', async (req, res) => {
     const decoded = auth(req);
     const { toId } = req.body;
     if (toId === decoded.id) return res.status(400).json({ error: '自分には送れません' });
-    const existing = await FriendRequest.findOne({ from_id: decoded.id, to_id: toId, status: 'pending' });
+    const existing = await FriendRequest.findOne({ from_id: decoded.id, to_id: toId, status: 'pending' }).lean();
     if (existing) return res.status(400).json({ error: '既に申請済みです' });
-    const alreadyFriend = await Friend.findOne({ user_id: decoded.id, friend_id: toId });
+    const alreadyFriend = await Friend.findOne({ user_id: decoded.id, friend_id: toId }).lean();
     if (alreadyFriend) return res.status(400).json({ error: '既に友だちです' });
     const id = uuidv4();
     const request = await FriendRequest.create({ id, from_id: decoded.id, from_name: decoded.username, to_id: toId });
@@ -1151,7 +1151,7 @@ app.post('/api/friend-requests', async (req, res) => {
 app.post('/api/friend-requests/:requestId/accept', async (req, res) => {
   try {
     const decoded = auth(req);
-    const request = await FriendRequest.findOne({ id: req.params.requestId, to_id: decoded.id });
+    const request = await FriendRequest.findOne({ id: req.params.requestId, to_id: decoded.id }).lean();
     if (!request) return res.status(404).json({ error: '申請が見つかりません' });
     await FriendRequest.findOneAndUpdate({ id: req.params.requestId }, { status: 'accepted' }, {returnDocument:'after'});
     await Friend.findOneAndUpdate(
@@ -1690,7 +1690,7 @@ app.get('/api/rooms/:roomId/note/mine', async (req, res) => {
     const decoded = auth(req);
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
-    const note = await Note.findOne({ room_id: req.params.roomId, user_id: decoded.id });
+    const note = await Note.findOne({ room_id: req.params.roomId, user_id: decoded.id }).lean();
     res.json({ content: note?.content || '' });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
@@ -1771,7 +1771,7 @@ io.on('connection', async (socket) => {
 
   socket.on('room:join', async (roomId) => {
     try {
-      const room = await Room.findOne({ id: roomId, members: socket.user.id });
+      const room = await Room.findOne({ id: roomId, members: socket.user.id }).lean();
       if (room) socket.join(roomId);
     } catch (e) { console.error('room:join error:', e); }
   });
@@ -2197,7 +2197,7 @@ app.post('/api/favorites', async (req, res) => {
     const decoded = auth(req);
     const { messageId, roomId, content, senderName } = req.body;
     
-    const existing = await Favorite.findOne({ user_id: decoded.id, message_id: messageId });
+    const existing = await Favorite.findOne({ user_id: decoded.id, message_id: messageId }).lean();
     if (existing) { await Favorite.deleteOne({ _id: existing._id }); return res.json({ removed: true }); }
     const fav = await Favorite.create({ id: 'fav_' + uuidv4(), user_id: decoded.id, message_id: messageId, room_id: roomId, content, sender_name: senderName });
     res.json(fav);
@@ -2333,7 +2333,7 @@ app.use('/api/game', (req, res, next) => {
 app.get('/api/game/coins', async (req, res) => {
   try {
     const decoded = auth(req);
-    let wallet = await GameCoin.findOne({ user_id: decoded.id });
+    let wallet = await GameCoin.findOne({ user_id: decoded.id }).lean();
     if (!wallet) wallet = await GameCoin.create({ user_id: decoded.id, coins: 100 });
     res.json({ coins: wallet.coins });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
@@ -2400,16 +2400,21 @@ app.post('/api/game/shop/buy', async (req, res) => {
   try {
     const decoded = auth(req);
     const { itemType, itemId, price } = req.body;
-    const wallet = await GameCoin.findOne({ user_id: decoded.id });
-    if (!wallet || wallet.coins < price) return res.status(400).json({ error: 'コイン不足' });
+    if (!itemType || !itemId || typeof price !== 'number' || price < 0) return res.status(400).json({ error: 'パラメータが不正です' });
     // 既に持っているか確認
-    const existing = await GameItem.findOne({ user_id: decoded.id, item_id: itemId });
+    const existing = await GameItem.findOne({ user_id: decoded.id, item_id: itemId }).lean();
     if (existing) return res.status(400).json({ error: '既に持ってるで' });
-    await GameCoin.findOneAndUpdate({ user_id: decoded.id }, { $inc: { coins: -price }, updated_at: new Date() }, {returnDocument:'after'});
+    // 原子的にコインを減算（コインが足りない場合はnullが返る）
+    const wallet = await GameCoin.findOneAndUpdate(
+      { user_id: decoded.id, coins: { $gte: price } },
+      { $inc: { coins: -price }, updated_at: new Date() },
+      { returnDocument: 'after' }
+    );
+    if (!wallet) return res.status(400).json({ error: 'コイン不足' });
     const item = await GameItem.create({ id: 'gi_' + uuidv4(), user_id: decoded.id, item_type: itemType, item_id: itemId });
     // アバターフレーム購入の場合はUserにも反映
-    if (itemType === 'avatar_frame') await User.findOneAndUpdate({ id: decoded.id }, { avatar_frame: itemId }, {returnDocument:'after'});
-    res.json({ ok: true, item, remainingCoins: wallet.coins - price });
+    if (itemType === 'avatar_frame') await User.findOneAndUpdate({ id: decoded.id }, { avatar_frame: itemId });
+    res.json({ ok: true, item, remainingCoins: wallet.coins });
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 
@@ -2418,7 +2423,7 @@ app.get('/api/game/items', async (req, res) => {
   try {
     const decoded = auth(req);
     const items = await GameItem.find({ user_id: decoded.id }).lean();
-    const wallet = await GameCoin.findOne({ user_id: decoded.id });
+    const wallet = await GameCoin.findOne({ user_id: decoded.id }).lean();
     res.json({ items, coins: wallet?.coins || 0 });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
@@ -2428,8 +2433,8 @@ app.get('/api/game/me', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
-    const wallet = await GameCoin.findOne({ user_id: decoded.id });
-    if (!wallet) await GameCoin.create({ user_id: decoded.id, coins: 100 });
+    let wallet = await GameCoin.findOne({ user_id: decoded.id }).lean();
+    if (!wallet) { await GameCoin.create({ user_id: decoded.id, coins: 100 }); wallet = { coins: 100 }; }
     res.json({
       id: decoded.id,
       username: user?.display_name || user?.username,
