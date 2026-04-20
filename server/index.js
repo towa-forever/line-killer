@@ -617,7 +617,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', async (req, res) => {
   try {
     const decoded = auth(req);
-    const user = await User.findOne({ id: decoded.id }, { password: 0 });
+    const user = await User.findOne({ id: decoded.id }, { password: 0 }).lean();
     if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
     res.json({ user: {
       id: user.id, username: user.username, avatar: user.avatar,
@@ -636,7 +636,7 @@ app.get('/api/auth/me', async (req, res) => {
 app.get('/api/users/me', async (req, res) => {
   try {
     const decoded = auth(req);
-    const user = await User.findOne({ id: decoded.id }, { password: 0 });
+    const user = await User.findOne({ id: decoded.id }, { password: 0 }).lean();
     if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
     res.json({
       id: user.id, username: user.username, avatar: user.avatar,
@@ -655,11 +655,11 @@ app.put('/api/drafts/:roomId', async (req, res) => {
   try {
     const decoded = auth(req);
     const { content } = req.body;
-    const user = await User.findOne({ id: decoded.id });
-    const drafts = user?.drafts || {};
-    if (content) drafts[req.params.roomId] = content;
-    else delete drafts[req.params.roomId];
-    await User.findOneAndUpdate({ id: decoded.id }, { drafts }, {returnDocument:'after'});
+    // $set/$unset で1回のDBアクセスに最適化
+    const update = content
+      ? { $set: { [`drafts.${req.params.roomId}`]: content } }
+      : { $unset: { [`drafts.${req.params.roomId}`]: '' } };
+    await User.findOneAndUpdate({ id: decoded.id }, update);
     res.json({ ok: true });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
@@ -704,17 +704,21 @@ app.post('/api/users/:userId/gift', async (req, res) => {
     const decoded = auth(req);
     const { amount, stampId } = req.body;
     if (!amount || amount < 1 || amount > 1000) return res.status(400).json({ error: 'ギフト量が不正です' });
-    const sender = await User.findOne({ id: decoded.id });
-    if (!sender || (sender.coins || 0) < amount) return res.status(400).json({ error: 'コインが不足しています' });
-    const receiver = await User.findOne({ id: req.params.userId });
+    const receiver = await User.findOne({ id: req.params.userId }, { id: 1 }).lean();
     if (!receiver) return res.status(404).json({ error: 'ユーザーが見つかりません' });
-    await User.findOneAndUpdate({ id: decoded.id }, { $inc: { coins: -amount, gift_sent: amount } }, {returnDocument:'after'});
-    await User.findOneAndUpdate({ id: req.params.userId }, { $inc: { coins: amount, gift_received: amount } }, {returnDocument:'after'});
+    // 原子的にコインを減算（コインが足りない場合はnullが返る）
+    const sender = await User.findOneAndUpdate(
+      { id: decoded.id, coins: { $gte: amount } },
+      { $inc: { coins: -amount, gift_sent: amount } },
+      { returnDocument: 'after', projection: { coins: 1 } }
+    );
+    if (!sender) return res.status(400).json({ error: 'コインが不足しています' });
+    await User.findOneAndUpdate({ id: req.params.userId }, { $inc: { coins: amount, gift_received: amount } });
     // ギフト通知
     io.to('user_' + req.params.userId).emit('gift:received', {
       from: decoded.username, amount, stampId,
     });
-    res.json({ ok: true, newBalance: (sender.coins || 0) - amount });
+    res.json({ ok: true, newBalance: sender.coins });
   } catch { res.status(500).json({ error: 'ギフト送信に失敗しました' }); }
 });
 
@@ -1030,7 +1034,7 @@ app.get('/api/users/search', async (req, res) => {
     const users = await User.find(
       { username: { $regex: q, $options: 'i' }, id: { $ne: decoded.id } },
       { id: 1, username: 1, display_name: 1, avatar: 1, status: 1, bio: 1, is_official: 1 }
-    ).limit(20);
+    ).limit(20).lean();
     res.json(users);
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
