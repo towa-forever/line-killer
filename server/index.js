@@ -1115,12 +1115,15 @@ app.patch('/api/users/me/settings', async (req, res) => {
 app.get('/api/friend-requests', async (req, res) => {
   try {
     const decoded = auth(req);
-    const requests = await FriendRequest.find({ to_id: decoded.id, status: 'pending' });
-    // 申請者のアバターも付与
-    const withAvatar = await Promise.all(requests.map(async r => {
-      const fromUser = await User.findOne({ id: r.from_id }, { avatar: 1, display_name: 1 });
-      return { ...r.toObject(), from_avatar: fromUser?.avatar || null, from_display_name: fromUser?.display_name || r.from_name };
-    }));
+    const requests = await FriendRequest.find({ to_id: decoded.id, status: 'pending' }).lean();
+    // 申請者のアバターを一括取得（N+1解消）
+    const fromIds = requests.map(r => r.from_id);
+    const fromUsers = await User.find({ id: { $in: fromIds } }, { id: 1, avatar: 1, display_name: 1 }).lean();
+    const fromUserMap = Object.fromEntries(fromUsers.map(u => [u.id, u]));
+    const withAvatar = requests.map(r => {
+      const fromUser = fromUserMap[r.from_id];
+      return { ...r, from_avatar: fromUser?.avatar || null, from_display_name: fromUser?.display_name || r.from_name };
+    });
     res.json(withAvatar);
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
