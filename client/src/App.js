@@ -876,6 +876,16 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, []);
   const handleCloseMsgMenu = useCallback(() => setMsgMenu(null), []);
   const handleCloseConfirm = useCallback(() => setConfirmDialog(null), []);
+  // モーダルclose系
+  const handleCloseNote = useCallback(() => setShowNote(false), []);
+  const handleCloseEventCal = useCallback(() => setShowEventCal(false), []);
+  const handleCloseStickerMaker = useCallback(() => setShowStickerMaker(false), []);
+  const handleCloseMiniGame = useCallback(() => setShowMiniGame(false), []);
+  const handleCloseAI = useCallback(() => setShowAI(false), []);
+  const handleCloseTaskPanel = useCallback(() => setShowTaskPanel(false), []);
+  const handleCloseUserProfile = useCallback(() => setShowUserProfile(null), []);
+  const handleCloseMediaList = useCallback(() => setShowMediaList(false), []);
+  const handleCloseStats = useCallback(() => setShowStats(false), []);
   const handleConfirmOk = useCallback(() => {
     confirmDialog?.onOk();
     setConfirmDialog(null);
@@ -891,6 +901,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, [globalQuery]);
   const handleCloseGlobalSearch = useCallback(() => setShowGlobalSearch(false), []);
   const handleCloseFavorites = useCallback(() => setShowFavorites(false), []);
+  const handleCloseCreateRoom = useCallback(() => setShowCreateRoom(false), []);
+  const handleRoomCreated = useCallback((room) => {
+    setRooms((prev) => prev.find(r => r.id === room.id) ? prev : [room, ...prev]);
+    setSelectedRoom(room);
+    setShowCreateRoom(false);
+  }, []);
 
   // リアクション（msgMenu用）
   const handleReactFromMenu = useCallback((emoji) => {
@@ -2073,8 +2089,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           currentUser={currentUser}
           friendsList={friendsList}
           onOpen={() => { /* friendsList はCreateRoom内でAPIから自動取得 */ }}
-          onClose={() => setShowCreateRoom(false)}
-          onCreated={(room) => { setRooms((prev) => prev.find(r => r.id === room.id) ? prev : [room, ...prev]); setSelectedRoom(room); setShowCreateRoom(false); }}
+          onClose={handleCloseCreateRoom}
+          onCreated={handleRoomCreated}
         /></Suspense></ErrorBoundary>
       )}</Portal>
     </div>

@@ -1488,9 +1488,11 @@ app.post('/api/rooms', async (req, res) => {
 app.patch('/api/rooms/:roomId/name', async (req, res) => {
   try {
     const decoded = auth(req);
+    const name = (req.body.name || '').trim().slice(0, 50);
+    if (!name) return res.status(400).json({ error: 'ルーム名を入力してください' });
     const room = await Room.findOneAndUpdate(
       { id: req.params.roomId, members: decoded.id },
-      { name: req.body.name }, { returnDocument: 'after' }
+      { name }, { returnDocument: 'after' }
     );
     if (!room) return res.status(403).json({ error: '権限なし' });
     io.to(req.params.roomId).emit('room:updated', { roomId: room.id, name: room.name, icon: room.icon });
@@ -2292,7 +2294,7 @@ app.post('/api/stories', async (req, res) => {
       user_avatar: user?.avatar,
       type: req.body.type || 'image',
       url: req.body.url,
-      text: req.body.text,
+      text: (req.body.text || '').slice(0, 200),
     });
     res.json(story);
   } catch(e) { res.status(400).json({ error: e.message }); }
