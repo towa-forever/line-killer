@@ -46,7 +46,7 @@ const pushSubscriptions = new Map(); // userId -> subscription (メモリキャ�
 // 起動時にDBからpush subscriptionsを読み込む
 (async () => {
   try {
-    const subs = await PushSubscription.find();
+    const subs = await PushSubscription.find().lean();
     subs.forEach(s => pushSubscriptions.set(s.user_id, s.subscription));
     console.log(`Push subscriptions loaded: ${subs.length}`);
   } catch(e) { console.error('Push subscription load error:', e); }
@@ -873,7 +873,7 @@ app.get('/api/sub-accounts', async (req, res) => {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id }, { sub_accounts: 1 }).lean();
     if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
-    const subs = await User.find({ id: { $in: user.sub_accounts || [] } }, { password: 0 });
+    const subs = await User.find({ id: { $in: user.sub_accounts || [] } }, { password: 0 }).lean();
     res.json(subs.map(s => ({ id: s.id, username: s.username, displayName: s.display_name || s.username, avatar: s.avatar, bio: s.bio })));
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
@@ -982,7 +982,7 @@ app.get('/api/contact', async (req, res) => {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
     if (!user || user.username !== ADMIN_USERNAME) return res.status(403).json({ error: '権限がありません' });
-    const contacts = await Contact.find().sort({ created_at: -1 }).limit(100);
+    const contacts = await Contact.find().sort({ created_at: -1 }).limit(100).lean();
     res.json(contacts);
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
@@ -1225,7 +1225,7 @@ app.get('/api/users/blocked', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
-    const blocked = await User.find({ id: { $in: user.blocked_users || [] } }, { password: 0 });
+    const blocked = await User.find({ id: { $in: user.blocked_users || [] } }, { password: 0 }).lean();
     res.json(blocked);
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
@@ -1289,7 +1289,7 @@ app.delete('/api/rooms/:roomId/mute', async (req, res) => {
 app.get('/api/posts', async (req, res) => {
   try {
     auth(req);
-    const posts = await Post.find().sort({ created_at: -1 }).limit(50);
+    const posts = await Post.find().sort({ created_at: -1 }).limit(50).lean();
     res.json(posts);
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
@@ -1440,11 +1440,11 @@ app.post('/api/rooms/dm', async (req, res) => {
     // 2人だけのルームが既に存在するか探す
     const existing = await Room.findOne({
       members: { $all: [decoded.id, targetUserId], $size: 2 }
-    });
+    }).lean();
     if (existing) {
-      const memberUsers = await User.find({ id: { $in: existing.members } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
+      const memberUsers = await User.find({ id: { $in: existing.members } }, { id: 1, username: 1, display_name: 1, avatar: 1 }).lean();
       const memberDetails = memberUsers.map(u => ({ id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar }));
-      return res.json({ ...existing.toObject(), id: existing.id, memberDetails });
+      return res.json({ ...existing, id: existing.id, memberDetails });
     }
 
     // なければ作成
@@ -1458,7 +1458,7 @@ app.post('/api/rooms/dm', async (req, res) => {
       members: [decoded.id, targetUserId],
       creator_id: decoded.id,
     });
-    const memberUsers = await User.find({ id: { $in: room.members } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
+    const memberUsers = await User.find({ id: { $in: room.members } }, { id: 1, username: 1, display_name: 1, avatar: 1 }).lean();
     const memberDetails = memberUsers.map(u => ({ id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar }));
     const roomObj = { id: room.id, name: room.name, icon: room.icon, members: room.members, memberDetails, pinned_message_id: null, lastMessage: null };
     [decoded.id, targetUserId].forEach(mid => io.to('user_' + mid).emit('room:new', roomObj));
@@ -1477,7 +1477,7 @@ app.post('/api/rooms', async (req, res) => {
     const members = [...new Set([decoded.id, ...safeIds])];
     const id = 'room_' + uuidv4();
     const room = await Room.create({ id, name: name.trim(), members, creator_id: decoded.id });
-    const memberUsers = await User.find({ id: { $in: members } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
+    const memberUsers = await User.find({ id: { $in: members } }, { id: 1, username: 1, display_name: 1, avatar: 1 }).lean();
     const memberDetails = memberUsers.map(u => ({ id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar }));
     const roomObj = { id: room.id, name: room.name, icon: room.icon, members: room.members, memberDetails, pinned_message_id: null, lastMessage: null };
     members.forEach(mid => io.to('user_' + mid).emit('room:new', roomObj));
@@ -1714,8 +1714,8 @@ app.get('/api/album', async (req, res) => {
     const roomIds = rooms.map(r => r.id);
     const roomMap = Object.fromEntries(rooms.map(r => [r.id, r.name || 'ルーム']));
     const imgs = await Message.find({ room_id: { $in: roomIds }, type: { $in: ['image', 'file'] }, deleted: false })
-      .sort({ created_at: -1 }).limit(500);
-    res.json(imgs.map(img => ({ ...img.toObject(), roomName: roomMap[img.room_id] || 'ルーム' })));
+      .sort({ created_at: -1 }).limit(500).lean();
+    res.json(imgs.map(img => ({ ...img, roomName: roomMap[img.room_id] || 'ルーム' })));
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
@@ -1837,7 +1837,7 @@ io.on('connection', async (socket) => {
         const mentionedUsers = await User.find({
           username: { $in: mentionedNames },
           id: { $in: room.members, $ne: socket.user.id }
-        });
+        }).lean();
         mentionedUsers.forEach(u => {
           io.to('user_' + u.id).emit('mention:new', {
             from: socket.user.username, roomId, roomName: room.name,
@@ -1881,7 +1881,7 @@ io.on('connection', async (socket) => {
         { returnDocument: 'after' }
       );
       if (!msg) return;
-      const readers = await User.find({ id: { $in: msg.read_by } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
+      const readers = await User.find({ id: { $in: msg.read_by } }, { id: 1, username: 1, display_name: 1, avatar: 1 }).lean();
       const readByDetail = readers.map(u => ({ id: u.id, name: u.display_name || u.username, avatar: u.avatar }));
       io.to(roomId).emit('message:read_update', { messageId, readBy: msg.read_by, readByDetail, roomId });
     } catch(e) { console.error('message:read error:', e); }
@@ -2202,7 +2202,7 @@ app.post('/api/favorites', async (req, res) => {
 app.get('/api/favorites', async (req, res) => {
   try {
     const decoded = auth(req);
-    const favs = await Favorite.find({ user_id: decoded.id }).sort({ created_at: -1 });
+    const favs = await Favorite.find({ user_id: decoded.id }).sort({ created_at: -1 }).lean();
     res.json(favs);
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
@@ -2227,7 +2227,7 @@ app.post('/api/rooms/:roomId/events', async (req, res) => {
 app.get('/api/rooms/:roomId/events', async (req, res) => {
   try {
     auth(req);
-    const events = await Event.find({ room_id: req.params.roomId }).sort({ start_at: 1 });
+    const events = await Event.find({ room_id: req.params.roomId }).sort({ start_at: 1 }).lean();
     res.json(events);
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
@@ -2279,7 +2279,7 @@ app.get('/api/rooms/:roomId/stats', async (req, res) => {
 app.get('/api/stories', async (req, res) => {
   try {
     auth(req);
-    const stories = await Story.find({ expires_at: { $gt: new Date() } }).sort({ created_at: -1 });
+    const stories = await Story.find({ expires_at: { $gt: new Date() } }).sort({ created_at: -1 }).lean();
     res.json(stories);
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
@@ -2368,7 +2368,7 @@ app.post('/api/game/score', async (req, res) => {
 app.get('/api/game/ranking/:game', async (req, res) => {
   try {
     const scores = await GameScore.find({ game: req.params.game })
-      .sort({ score: -1 }).limit(20);
+      .sort({ score: -1 }).lean().limit(20);
     // ユーザーごとのベストスコアのみ
     const best = {};
     scores.forEach(s => {
@@ -2382,9 +2382,9 @@ app.get('/api/game/ranking/:game', async (req, res) => {
 app.get('/api/game/ranking/:game/friends', async (req, res) => {
   try {
     const decoded = auth(req);
-    const friends = await Friend.find({ user_id: decoded.id });
+    const friends = await Friend.find({ user_id: decoded.id }).lean();
     const friendIds = [...friends.map(f => f.friend_id), decoded.id];
-    const scores = await GameScore.find({ game: req.params.game, user_id: { $in: friendIds } }).sort({ score: -1 });
+    const scores = await GameScore.find({ game: req.params.game, user_id: { $in: friendIds } }).sort({ score: -1 }).lean();
     const best = {};
     scores.forEach(s => { if (!best[s.user_id] || best[s.user_id].score < s.score) best[s.user_id] = s; });
     res.json(Object.values(best).sort((a, b) => b.score - a.score));
@@ -2413,7 +2413,7 @@ app.post('/api/game/shop/buy', async (req, res) => {
 app.get('/api/game/items', async (req, res) => {
   try {
     const decoded = auth(req);
-    const items = await GameItem.find({ user_id: decoded.id });
+    const items = await GameItem.find({ user_id: decoded.id }).lean();
     const wallet = await GameCoin.findOne({ user_id: decoded.id });
     res.json({ items, coins: wallet?.coins || 0 });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
@@ -2691,7 +2691,7 @@ app.post('/api/rooms/:roomId/tasks', async (req, res) => {
 app.get('/api/rooms/:roomId/tasks', async (req, res) => {
   try {
     auth(req);
-    const tasks = await Task.find({ room_id: req.params.roomId }).sort({ created_at: -1 });
+    const tasks = await Task.find({ room_id: req.params.roomId }).sort({ created_at: -1 }).lean();
     res.json(tasks);
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
