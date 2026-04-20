@@ -871,7 +871,7 @@ app.patch('/api/rooms/:roomId/theme', async (req, res) => {
 app.get('/api/sub-accounts', async (req, res) => {
   try {
     const decoded = auth(req);
-    const user = await User.findOne({ id: decoded.id });
+    const user = await User.findOne({ id: decoded.id }, { sub_accounts: 1 }).lean();
     if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
     const subs = await User.find({ id: { $in: user.sub_accounts || [] } }, { password: 0 });
     res.json(subs.map(s => ({ id: s.id, username: s.username, displayName: s.display_name || s.username, avatar: s.avatar, bio: s.bio })));
@@ -1298,7 +1298,7 @@ app.post('/api/posts', upload.single('image'), async (req, res) => {
   try {
     const decoded = auth(req);
     // JWTにusernameがない古いトークン対策：DBから必ず取得
-    const user = await User.findOne({ id: decoded.id });
+    const user = await User.findOne({ id: decoded.id }, { username: 1 }).lean();
     if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません。ログインし直してください' });
     const actualUsername = user.username;
     // 管理者のみ投稿可能
@@ -1518,13 +1518,15 @@ app.post('/api/rooms/:roomId/members', async (req, res) => {
   try {
     const decoded = auth(req);
     const { memberIds } = req.body;
+    if (!Array.isArray(memberIds) || memberIds.length === 0) return res.status(400).json({ error: 'メンバーIDが必要です' });
+    if (memberIds.length > 50) return res.status(400).json({ error: '一度に追加できるメンバーは50人までです' });
     const room = await Room.findOneAndUpdate(
       { id: req.params.roomId, members: decoded.id },
       { $addToSet: { members: { $each: memberIds } } }, { returnDocument: 'after' }
     );
     if (!room) return res.status(403).json({ error: '権限なし' });
     // memberDetailsを含めてroom:newを送信
-    const memberUsers = await User.find({ id: { $in: room.members } }, { id: 1, username: 1, display_name: 1, avatar: 1 });
+    const memberUsers = await User.find({ id: { $in: room.members } }, { id: 1, username: 1, display_name: 1, avatar: 1 }).lean();
     const memberDetails = memberUsers.map(u => ({ id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar }));
     const roomObj = { id: room.id, name: room.name, icon: room.icon, members: room.members, memberDetails, pinned_message_id: room.pinned_message_id, lastMessage: null };
     memberIds.forEach(mid => io.to('user_' + mid).emit('room:new', roomObj));
@@ -1537,7 +1539,7 @@ app.post('/api/rooms/:roomId/members', async (req, res) => {
 app.delete('/api/rooms/:roomId/members/:userId', async (req, res) => {
   try {
     const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId });
+    const room = await Room.findOne({ id: req.params.roomId }, { id: 1, members: 1, creator_id: 1 }).lean();
     if (!room) return res.status(404).json({ error: 'ルームが見つかりません' });
     // 自分自身を退出 or 作成者が他のメンバーを削除
     if (decoded.id !== req.params.userId && room.creator_id !== decoded.id)
@@ -1564,7 +1566,7 @@ app.post('/api/rooms/:roomId/forward', async (req, res) => {
       content, type: type || 'text', file_data: fileData || null,
       read_by: [decoded.id], reactions: [], forwarded: true
     });
-    const user = await User.findOne({ id: decoded.id });
+    const user = await User.findOne({ id: decoded.id }, { avatar: 1 }).lean();
     io.to(req.params.roomId).emit('message:receive', {
       id, roomId: req.params.roomId, senderId: decoded.id, senderName: decoded.username,
       senderAvatar: user?.avatar || null,
@@ -2541,7 +2543,7 @@ app.post('/api/rooms/:roomId/schedule', async (req, res) => {
     if (sendTime <= new Date()) return res.status(400).json({ error: '送信日時は未来の日時を指定してください' });
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
-    const user = await User.findOne({ id: decoded.id });
+    const user = await User.findOne({ id: decoded.id }, { display_name: 1, username: 1, avatar: 1 }).lean();
     const msg = await ScheduledMessage.create({
       id: 'sched_' + uuidv4(), room_id: req.params.roomId,
       sender_id: decoded.id, sender_name: user.display_name || user.username,
@@ -2586,17 +2588,20 @@ app.delete('/api/scheduled/:id', async (req, res) => {
 app.post('/api/rooms/:roomId/polls', async (req, res) => {
   try {
     const decoded = auth(req);
-    
     const { question, options, multi, allow_free_text } = req.body;
+    if (!question || !question.trim()) return res.status(400).json({ error: '質問を入力してください' });
+    if (!Array.isArray(options) || options.length < 2) return res.status(400).json({ error: '選択肢は2つ以上必要です' });
+    if (options.length > 10) return res.status(400).json({ error: '選択肢は10個までです' });
+    if (question.length > 200) return res.status(400).json({ error: '質問は200文字以内にしてください' });
     const poll = await Poll.create({
       id: 'poll_' + uuidv4(), room_id: req.params.roomId,
-      creator_id: decoded.id, question, multi: !!multi,
+      creator_id: decoded.id, question: question.trim(), multi: !!multi,
       allow_free_text: !!allow_free_text,
       free_text_answers: [],
-      options: options.map((t, i) => ({ id: 'opt_' + i, text: t, voters: [] }))
+      options: options.map((t, i) => ({ id: 'opt_' + i, text: (t || '').trim().slice(0, 100), voters: [] }))
     });
     // メッセージとして送信
-    const user = await User.findOne({ id: decoded.id });
+    const user = await User.findOne({ id: decoded.id }, { display_name: 1, username: 1 }).lean();
     
     const msg = await Message.create({
       id: 'msg_' + uuidv4(), room_id: req.params.roomId,
@@ -2616,7 +2621,7 @@ app.post('/api/rooms/:roomId/polls', async (req, res) => {
 app.get('/api/polls/:pollId', async (req, res) => {
   try {
     auth(req);
-    const poll = await Poll.findOne({ id: req.params.pollId });
+    const poll = await Poll.findOne({ id: req.params.pollId }).lean();
     res.json(poll);
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
@@ -2730,7 +2735,7 @@ app.post('/api/rooms/:roomId/ephemeral', async (req, res) => {
     const decoded = auth(req);
     
     const { content, ttlSeconds } = req.body;
-    const user = await User.findOne({ id: decoded.id });
+    const user = await User.findOne({ id: decoded.id }, { display_name: 1, username: 1 }).lean();
     const expiresAt = new Date(Date.now() + (ttlSeconds || 30) * 1000);
     const msg = await Message.create({
       id: 'msg_' + uuidv4(), room_id: req.params.roomId,
