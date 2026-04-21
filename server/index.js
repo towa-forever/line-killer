@@ -98,7 +98,7 @@ app.get('/admin/reset-requests', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '2mb' })); // メッセージ・投稿のbody制限
 
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
@@ -113,8 +113,19 @@ const cloudStorage = useCloudinary ? new CloudinaryStorage({
   params: { folder: 'line-killer', allowed_formats: ['jpg','jpeg','png','gif','webp','mp4','pdf'] },
 }) : null;
 
+const ALLOWED_EXTENSIONS = new Set([
+  '.jpg','.jpeg','.png','.gif','.webp','.mp4','.mov','.avi','.webm',
+  '.pdf','.zip','.doc','.docx','.xls','.xlsx','.ppt','.pptx','.txt',
+  '.mp3','.wav','.ogg','.m4a','.aac',
+]);
+const fileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ALLOWED_EXTENSIONS.has(ext)) { cb(null, true); }
+  else { cb(new Error('このファイル形式はアップロードできません'), false); }
+};
+
 const storage = cloudStorage || diskStorage;
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
+const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter });
 const getFileUrl = (req) => {
   if (useCloudinary && req.file?.path) return req.file.path; // Cloudinaryは絶対URL
   return req.file ? `/uploads/${req.file.filename}` : null;
@@ -565,6 +576,9 @@ app.post('/api/auth/register', async (req, res) => {
     if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
     const uname = username.trim();
     if (uname.length < 1) return res.status(400).json({ error: 'ユーザー名を入力してください' });
+    if (uname.length > 30) return res.status(400).json({ error: 'ユーザー名は30文字以内にしてください' });
+    if (password.length < 6) return res.status(400).json({ error: 'パスワードは6文字以上にしてください' });
+    if (password.length > 100) return res.status(400).json({ error: 'パスワードが長すぎます' });
     // スペースと制御文字のみ禁止（日本語・記号はOK）
     if (/[\s\x00-\x1f]/.test(uname)) return res.status(400).json({ error: 'ユーザー名にスペースや制御文字は使えません' });
     const exists = await User.findOne({ username: uname });

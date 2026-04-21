@@ -176,11 +176,12 @@ function MediaListModal({ roomId, serverUrl, onClose }) {
 function RoomNameEditor({ room, onClose }) {
   const [name, setName] = React.useState(room.name || '');
   const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState('');
   const handleSave = async () => {
     if (!name.trim()) return;
-    setSaving(true);
-    try { await axios.patch(`/api/rooms/${room.id}/name`, { name }); onClose(); }
-    catch (e) { console.error(e); }
+    setSaving(true); setError('');
+    try { await axios.patch(`/api/rooms/${room.id}/name`, { name: name.trim() }); onClose(); }
+    catch (e) { setError(e.response?.data?.error || '保存に失敗したで'); }
     finally { setSaving(false); }
   };
   return (
@@ -193,6 +194,7 @@ function RoomNameEditor({ room, onClose }) {
           {saving ? '...' : '変更'}
         </button>
       </div>
+      {error && <div style={{ fontSize:12, color:'var(--danger)', marginTop:4 }}>{error}</div>}
     </div>
   );
 }
