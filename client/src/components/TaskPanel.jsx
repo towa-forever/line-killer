@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 export default function TaskPanel({ room, currentUser, socket, onClose, showToast }) {
@@ -21,7 +21,7 @@ export default function TaskPanel({ room, currentUser, socket, onClose, showToas
     return () => { socket.off('task:new', onNew); socket.off('task:updated', onUpdated); socket.off('task:deleted', onDeleted); };
   }, [room.id, socket]);
 
-  const addTask = async () => {
+  const addTask = useCallback(async () => {
     if (!title.trim() || adding) return;
     setAdding(true);
     try {
@@ -35,10 +35,10 @@ export default function TaskPanel({ room, currentUser, socket, onClose, showToas
     } catch (e) {
       showToast?.('タスクの追加に失敗したで', 'error');
     } finally { setAdding(false); }
-  };
+  }, [title, adding, room.id, assigneeId, currentUser, due, showToast]);
 
-  const toggle = (task) => axios.patch('/api/tasks/' + task.id, { done: !task.done }).catch(() => {});
-  const del = (task) => axios.delete('/api/tasks/' + task.id).catch(() => {});
+  const toggle = useCallback((task) => axios.patch('/api/tasks/' + task.id, { done: !task.done }).catch(() => {}), []);
+  const del = useCallback((task) => axios.delete('/api/tasks/' + task.id).catch(() => {}), []);
 
   const pending = tasks.filter(t => !t.done);
   const done = tasks.filter(t => t.done);

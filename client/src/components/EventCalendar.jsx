@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 export default function EventCalendar({ room, currentUser, socket, onClose }) {
@@ -21,14 +21,14 @@ export default function EventCalendar({ room, currentUser, socket, onClose }) {
     return () => { socket.off('event:new', onNew); socket.off('event:updated', onUpd); };
   }, [room.id, socket]);
 
-  const create = async () => {
+  const create = useCallback(async () => {
     if (!title.trim() || !startAt) return;
     try { await axios.post('/api/rooms/' + room.id + '/events', { title: title.trim(), description: desc, startAt, endAt }); }
     catch { setCreateError('イベントの保存に失敗しました'); return; }
     setTitle(''); setDesc(''); setStartAt(''); setEndAt(''); setView('list'); setCreateError('');
-  };
+  }, [title, startAt, desc, endAt, room.id]);
 
-  const attend = async (eventId, status) => {
+  const attend = useCallback(async (eventId, status) => {
     // オプティミスティックUI更新（即時反映）
     setEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
