@@ -377,7 +377,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [globalResults, setGlobalResults] = useState([]);
   const [globalSearching, setGlobalSearching] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null); // { message, onOk }
-  const appConfirm = (message, onOk) => setConfirmDialog({ message, onOk });
+  const appConfirm = useCallback((message, onOk) => setConfirmDialog({ message, onOk }), []);
   const [msgStyle, setMsgStyle] = useState(() => JSON.parse(localStorage.getItem('msgStyle') || '{"font":"default","color":""}'));
   const [lang, setLang] = useState(() => localStorage.getItem('lang') || 'ja');
   const [scheduleText, setScheduleText] = useState('');
@@ -677,9 +677,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     const savedDraft = selectedRoom ? (draftRef.current[selectedRoom.id] || '') : '';
     setInputText(savedDraft);
     setReplyTo(null);
-    setShowInputMenu(false);
-    setShowHeaderMenu(false);
-    setShowStampPanel(false);
+    dispatchModal({ type: 'CLOSE_ALL' });
     setShowVoice(false);
     setShowLocation(false);
     setShowSecret(false);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 
 export default function StampShop({ currentUser, acquiredStampIds = [], onAcquire }) {
@@ -15,7 +15,7 @@ export default function StampShop({ currentUser, acquiredStampIds = [], onAcquir
       .finally(() => setLoading(false));
   }, []);
 
-  const handleAcquire = async (setId) => {
+  const handleAcquire = useCallback(async (setId) => {
     setAcquiring(setId);
     try {
       await axios.post('/api/stamps/acquire', { setId });
@@ -24,10 +24,11 @@ export default function StampShop({ currentUser, acquiredStampIds = [], onAcquir
     } catch (err) {
       setMessage(err.response?.data?.error || '取得に失敗しました');
     } finally { setAcquiring(null); }
-  };
+  }, [onAcquire]);
 
-  const isOwned = (setId) => acquiredStampIds.map(id => String(id)).includes(String(setId));
-  const myStampSets = stamps.filter((s) => isOwned(s.id));
+  const acquiredSet = useMemo(() => new Set(acquiredStampIds.map(id => String(id))), [acquiredStampIds]);
+  const isOwned = useCallback((setId) => acquiredSet.has(String(setId)), [acquiredSet]);
+  const myStampSets = useMemo(() => stamps.filter((s) => isOwned(s.id)), [stamps, isOwned]);
 
   if (loading) return <div className="page"><div className="empty-state">読み込み中...</div></div>;
 
