@@ -169,7 +169,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
   }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 自分だけ退出
-  const leaveCall = () => {
+  const leaveCall = useCallback(() => {
     socket?.emit('gcall:end', { roomId });
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     Object.values(pcsRef.current).forEach(pc => pc.close());
@@ -177,25 +177,25 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
   };
 
   // 全員終話（ホストのみ）
-  const endCallAll = () => {
+  const endCallAll = useCallback(() => {
     socket?.emit('gcall:end_all', { roomId });
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     Object.values(pcsRef.current).forEach(pc => pc.close());
     onEnd();
   };
 
-  const toggleMute = () => {
+  const toggleMute = useCallback(() => {
     localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
     setIsMuted(m => !m);
   };
 
-  const toggleCamera = () => {
+  const toggleCamera = useCallback(() => {
     localStreamRef.current?.getVideoTracks().forEach(t => { t.enabled = !t.enabled; });
     setIsCamOff(c => !c);
   };
 
   // カメラ切り替え（内カメ⇔外カメ）
-  const switchCamera = async () => {
+  const switchCamera = useCallback(async () => {
     const newFacing = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(newFacing);
     try {
@@ -205,7 +205,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
     }
   };
 
-  const toggleScreenShare = async () => {
+  const toggleScreenShare = useCallback(async () => {
     if (isScreenSharing) {
       screenTrackRef.current?.stop();
       const camTrack = localStreamRef.current?.getVideoTracks()[0];

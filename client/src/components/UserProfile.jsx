@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
@@ -18,7 +18,7 @@ export default function UserProfile({ username, currentUser, onClose, onStartCha
   const coverSrc   = user?.coverImage ? (user.coverImage.startsWith('http') ? user.coverImage : `${SERVER_URL}${user.coverImage}`) : null;
   const isSelf = user?.username === currentUser?.username;
 
-  const lastSeenText = (date) => {
+  const lastSeenText = useCallback((date) => {
     if (!date) return '';
     const diff = Date.now() - new Date(date);
     const min = Math.floor(diff / 60000);

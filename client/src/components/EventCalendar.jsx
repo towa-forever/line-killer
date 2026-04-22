@@ -48,7 +48,7 @@ export default function EventCalendar({ room, currentUser, socket, onClose }) {
   const STATUS_COLOR = { going: '#06c755', maybe: '#ff9500', notgoing: '#ff3b30', pending: 'var(--text2)' };
 
   // カレンダーグリッド
-  const daysInMonth = () => {
+  const daysInMonth = useCallback(() => {
     const y = month.getFullYear(), m = month.getMonth();
     const first = new Date(y, m, 1).getDay();
     const days = new Date(y, m + 1, 0).getDate();

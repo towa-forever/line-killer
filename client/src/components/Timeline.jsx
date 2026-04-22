@@ -21,7 +21,7 @@ export default function Timeline({ currentUser, socket }) {
   const fileInputRef = useRef(null);
 
   // 管理者判定 - 複数の方法でチェック
-  const checkIsAdmin = () => {
+  const checkIsAdmin = useCallback(() => {
     const u = currentUser;
     if (!u) return false;
     const name = (u.username || u.displayName || '').toLowerCase().trim();
@@ -135,7 +135,7 @@ export default function Timeline({ currentUser, socket }) {
 
   const isLiked = (post) => post.likes?.some((l) => l === currentUser?._id || l === currentUser?.id);
 
-  const timeAgo = (date) => {
+  const timeAgo = useCallback((date) => {
     const diff = Date.now() - new Date(date);
     const min  = Math.floor(diff / 60000);
     const hr   = Math.floor(min / 60);

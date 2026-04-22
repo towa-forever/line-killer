@@ -15,7 +15,7 @@ export default function StickerMaker({ onSend, onClose }) {
 
   useEffect(() => { drawSticker(); }, [text, fontSize, bgColor, fontColor, font, shape]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const drawSticker = () => {
+  const drawSticker = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -43,7 +43,7 @@ export default function StickerMaker({ onSend, onClose }) {
     ctx.fillText(text, W/2, H/2);
   };
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     setSending(true);

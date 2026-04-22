@@ -22,7 +22,7 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
     if (audioUrl) URL.revokeObjectURL(audioUrl);
   }, [audioUrl]);
 
-  const startRecording = async () => {
+  const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const ctx = new AudioContext();
@@ -78,13 +78,13 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
     draw();
   };
 
-  const stopRecording = () => {
+  const stopRecording = useCallback(() => {
     clearInterval(timerRef.current);
     cancelAnimationFrame(animRef.current);
     mediaRecorderRef.current?.stop();
   };
 
-  const send = async () => {
+  const send = useCallback(async () => {
     if (!audioBlob) return;
     setState('sending');
     try {

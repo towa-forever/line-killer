@@ -36,7 +36,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
     if (pcRef.current) { pcRef.current.close(); pcRef.current = null; }
   }, []);
 
-  const startTimer = () => {
+  const startTimer = useCallback(() => {
     callStartRef.current = Date.now();
     timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - callStartRef.current) / 1000)), 1000);
   };
@@ -88,7 +88,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       if (!pcRef.current) return;
       await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
     };
-    const handleEnd = () => { cleanup(); onClose(); };
+    const handleEnd = useCallback(() => { cleanup(); onClose(); };
 
     socket.on('voice:answer', handleAnswer);
     socket.on('voice:ice', handleIce);
@@ -104,7 +104,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 着信応答
-  const acceptCall = async () => {
+  const acceptCall = useCallback(async () => {
     setStatus('active');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -121,7 +121,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
     } catch (e) { console.error(e); onClose(); }
   };
 
-  const rejectCall = () => {
+  const rejectCall = useCallback(() => {
     socket.emit('voice:reject', { to: targetUser.id, callId: callIdRef.current });
     cleanup(); onClose();
   };
@@ -132,7 +132,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
     cleanup(); onClose();
   }, [socket, targetUser, cleanup, onClose, roomId]);
 
-  const toggleMute = () => {
+  const toggleMute = useCallback(() => {
     if (localStream.current) {
       localStream.current.getAudioTracks().forEach(t => { t.enabled = muted; });
       setMuted(m => !m);

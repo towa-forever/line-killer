@@ -98,7 +98,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   }, [onEnd]);
 
   // ICEバッファをフラッシュ
-  const flushIce = async (pc) => {
+  const flushIce = useCallback(async (pc) => {
     for (const c of iceBufRef.current) {
       try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (_) {}
     }
@@ -106,7 +106,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   };
 
   // メディア取得
-  const getMedia = async () => {
+  const getMedia = useCallback(async () => {
     try {
       return await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -198,7 +198,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     let mounted = true;
 
     // ---- 発信 ----
-    const startCall = async () => {
+    const startCall = useCallback(async () => {
       const stream = await getMedia();
       if (!stream || !mounted) return;
       localStreamRef.current = stream;
@@ -214,7 +214,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     };
 
     // ---- 着信応答 ----
-    const answerCall = async () => {
+    const answerCall = useCallback(async () => {
       if (!incomingOffer) { console.error('[着信] incomingOfferがない'); safeEnd(); return; }
       const stream = await getMedia();
       if (!stream || !mounted) return;
@@ -287,7 +287,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   }, [minimized]);
 
   // カメラ切替
-  const switchCamera = async () => {
+  const switchCamera = useCallback(async () => {
     const next = facing === 'user' ? 'environment' : 'user';
     setFacing(next);
     try {
@@ -302,24 +302,24 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     } catch (e) { console.error('[switchCamera]', e); }
   };
 
-  const endCall = () => {
+  const endCall = useCallback(() => {
     const dur = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
     socket?.emit('call:end', { roomId, to: targetUserId, duration: dur });
     clearInterval(durationTimer.current);
     safeEnd();
   };
 
-  const toggleMute = () => {
+  const toggleMute = useCallback(() => {
     localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
     setIsMuted(m => !m);
   };
 
-  const toggleCamera = () => {
+  const toggleCamera = useCallback(() => {
     localStreamRef.current?.getVideoTracks().forEach(t => { t.enabled = !t.enabled; });
     setIsCamOff(c => !c);
   };
 
-  const toggleScreen = async () => {
+  const toggleScreen = useCallback(async () => {
     if (isScreen) {
       screenTrack.current?.stop(); screenTrack.current = null;
       try {
