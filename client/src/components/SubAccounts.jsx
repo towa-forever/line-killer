@@ -15,10 +15,10 @@ export default function SubAccounts({ currentUser, onSwitch, onClose }) {
 
   const isSubAccount = !!currentUser?.parentAccountId;
 
-  const showMsg = (text, type = 'success') => {
+  const showMsg = useCallback((text, type = 'success') => {
     setMsg({ text, type });
     setTimeout(() => setMsg({ text: '', type: '' }), 3000);
-  };
+  }, []);
 
   useEffect(() => { fetchSubs(); }, []);
 

@@ -9,7 +9,7 @@ export function StoryBar({ currentUser, friendsList, socket }) { // eslint-disab
   const [viewing, setViewing] = useState(null); // { userId, stories[], idx }
   const fileRef = useRef(null);
 
-  const load = () => axios.get('/api/stories').then(r => setStories(r.data)).catch(() => {});
+  const load = useCallback(() => axios.get('/api/stories').then(r => setStories(r.data)).catch(() => {}), []);
   useEffect(() => { load(); const id = setInterval(load, 30000); return () => clearInterval(id); }, []);
 
   // ユーザー別にグループ化
@@ -21,7 +21,7 @@ export function StoryBar({ currentUser, friendsList, socket }) { // eslint-disab
   const myStories = byUser[currentUser?.id];
   const others = Object.entries(byUser).filter(([id]) => id !== currentUser?.id);
 
-  const openStory = (userId, items) => setViewing({ userId, items, idx: 0 });
+  const openStory = useCallback((userId, items) => setViewing({ userId, items, idx: 0 }), []);
 
   const [posting, setPosting] = useState(false);
   const postStory = useCallback(async (e) => {

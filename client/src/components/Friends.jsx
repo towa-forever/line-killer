@@ -20,7 +20,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
   const [onlineUsers, setOnlineUsers] = useState([]);
   const qrInputRef = useRef(null);
 
-  const showMsg = (text, type = 'success') => { setMessage(text); setMessageType(type); setTimeout(() => setMessage(''), 3000); };
+  const showMsg = useCallback((text, type = 'success') => { setMessage(text); setMessageType(type); setTimeout(() => setMessage(''), 3000); }, []);
 
   const fetchFriends  = useCallback(async () => {
     try {

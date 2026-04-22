@@ -133,7 +133,7 @@ export default function Timeline({ currentUser, socket }) {
     }});
   };
 
-  const isLiked = (post) => post.likes?.some((l) => l === currentUser?._id || l === currentUser?.id);
+  const isLiked = useCallback((post) => post.likes?.some((l) => l === currentUser?._id || l === currentUser?.id), [currentUser]);
 
   const timeAgo = useCallback((date) => {
     const diff = Date.now() - new Date(date);
