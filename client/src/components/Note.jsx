@@ -37,7 +37,7 @@ export default function Note({ room, currentUser, socket, onClose }) {
     return () => socket.off('note:updated', handler);
   }, [socket, room.id]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setSaving(true);
     try {
       if (tab === 'shared') {
@@ -50,15 +50,15 @@ export default function Note({ room, currentUser, socket, onClose }) {
       setTimeout(() => setSaved(false), 2000);
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
-  };
+  }, [tab, room.id, sharedContent, mineContent]);
 
   const content = tab === 'shared' ? sharedContent : mineContent;
-  const setContent = (val) => {
+  const setContent = useCallback((val) => {
     if (tab === 'shared') setSharedContent(val);
     else setMineContent(val);
     setDirty(true);
     setSaved(false);
-  };
+  }, [tab]);
 
   return (
     <div style={{

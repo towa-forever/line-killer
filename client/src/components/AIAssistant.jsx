@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import axios from 'axios';
 
 export default function AIAssistant({ messages, currentRoom, onInsert, onClose }) {
@@ -9,7 +9,7 @@ export default function AIAssistant({ messages, currentRoom, onInsert, onClose }
   const [translateText, setTranslateText] = useState('');
   const [suggestions, setSuggestions] = useState([]);
 
-  const run = async () => {
+  const run = useCallback(async () => {
     setLoading(true); setResult(''); setSuggestions([]);
     try {
       const payload = { type: mode, messages, text: translateText, targetLang: translateTarget };
@@ -26,7 +26,7 @@ export default function AIAssistant({ messages, currentRoom, onInsert, onClose }
       setResult('AIへの接続に失敗したで。ANTHROPIC_API_KEYが設定されてるか確認してな。');
     }
     setLoading(false);
-  };
+  }, [mode, messages, translateText, translateTarget]);
 
   return (
     <div style={{

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const GIFT_AMOUNTS = [10, 50, 100, 300, 500];
@@ -16,7 +16,7 @@ export default function GiftModal({ targetUser, currentUser, onClose }) {
     axios.get('/api/users/me/coins').then(r => setMyCoins(r.data.coins)).catch(() => {});
   }, []);
 
-  const send = async () => {
+  const send = useCallback(async () => {
     if (amount > myCoins) { setError('コインが不足しています'); return; }
     setSending(true); setError('');
     try {
@@ -25,7 +25,7 @@ export default function GiftModal({ targetUser, currentUser, onClose }) {
       setDone(true);
     } catch (e) { setError(e.response?.data?.error || '送信に失敗しました'); }
     finally { setSending(false); }
-  };
+  }, [amount, myCoins, targetUser, stamp]);
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:9000, display:'flex', alignItems:'flex-end', justifyContent:'center' }}

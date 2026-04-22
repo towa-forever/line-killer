@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import axios from 'axios';
 
 const CATEGORIES = [
@@ -17,7 +17,7 @@ export default function ContactForm({ currentUser, onClose }) {
   const [done,     setDone]     = useState(false);
   const [error,    setError]    = useState('');
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     if (!category) { setError('カテゴリを選んでください'); return; }
     if (!title.trim()) { setError('件名を入力してください'); return; }
     if (!body.trim() || body.trim().length < 10) { setError('内容を10文字以上入力してください'); return; }
@@ -30,7 +30,7 @@ export default function ContactForm({ currentUser, onClose }) {
     } catch (e) {
       setError(e.response?.data?.error || '送信に失敗しました。しばらくしてから再試行してください。');
     } finally { setSending(false); }
-  };
+  }, [category, title, body]);
 
   return (
     <div style={{ position:'fixed', inset:0, background:'var(--bg)', zIndex:8000, display:'flex', flexDirection:'column', overflow:'hidden' }}>

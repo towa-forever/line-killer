@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 export default function ReadLater({ currentUser, onClose, onJumpTo }) {
@@ -9,10 +9,10 @@ export default function ReadLater({ currentUser, onClose, onJumpTo }) {
     axios.get('/api/read-later').then(r => setMsgs(r.data)).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  const remove = async (msgId) => {
+  const remove = useCallback(async (msgId) => {
     await axios.delete(`/api/read-later/${msgId}`).catch(() => {});
     setMsgs(m => m.filter(x => x.id !== msgId));
-  };
+  }, []);
 
   return (
     <div style={{ position:'fixed', inset:0, background:'var(--bg)', zIndex:8000, display:'flex', flexDirection:'column' }}>
