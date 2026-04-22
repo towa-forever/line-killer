@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom';
 import axios from 'axios';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
@@ -392,37 +392,37 @@ function SecuritySection({ currentUser, onOpenPinSetup }) {
   const [pwMsg, setPwMsg] = React.useState('');
   const [pwSaving, setPwSaving] = React.useState(false);
 
-  const loadLoginHistory = async () => {
+  const loadLoginHistory = useCallback(async () => {
     setLoadingHistory(true);
     try {
       const res = await axios.get('/api/auth/login-history');
       setLoginHistory(res.data || []);
     } catch { setLoginHistory([]); }
     finally { setLoadingHistory(false); }
-  };
+  }, []);
 
-  const loadBlockedUsers = async () => {
+  const loadBlockedUsers = useCallback(async () => {
     setLoadingBlocked(true);
     try {
       setBlockedUsers(currentUser?.blockedUsers || []);
     } catch { setBlockedUsers([]); }
     finally { setLoadingBlocked(false); }
-  };
+  }, []);
 
-  const handleOpenSecurity = () => {
+  const handleOpenSecurity = useCallback(() => {
     setShowSecurity(true);
     loadLoginHistory();
     loadBlockedUsers();
-  };
+  }, [loadLoginHistory, loadBlockedUsers]);
 
-  const handleUnblock = async (userId) => {
+  const handleUnblock = useCallback(async (userId) => {
     try {
       await axios.post(`/api/users/${userId}/block`);
       setBlockedUsers(prev => prev.filter(u => u.id !== userId && u !== userId));
     } catch {}
-  };
+  }, []);
 
-  const handleSaveRecoveryEmail = async () => {
+  const handleSaveRecoveryEmail = useCallback(async () => {
     if (!recoveryEmail.trim() || !recoveryEmail.includes('@')) { setSecMsg('正しいメールアドレスを入力してや'); return; }
     setSecSaving(true); setSecMsg('');
     try {
@@ -431,9 +431,9 @@ function SecuritySection({ currentUser, onOpenPinSetup }) {
       setTimeout(() => setShowSecForm(false), 1500);
     } catch (e) { setSecMsg(e.response?.data?.error || '保存に失敗した...'); }
     finally { setSecSaving(false); }
-  };
+  }, [recoveryEmail]);
 
-  const handleChangePw = async () => {
+  const handleChangePw = useCallback(async () => {
     if (!currentPw) { setPwMsg('現在のパスワードを入力してや'); return; }
     if (!newPw) { setPwMsg('新しいパスワードを入力してや'); return; }
     if (newPw.length < 6) { setPwMsg('パスワードは6文字以上にしてや'); return; }
@@ -446,7 +446,7 @@ function SecuritySection({ currentUser, onOpenPinSetup }) {
       setCurrentPw(''); setNewPw(''); setNewPw2('');
     } catch (e) { setPwMsg(e.response?.data?.error || '変更に失敗した...'); }
     finally { setPwSaving(false); }
-  };
+  }, [currentPw, newPw, newPw2]);
 
   return (
     <>
@@ -582,7 +582,7 @@ function SubAccountSection({ currentUser, onSwitchAccount }) {
     axios.get('/api/sub-accounts').then(r => setSubAccounts(r.data)).catch(() => {});
   }, [isSubAccount, setSubAccounts]);
 
-  const createSub = async () => {
+  const createSub = useCallback(async () => {
     if (!subForm.username.trim() || !subForm.password.trim()) { setSubError('IDとパスワードは必須です'); return; }
     setSubLoading(true); setSubError('');
     try {
@@ -592,35 +592,35 @@ function SubAccountSection({ currentUser, onSwitchAccount }) {
       setSubForm({ username:'', password:'', displayName:'' });
     } catch (e) { setSubError(e.response?.data?.error || '作成に失敗しました'); }
     finally { setSubLoading(false); }
-  };
+  }, [subForm, subLoading]);
 
-  const deleteSub = async (subId) => {
+  const deleteSub = useCallback(async (subId) => {
     setDeleteConfirm(subId);
-  };
+  }, []);
 
-  const confirmDeleteSub = async (subId) => {
+  const confirmDeleteSub = useCallback(async (subId) => {
     try {
       await axios.delete(`/api/sub-accounts/${subId}`);
       setSubAccounts(p => p.filter(s => s.id !== subId));
     } catch {}
     setDeleteConfirm(null);
-  };
+  }, []);
 
-  const switchTo = async (subId) => {
+  const switchTo = useCallback(async (subId) => {
     try {
       const res = await axios.post(`/api/sub-accounts/${subId}/switch`);
       onSwitchAccount?.(res.data.token, res.data.user);
     } catch {}
-  };
+  }, [onSwitchAccount]);
 
-  const switchToParent = async () => {
+  const switchToParent = useCallback(async () => {
     const parentId = currentUser?.parentAccountId;
     if (!parentId) return;
     try {
       const res = await axios.post(`/api/sub-accounts/${parentId}/switch`);
       onSwitchAccount?.(res.data.token, res.data.user);
     } catch (e) { console.error('親アカへの切替失敗', e); }
-  };
+  }, [currentUser, onSwitchAccount]);
 
   return (
     <div className="card" style={{ margin:10 }}>
