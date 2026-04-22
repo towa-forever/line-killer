@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from 'react'; // useCallback追加済み
 import axios from 'axios';
 
 export default function PasswordReset({ onClose, onSuccess, onBack }) {
@@ -13,7 +13,7 @@ export default function PasswordReset({ onClose, onSuccess, onBack }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchEmail = async () => {
+  const fetchEmail = useCallback(async () => {
     if (!username.trim()) { setError('IDを入力してください'); return; }
     setLoading(true); setError('');
     try {
@@ -25,7 +25,7 @@ export default function PasswordReset({ onClose, onSuccess, onBack }) {
     } finally { setLoading(false); }
   };
 
-  const resetPassword = async () => {
+  const resetPassword = useCallback(async () => {
     if (!email.trim()) { setError('メールアドレスを入力してください'); return; }
     if (!newPass) { setError('新しいパスワードを入力してください'); return; }
     if (newPass !== newPass2) { setError('パスワードが一致しません'); return; }

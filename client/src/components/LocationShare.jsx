@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 
 export default function LocationShare({ socket, roomId, currentUser, onSent, onCancel }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const send = () => {
+  const send = useCallback(() => {
     setLoading(true);
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {

@@ -39,21 +39,19 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   const coverInputRef = useRef(null);
   const qrInputRef = useRef(null);
 
-  const handleAvatarChange = (e) => {
+  const handleAvatarChange = useCallback((e) => {
     const file = e.target.files[0];
     if (!file) return;
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
-  };
-
-  const handleCoverChange = (e) => {
+  }, [fileInputRef]);
+  const handleCoverChange = useCallback((e) => {
     const file = e.target.files[0];
     if (!file) return;
     setCoverFile(file);
     setCoverPreview(URL.createObjectURL(file));
-  };
-
-  const saveSettings = async (updates) => {
+  }, [coverInputRef]);
+  const saveSettings = useCallback(async (updates) => {
     try {
       const res = await axios.patch('/api/users/me/settings', updates);
       if (res.data) onUpdate(res.data);
@@ -64,7 +62,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setSaving(true);
     try {
       const formData = new FormData();
@@ -86,7 +84,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   };
 
   // QRコード画像からユーザー名を読み取り
-  const handleQrImageUpload = async (e) => {
+  const handleQrImageUpload = useCallback(async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     // QRコードの画像をcanvasで読み取る
@@ -105,7 +103,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
     setMessage('QRコードの読み取りには別の方法をお試しください');
   };
 
-  const handleQrValue = async (text) => {
+  const handleQrValue = useCallback(async (text) => {
     // linekiller://add/USERNAME or just USERNAME
     const match = text.match(/linekiller:\/\/add\/(.+)/) || text.match(/^([a-zA-Z0-9_]+)$/);
     const username = match?.[1]?.trim();
@@ -121,11 +119,10 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   };
 
   // カメラQRスキャン（スマホ向け）
-  const handleCameraQr = () => {
+  const handleCameraQr = useCallback(() => {
     // input type=file でカメラを使う（モバイル向け）
     qrInputRef.current?.click();
-  };
-
+  }, [qrInputRef]);
   const avatarSrc  = avatarPreview  || (currentUser?.avatar     ? (currentUser?.avatar?.startsWith('http') ? currentUser?.avatar : `${SERVER_URL}${currentUser?.avatar}`) : null);
   const coverSrc   = coverPreview   || (currentUser?.coverImage ? (currentUser?.coverImage?.startsWith('http') ? currentUser?.coverImage : `${SERVER_URL}${currentUser?.coverImage}`) : null);
 

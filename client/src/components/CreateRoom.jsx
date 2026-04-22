@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // useCallback追加済み
 import axios from 'axios';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
@@ -22,13 +22,12 @@ export default function CreateRoom({ currentUser, friendsList: initialFriends = 
     if (onOpen) onOpen();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const toggleUser = (userId) => {
+  const toggleUser = useCallback((userId) => {
     setSelectedUsers((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
-  };
-
-  const handleCreate = async () => {
+  }, []);
+  const handleCreate = useCallback(async () => {
     if (selectedUsers.length === 0) { setError('相手を選んでください'); return; }
     if (tab === 'group' && !groupName.trim()) { setError('グループ名を入力してください'); return; }
     setCreating(true); setError('');

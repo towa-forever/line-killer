@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from 'react'; // useCallback追加済み
 import axios from 'axios';
 
 export default function GroupSettings({ room, currentUser, onClose, onUpdate }) {
@@ -15,7 +15,7 @@ export default function GroupSettings({ room, currentUser, onClose, onUpdate }) 
   // 将来的に使う可能性があるので正しいAPIエンドポイントに修正
   const roomId = room?.id || room?._id;
 
-  const generateInvite = async () => {
+  const generateInvite = useCallback(async () => {
     setInviteLoading(true);
     try {
       const res = await axios.post(`/api/rooms/${roomId}/invite`);
@@ -24,12 +24,11 @@ export default function GroupSettings({ room, currentUser, onClose, onUpdate }) 
     finally { setInviteLoading(false); }
   };
 
-  const copyInvite = () => {
+  const copyInvite = useCallback(() => {
     navigator.clipboard.writeText(inviteUrl);
     setMessage('コピーしました！');
-  };
-
-  const saveTheme = async (color) => {
+  }, []);
+  const saveTheme = useCallback(async (color) => {
     setThemeSaving(true);
     try {
       await axios.patch(`/api/rooms/${roomId}/theme`, { themeColor: color });
@@ -39,7 +38,7 @@ export default function GroupSettings({ room, currentUser, onClose, onUpdate }) 
     finally { setThemeSaving(false); }
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setSaving(true);
     try {
       await axios.patch(`/api/rooms/${roomId}/name`, { name });
@@ -50,7 +49,7 @@ export default function GroupSettings({ room, currentUser, onClose, onUpdate }) 
     } finally { setSaving(false); }
   };
 
-  const handleKick = (userId) => {
+  const handleKick = useCallback((userId) => {
     setConfirmDialog({ text: 'このメンバーを退出させますか？', onOk: async () => {
       try {
         await axios.delete(`/api/rooms/${roomId}/members/${userId}`);
@@ -59,7 +58,7 @@ export default function GroupSettings({ room, currentUser, onClose, onUpdate }) 
     }});
   };
 
-  const handleLeave = () => {
+  const handleLeave = useCallback(() => {
     setConfirmDialog({ text: 'このグループを退出しますか？', onOk: async () => {
       try {
         await axios.delete(`/api/rooms/${roomId}/members/${currentUser?.id}`);

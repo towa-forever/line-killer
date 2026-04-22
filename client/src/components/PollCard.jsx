@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // useCallback追加済み
 import axios from 'axios';
 
 export default function PollCard({ pollId, initialPoll, currentUser }) {
@@ -20,7 +20,7 @@ export default function PollCard({ pollId, initialPoll, currentUser }) {
   const myFreeAnswer = (poll.free_text_answers || []).find(a => a.user_id === currentUser?.id);
   const freeAnswers = poll.free_text_answers || [];
 
-  const vote = async (optId) => {
+  const vote = useCallback(async (optId) => {
     if (poll.closed) return;
     try {
       const res = await axios.post('/api/polls/' + poll.id + '/vote', { optionId: optId });
@@ -28,7 +28,7 @@ export default function PollCard({ pollId, initialPoll, currentUser }) {
     } catch { /* 無視 */ }
   };
 
-  const submitFreeText = async () => {
+  const submitFreeText = useCallback(async () => {
     if (!freeText.trim() || submittingFree) return;
     setSubmittingFree(true);
     try {
@@ -39,7 +39,7 @@ export default function PollCard({ pollId, initialPoll, currentUser }) {
     finally { setSubmittingFree(false); }
   };
 
-  const close = async () => {
+  const close = useCallback(async () => {
     try {
       const res = await axios.post('/api/polls/' + poll.id + '/close');
       setPoll(res.data);

@@ -68,22 +68,20 @@ export default function Timeline({ currentUser, socket }) {
     };
   }, [socket]);
 
-  const handleImageSelect = (e) => {
+  const handleImageSelect = useCallback((e) => {
     const file = e.target.files[0];
     if (!file) return;
     setNewPostImage(file);
     const reader = new FileReader();
     reader.onload = (ev) => setNewPostImagePreview(ev.target.result);
     reader.readAsDataURL(file);
-  };
-
+  }, []);
   // パスワード確認なしで直接投稿（サーバーが管理者チェック）
-  const openPasswordModal = () => {
+  const openPasswordModal = useCallback(() => {
     if (!newPostText.trim() && !newPostImage) return;
     handlePost();
-  };
-
-  const handlePost = async () => {
+  }, [newPostText, newPostImage]);
+  const handlePost = useCallback(async () => {
     if (!newPostText.trim() && !newPostImage) return;
     setPosting(true);
     setError('');
@@ -109,14 +107,14 @@ export default function Timeline({ currentUser, socket }) {
     }
   };
 
-  const handleLike = async (postId) => {
+  const handleLike = useCallback(async (postId) => {
     try {
       const res = await axios.post(`/api/posts/${postId}/like`);
       setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, likes: res.data.likes } : p));
     } catch {}
   };
 
-  const handleComment = async (postId) => {
+  const handleComment = useCallback(async (postId) => {
     const text = commentInputs[postId];
     if (!text?.trim()) return;
     try {
@@ -126,7 +124,7 @@ export default function Timeline({ currentUser, socket }) {
     } catch {}
   };
 
-  const handleDeletePost = (postId) => {
+  const handleDeletePost = useCallback((postId) => {
     setConfirmDialog({ text: 'このお知らせを削除しますか？', onOk: async () => {
       try {
         await axios.delete('/api/posts/' + postId);

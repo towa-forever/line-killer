@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // useCallback追加済み
 import axios from 'axios';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
@@ -22,7 +22,7 @@ export default function SubAccounts({ currentUser, onSwitch, onClose }) {
 
   useEffect(() => { fetchSubs(); }, []);
 
-  const fetchSubs = async () => {
+  const fetchSubs = useCallback(async () => {
     try {
       const res = await axios.get('/api/sub-accounts');
       setSubs(res.data);
@@ -30,7 +30,7 @@ export default function SubAccounts({ currentUser, onSwitch, onClose }) {
     finally { setLoading(false); }
   };
 
-  const handleCreate = async () => {
+  const handleCreate = useCallback(async () => {
     if (!form.username.trim() || !form.password.trim()) {
       showMsg('IDとパスワードは必須です', 'error'); return;
     }
@@ -50,7 +50,7 @@ export default function SubAccounts({ currentUser, onSwitch, onClose }) {
     } finally { setCreating(false); }
   };
 
-  const handleSwitch = async (subId) => {
+  const handleSwitch = useCallback(async (subId) => {
     setSwitchingId(subId);
     try {
       const res = await axios.post(`/api/sub-accounts/${subId}/switch`);
@@ -63,7 +63,7 @@ export default function SubAccounts({ currentUser, onSwitch, onClose }) {
     } finally { setSwitchingId(null); }
   };
 
-  const handleDelete = async (subId) => {
+  const handleDelete = useCallback(async (subId) => {
     try {
       await axios.delete(`/api/sub-accounts/${subId}`);
       showMsg('削除しました');

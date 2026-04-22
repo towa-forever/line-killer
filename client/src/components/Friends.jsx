@@ -52,7 +52,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
     return () => { socket.off('friend:request', onReq); socket.off('user:online', onOnline); socket.off('user:offline', onOffline); };
   }, [socket, fetchRequests]);
 
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     const q = searchQuery.trim();
     if (!q) return;
     setSearching(true); setSearchResults([]);
@@ -64,7 +64,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
     finally { setSearching(false); }
   };
 
-  const sendRequest = async (userId) => {
+  const sendRequest = useCallback(async (userId) => {
     try {
       await axios.post('/api/friend-requests', { toId: userId });
       showMsg('友達申請を送りました！');
@@ -72,7 +72,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
     } catch (err) { showMsg(err.response?.data?.message || '申請に失敗しました', 'error'); }
   };
 
-  const acceptRequest = async (requestId) => {
+  const acceptRequest = useCallback(async (requestId) => {
     try {
       await axios.post(`/api/friend-requests/${requestId}/accept`);
       showMsg('友達になりました！🎉');
@@ -82,17 +82,17 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
     } catch {}
   };
 
-  const rejectRequest = async (requestId) => {
+  const rejectRequest = useCallback(async (requestId) => {
     try { await axios.post(`/api/friend-requests/${requestId}/reject`); fetchRequests(); } catch {}
   };
 
-  const removeFriend = (friendId) => {
+  const removeFriend = useCallback((friendId) => {
     setConfirmDialog({ text: 'この友達を削除しますか？', onOk: async () => {
       try { await axios.delete(`/api/friends/${friendId}`); fetchFriends(); } catch {}
     }});
   };
 
-  const handleQrScan = async (e) => {
+  const handleQrScan = useCallback(async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     // jsQR でQRコードを読み取る

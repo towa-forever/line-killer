@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react'; // useCallback追加済み
 import axios from 'axios';
 
 const SERVER = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
@@ -24,7 +24,7 @@ export function StoryBar({ currentUser, friendsList, socket }) { // eslint-disab
   const openStory = (userId, items) => setViewing({ userId, items, idx: 0 });
 
   const [posting, setPosting] = useState(false);
-  const postStory = async (e) => {
+  const postStory = useCallback(async (e) => {
     const file = e.target.files?.[0];
     if (!file || posting) return;
     setPosting(true);

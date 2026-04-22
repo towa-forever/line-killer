@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 // 秘密メッセージ（閲覧後自動削除 or タイマー削除）
 export default function SecretMessage({ socket, roomId, currentUser, onSent, onCancel }) {
   const [text, setText] = useState('');
@@ -6,7 +6,7 @@ export default function SecretMessage({ socket, roomId, currentUser, onSent, onC
   const TIMERS = [5, 10, 30, 60, 300];
   const fmt = s => s >= 60 ? `${s/60}分` : `${s}秒`;
 
-  const send = () => {
+  const send = useCallback(() => {
     if (!text.trim()) return;
     socket?.emit('message:send', {
       roomId, senderId: currentUser?.id,
@@ -52,11 +52,10 @@ export function SecretBubble({ msg, isMine }) {
   const intervalRef = useRef(null);
   const timer = msg.fileData?.timer || msg.file_data?.timer || 10;
 
-  const reveal = () => {
+  const reveal = useCallback(() => {
     setRevealed(true);
     setRemaining(timer);
-  };
-
+  }, []);
   // カウントダウン処理
   useEffect(() => {
     if (!revealed || isMine) return;
