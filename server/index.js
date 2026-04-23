@@ -474,7 +474,7 @@ app.post('/api/auth/recovery-email', async (req, res) => {
 // リカバリーメール確認（パスワードリセット用）
 app.get('/api/auth/recovery-email/:username', async (req, res) => {
   try {
-    const user = await User.findOne({ username: req.params.username });
+    const user = await User.findOne({ username: req.params.username }, { id: 1, username: 1, secret_question: 1, secret_answer: 1, recovery_email: 1 }).lean();
     if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
     if (!user.recovery_email) return res.status(404).json({ error: 'リカバリーメールが設定されていません' });
     // セキュリティのためマスクして返す
@@ -581,7 +581,7 @@ app.post('/api/auth/register', async (req, res) => {
     if (password.length > 100) return res.status(400).json({ error: 'パスワードが長すぎます' });
     // スペースと制御文字のみ禁止（日本語・記号はOK）
     if (/[\s\x00-\x1f]/.test(uname)) return res.status(400).json({ error: 'ユーザー名にスペースや制御文字は使えません' });
-    const exists = await User.findOne({ username: uname });
+    const exists = await User.findOne({ username: uname }, { id: 1 }).lean();
     if (exists) return res.status(400).json({ error: 'このユーザー名は既に使われてます' });
     const hashed = await bcrypt.hash(password, 10);
     const id = uuidv4();
@@ -601,7 +601,7 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
-    const user = await User.findOne({ username: username.trim() });
+    const user = await User.findOne({ username: username.trim() }).lean();
     if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ error: 'パスワードが違います' });
@@ -912,7 +912,7 @@ app.post('/api/sub-accounts', async (req, res) => {
     
     
 
-    const exists = await User.findOne({ username });
+    const exists = await User.findOne({ username }, { id: 1 }).lean();
     if (exists) return res.status(400).json({ error: 'このIDはすでに使われています' });
 
     const id = uuidv4();
@@ -1025,7 +1025,7 @@ app.post('/api/friends/by-qr', async (req, res) => {
     const decoded = auth(req);
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'ユーザー名が必要です' });
-    const target = await User.findOne({ username });
+    const target = await User.findOne({ username }, { id: 1, username: 1, display_name: 1, avatar: 1, status: 1 }).lean();
     if (!target) return res.status(404).json({ error: 'ユーザーが見つかりません' });
     if (target.id === decoded.id) return res.status(400).json({ error: '自分自身には送れません' });
     const already = await Friend.findOne({ user_id: decoded.id, friend_id: target.id }).lean();
@@ -1676,7 +1676,7 @@ app.get('/api/rooms/:roomId/note/shared', async (req, res) => {
     const decoded = auth(req);
     const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }, { id: 1, members: 1 }).lean();
     if (!room) return res.status(403).json({ error: '権限なし' });
-    const note = await Note.findOne({ room_id: req.params.roomId, user_id: null });
+    const note = await Note.findOne({ room_id: req.params.roomId, user_id: null }).lean();
     res.json({ content: note?.content || '', updatedBy: note?.updated_by || null, updatedAt: note?.updated_at || null });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
