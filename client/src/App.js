@@ -201,7 +201,7 @@ function RoomNameEditor({ room, onClose }) {
 
 // アバターフレームコンポーネント
 // AVATAR_FRAMES removed
-function AvatarImg({ src, name, size = 40, frame = 'none' }) {
+const AvatarImg = React.memo(function AvatarImg({ src, name, size = 40, frame = 'none' }) {
   const inner = src
     ? <img src={src} alt="" style={{ width:size, height:size, borderRadius:'50%', objectFit:'cover', display:'block' }} />
     : <div style={{ width:size, height:size, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:size*0.4, fontWeight:700 }}>{name?.[0] || '?'}</div>;
@@ -215,10 +215,10 @@ function AvatarImg({ src, name, size = 40, frame = 'none' }) {
       }
     </div>
   );
-}
+}); // React.memo
 
 // ephemeralメッセージ用カウントダウンコンポーネント
-function EphemeralBubble({ msg, isMine }) {
+const EphemeralBubble = React.memo(function EphemeralBubble({ msg, isMine }) {
   const expiresAt = msg.expiresAt || msg.expires_at ? new Date(msg.expiresAt || msg.expires_at) : null;
   const [remaining, setRemaining] = React.useState(
     expiresAt ? Math.max(0, Math.round((expiresAt - Date.now()) / 1000)) : 0
@@ -254,7 +254,7 @@ function EphemeralBubble({ msg, isMine }) {
       )}
     </div>
   );
-}
+}); // React.memo
 
 function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate, onReadRoom }) {
   const [rooms, setRooms] = useState([]);
@@ -2230,7 +2230,7 @@ const InputArea = React.memo(function InputArea({
   );
 });
 
-function TabBar({ activeTab, setActiveTab, notifications, onClearNotif }) {
+const TabBar = React.memo(function TabBar({ activeTab, setActiveTab, notifications, onClearNotif }) {
   const tabs = [
     { id: 'chat',      label: 'トーク',       icon: '💬' },
     { id: 'friends',   label: '友達',         icon: '👥' },
@@ -2250,7 +2250,7 @@ function TabBar({ activeTab, setActiveTab, notifications, onClearNotif }) {
       ))}
     </nav>
   );
-}
+}); // React.memo
 
 // タブをRoutes外でレンダリングするためのラッパー
 // /videocall パスの時だけ非表示にする
