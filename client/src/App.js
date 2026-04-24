@@ -2,10 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, useReducer, useRef, l
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
-import ErrorBoundary from "./components/ErrorBoundary";
-import VideoCall from "./components/VideoCall";
-import Portal from "./components/Portal";
-import { sounds, startRingtone, stopRingtone } from "./utils/sounds";
+import Portal from './components/Portal';
+import { sounds, startRingtone, stopRingtone } from './utils/sounds';
 import VoiceMessage, { VoiceMessageBubble } from './components/VoiceMessage';
 import LocationShare, { LocationBubble } from './components/LocationShare';
 import { SecretBubble } from './components/SecretMessage';
@@ -13,10 +11,12 @@ import { StoryBar } from './components/Story';
 import './App.css';
 
 // 遅延読み込み（初回ロード高速化）
+import ErrorBoundary from './components/ErrorBoundary';
 const Friends = lazy(() => import('./components/Friends'));
 const Timeline = lazy(() => import('./components/Timeline'));
 const StampShop = lazy(() => import('./components/StampShop'));
 const Album = lazy(() => import('./components/Album'));
+const VideoCall = lazy(() => import('./components/VideoCall'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const EventCalendar = lazy(() => import('./components/EventCalendar'));
 const MiniGame = lazy(() => import('./components/MiniGame'));
@@ -2657,7 +2657,7 @@ export default function App() {
 {/* LINEはタブごとにヘッダーを持つためグローバルヘッダーは非表示 */}
         <main className="app-main">
           <Routes>
-            <Route path="/videocall/:roomId/:targetUserId" element={<VideoCall currentUser={currentUser} socket={socket} />} />
+            <Route path="/videocall/:roomId/:targetUserId" element={<ErrorBoundary><Suspense fallback={null}><VideoCall currentUser={currentUser} socket={socket} /></Suspense></ErrorBoundary>} />
             <Route path="*" element={null} />
           </Routes>
           <LocationAwareTabs tabsElement={tabsElement} />
@@ -2679,7 +2679,7 @@ export default function App() {
           </Suspense></ErrorBoundary>
         )}
         {activeCall && (
-          <ErrorBoundary>
+          <ErrorBoundary><Suspense fallback={null}>
             <VideoCall
               currentUser={currentUser}
               socket={socket}
@@ -2691,7 +2691,7 @@ export default function App() {
               minimized={callMinimized}
               onToggleMinimize={handleGroupCallMinimize}
             />
-          </ErrorBoundary>
+          </Suspense></ErrorBoundary>
         )}
         {/* サブアカウント切り替え */}
         {showSubAccounts && (
