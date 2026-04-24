@@ -889,7 +889,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const handleCloseMsgMenu = useCallback(() => setMsgMenu(null), []);
   const handleCloseConfirm = useCallback(() => setConfirmDialog(null), []);
   // モーダルclose系
-  const handleCloseNote = useCallback(() => setShowNote(false), []);
+  const handleSetChatBg = useCallback((bgId) => {
+    setChatBg(bgId);
+    localStorage.setItem('chatBg', bgId);
+  }, []);
+  const handleCloseReactionPicker = useCallback(() => setReactionPicker(null), []);
+  const handleCloseForward = useCallback(() => setForwardMsg(null), []);
   const handleCloseEventCal = useCallback(() => setShowEventCal(false), []);
   const handleCloseStickerMaker = useCallback(() => setShowStickerMaker(false), []);
   const handleCloseMiniGame = useCallback(() => setShowMiniGame(false), []);
@@ -1840,7 +1845,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <div className="modal-title">🎨 背景を変更</div>
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 }}>
                   {[{id:"default",label:"デフォルト",color:"#efeff4"},{id:"#ffffff",label:"白",color:"#ffffff"},{id:"#1a1a2e",label:"深夜",color:"#1a1a2e"},{id:"#fef3e2",label:"温かみ",color:"#fef3e2"},{id:"#e8f5e9",label:"グリーン",color:"#e8f5e9"},{id:"#e3f2fd",label:"スカイ",color:"#e3f2fd"},{id:"#f3e5f5",label:"ラベンダー",color:"#f3e5f5"},{id:"#fff8e1",label:"サンシャイン",color:"#fff8e1"}].map(bg => (
-                    <div key={bg.id} onClick={() => { setChatBg(bg.id); localStorage.setItem('chatBg', bg.id); }}
+                    <div key={bg.id} onClick={() => handleSetChatBg(bg.id)}
                       style={{
                         height:64, borderRadius:12, background:bg.color, cursor:'pointer',
                         border: chatBg === bg.id ? '3px solid var(--primary)' : '2px solid var(--border)',
@@ -1904,13 +1909,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   ))}
                 </div>
                 <div className="modal-actions">
-                  <button className="btn btn-secondary" onClick={() => setForwardMsg(null)}>キャンセル</button>
+                  <button className="btn btn-secondary" onClick={handleCloseForward}>キャンセル</button>
                 </div>
               </div>
             </div>
           )}
           <Portal>{reactionPicker && (
-            <div style={{ position:'fixed', inset:0, zIndex:3000, background:'rgba(0,0,0,0.3)' }} onClick={() => setReactionPicker(null)}>
+            <div style={{ position:'fixed', inset:0, zIndex:3000, background:'rgba(0,0,0,0.3)' }} onClick={handleCloseReactionPicker}>
               <div style={{
                 position:'fixed',
                 left:'50%', transform:'translateX(-50%)',
