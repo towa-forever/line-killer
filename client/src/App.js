@@ -876,6 +876,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const handleBackToList = useCallback(() => setSelectedRoom(null), []);
   const handleOpenRoomSettings = useCallback(() => setShowRoomSettings(true), []);
   const handleCloseRoomSettings = useCallback(() => setShowRoomSettings(false), []);
+  const handleUnpin = useCallback((e) => {
+    e.stopPropagation();
+    axios.patch(`/api/rooms/${selectedRoom?.id}/pin`, { messageId: null });
+    setPinnedMessage(null);
+  }, [selectedRoom]);
   const handleSearchToggle = useCallback(() => {
     setShowSearch(v => !v);
     setSearchQuery('');
@@ -2018,7 +2023,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <div style={{ fontSize:11, color:'var(--primary)', fontWeight:700 }}>ピン留め</div>
                 <div style={{ fontSize:13, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{pinnedMessage.content}</div>
               </div>
-              <button onClick={(e) => { e.stopPropagation(); axios.patch(`/api/rooms/${selectedRoom.id}/pin`, { messageId: null }); setPinnedMessage(null); }}
+              <button onClick={handleUnpin}
                 style={{ fontSize:16, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
             </div>
           )}
