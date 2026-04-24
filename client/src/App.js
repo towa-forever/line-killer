@@ -886,6 +886,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     setSearchQuery('');
     setSearchResults([]);
   }, []);
+  const handleSearchReset = useCallback(() => {
+    setShowSearch(false);
+    setSearchSender('');
+    setSearchDate('');
+  }, []);
   const handleCloseMsgMenu = useCallback(() => setMsgMenu(null), []);
   const handleCloseConfirm = useCallback(() => setConfirmDialog(null), []);
   // モーダルclose系
@@ -1940,7 +1945,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             <div style={{ position:'fixed', inset:0, background:'var(--bg)', zIndex:2000, display:'flex', flexDirection:'column' }}>
               <div style={{ background:'var(--surface)', borderBottom:'1px solid var(--border)' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px' }}>
-                  <button onClick={() => { setShowSearch(false); setSearchSender(''); setSearchDate(''); }} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
+                  <button onClick={handleSearchReset} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
                   <input
                     autoFocus
                     value={searchQuery}
