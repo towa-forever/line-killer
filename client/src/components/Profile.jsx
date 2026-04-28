@@ -60,7 +60,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
       setMessage('設定の保存に失敗した...');
       setTimeout(() => setMessage(''), 3000);
     }
-  };
+  }, []);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -101,7 +101,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
     } catch (_) {}
     // zxingが使えない場合はファイルをFormDataで送る
     setMessage('QRコードの読み取りには別の方法をお試しください');
-  };
+  }, []);
 
   const handleQrValue = useCallback(async (text) => {
     // linekiller://add/USERNAME or just USERNAME
@@ -116,7 +116,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
     } catch (e) {
       setMessage(e.response?.data?.error || '申請に失敗しました');
     } finally { setQrSending(false); }
-  };
+  }, []);
 
   // カメラQRスキャン（スマホ向け）
   const handleCameraQr = useCallback(() => {

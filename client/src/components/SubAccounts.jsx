@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; // useCallback追加済み
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
@@ -28,7 +28,7 @@ export default function SubAccounts({ currentUser, onSwitch, onClose }) {
       setSubs(res.data);
     } catch {}
     finally { setLoading(false); }
-  };
+  }, []);
 
   const handleCreate = useCallback(async () => {
     if (!form.username.trim() || !form.password.trim()) {
@@ -48,7 +48,7 @@ export default function SubAccounts({ currentUser, onSwitch, onClose }) {
     } catch (e) {
       showMsg(e.response?.data?.error || '作成に失敗しました', 'error');
     } finally { setCreating(false); }
-  };
+  }, []);
 
   const handleSwitch = useCallback(async (subId) => {
     setSwitchingId(subId);
@@ -61,7 +61,7 @@ export default function SubAccounts({ currentUser, onSwitch, onClose }) {
     } catch (e) {
       showMsg(e.response?.data?.error || '切り替えに失敗しました', 'error');
     } finally { setSwitchingId(null); }
-  };
+  }, []);
 
   const handleDelete = useCallback(async (subId) => {
     try {
@@ -70,7 +70,7 @@ export default function SubAccounts({ currentUser, onSwitch, onClose }) {
       fetchSubs();
     } catch (e) { showMsg(e.response?.data?.error || '削除に失敗しました', 'error'); }
     setConfirmDelete(null);
-  };
+  }, []);
 
   const Avatar = ({ user, size = 46 }) => {
     const src = user?.avatar ? (user.avatar.startsWith('http') ? user.avatar : `${SERVER_URL}${user.avatar}`) : null;

@@ -39,7 +39,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
   const startTimer = useCallback(() => {
     callStartRef.current = Date.now();
     timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - callStartRef.current) / 1000)), 1000);
-  };
+  }, []);
 
   const createPC = useCallback(() => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
@@ -88,7 +88,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       if (!pcRef.current) return;
       await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
     };
-    const handleEnd = useCallback(() => { cleanup(); onClose(); };
+    const handleEnd = useCallback(() => { cleanup(); onClose(); }, []);
 
     socket.on('voice:answer', handleAnswer);
     socket.on('voice:ice', handleIce);
@@ -119,12 +119,12 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       socket.emit('voice:answer', { to: targetUser.id, answer, callId: callIdRef.current });
       startTimer();
     } catch (e) { console.error(e); onClose(); }
-  };
+  }, []);
 
   const rejectCall = useCallback(() => {
     socket.emit('voice:reject', { to: targetUser.id, callId: callIdRef.current });
     cleanup(); onClose();
-  };
+  }, []);
 
   const endCall = useCallback(() => {
     const duration = callStartRef.current ? Math.floor((Date.now() - callStartRef.current) / 1000) : 0;
@@ -137,7 +137,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       localStream.current.getAudioTracks().forEach(t => { t.enabled = muted; });
       setMuted(m => !m);
     }
-  };
+  }, []);
 
   const avatarSrc = targetUser?.avatar;
 

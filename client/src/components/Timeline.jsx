@@ -26,7 +26,7 @@ export default function Timeline({ currentUser, socket }) {
     if (!u) return false;
     const name = (u.username || u.displayName || '').toLowerCase().trim();
     return name === ADMIN_USERNAME.toLowerCase();
-  };
+  }, []);
   const isAdmin = checkIsAdmin();
 
   const fetchPosts = useCallback(async () => {
@@ -105,14 +105,14 @@ export default function Timeline({ currentUser, socket }) {
     } finally {
       setPosting(false);
     }
-  };
+  }, []);
 
   const handleLike = useCallback(async (postId) => {
     try {
       const res = await axios.post(`/api/posts/${postId}/like`);
       setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, likes: res.data.likes } : p));
     } catch {}
-  };
+  }, []);
 
   const handleComment = useCallback(async (postId) => {
     const text = commentInputs[postId];
@@ -122,7 +122,7 @@ export default function Timeline({ currentUser, socket }) {
       setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: res.data.comments } : p));
       setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
     } catch {}
-  };
+  }, []);
 
   const handleDeletePost = useCallback((postId) => {
     setConfirmDialog({ text: 'このお知らせを削除しますか？', onOk: async () => {
@@ -144,7 +144,7 @@ export default function Timeline({ currentUser, socket }) {
     if (hr  > 0) return `${hr}時間前`;
     if (min > 0) return `${min}分前`;
     return 'たった今';
-  };
+  }, []);
 
   if (loading) return (
     <div className="page" style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>

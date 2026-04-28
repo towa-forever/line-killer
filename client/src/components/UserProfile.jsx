@@ -28,7 +28,7 @@ export default function UserProfile({ username, currentUser, onClose, onStartCha
     if (hr > 0) return `${hr}時間前にオンライン`;
     if (min > 0) return `${min}分前にオンライン`;
     return 'さっきオンライン';
-  };
+  }, []);
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:9999, display:'flex', alignItems:'flex-end', justifyContent:'center' }}

@@ -16,7 +16,7 @@ export default function SecretMessage({ socket, roomId, currentUser, onSent, onC
       expiresAt: new Date(Date.now() + timer * 1000).toISOString(),
     });
     onSent?.();
-  };
+  }, []);
 
   return (
     <div style={{ background:'var(--surface)', border:'1.5px solid #c77dff', borderRadius:20, padding:'14px 16px', display:'flex', flexDirection:'column', gap:10 }}>

@@ -82,7 +82,7 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
     clearInterval(timerRef.current);
     cancelAnimationFrame(animRef.current);
     mediaRecorderRef.current?.stop();
-  };
+  }, []);
 
   const send = useCallback(async () => {
     if (!audioBlob) return;

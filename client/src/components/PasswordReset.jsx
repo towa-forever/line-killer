@@ -1,4 +1,4 @@
-import React, { useState } from 'react'; // useCallback追加済み
+import React, { useState, useCallback } from 'react';
 import axios from 'axios';
 
 export default function PasswordReset({ onClose, onSuccess, onBack }) {
@@ -23,7 +23,7 @@ export default function PasswordReset({ onClose, onSuccess, onBack }) {
     } catch (e) {
       setError(e.response?.data?.error || 'リカバリーメールが設定されていません');
     } finally { setLoading(false); }
-  };
+  }, []);
 
   const resetPassword = useCallback(async () => {
     if (!email.trim()) { setError('メールアドレスを入力してください'); return; }
@@ -38,7 +38,7 @@ export default function PasswordReset({ onClose, onSuccess, onBack }) {
     } catch (e) {
       setError(e.response?.data?.error || 'リセットに失敗しました');
     } finally { setLoading(false); }
-  };
+  }, []);
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; // useCallback追加済み
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
@@ -48,7 +48,7 @@ export default function CreateRoom({ currentUser, friendsList: initialFriends = 
       setError('エラー: ' + msg);
       console.error('[CreateRoom]', err.response?.status, err.response?.data, err.message);
     } finally { setCreating(false); }
-  };
+  }, [selectedUsers, tab, groupName, onCreated]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>

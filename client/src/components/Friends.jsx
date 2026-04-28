@@ -62,7 +62,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
       if (res.data.filter(u => u.id !== currentUser?.id).length === 0) showMsg('ユーザーが見つかりませんでした', 'error');
     } catch { showMsg('検索に失敗しました', 'error'); }
     finally { setSearching(false); }
-  };
+  }, []);
 
   const sendRequest = useCallback(async (userId) => {
     try {
@@ -70,7 +70,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
       showMsg('友達申請を送りました！');
       setSearchResults(p => p.map(u => (u.id === userId || u._id === userId) ? { ...u, requested: true } : u));
     } catch (err) { showMsg(err.response?.data?.message || '申請に失敗しました', 'error'); }
-  };
+  }, []);
 
   const acceptRequest = useCallback(async (requestId) => {
     try {
@@ -80,11 +80,11 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
       fetchFriends();
       setTimeout(() => setTab('list'), 1000); // 1秒後に友達タブに移動
     } catch {}
-  };
+  }, []);
 
   const rejectRequest = useCallback(async (requestId) => {
     try { await axios.post(`/api/friend-requests/${requestId}/reject`); fetchRequests(); } catch {}
-  };
+  }, []);
 
   const removeFriend = useCallback((friendId) => {
     setConfirmDialog({ text: 'この友達を削除しますか？', onOk: async () => {

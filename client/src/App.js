@@ -876,6 +876,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const handleBackToList = useCallback(() => setSelectedRoom(null), []);
   const handleOpenRoomSettings = useCallback(() => setShowRoomSettings(true), []);
   const handleCloseRoomSettings = useCallback(() => setShowRoomSettings(false), []);
+  const handleCloseNote = useCallback(() => setShowNote(false), []);
   const handleUnpin = useCallback((e) => {
     e.stopPropagation();
     axios.patch(`/api/rooms/${selectedRoom?.id}/pin`, { messageId: null });
@@ -2080,6 +2081,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             showStylePicker={showStylePicker}
             setShowStylePicker={setShowStylePicker}
             msgStyle={msgStyle}
+            setMsgStyle={setMsgStyle}
             lang={lang}
             setLang={setLang}
             setShowVoice={setShowVoice}
@@ -2124,7 +2126,7 @@ const InputArea = React.memo(function InputArea({
   handleSendStamp, mentionSuggestions, replyTo, setReplyTo,
   fileInputRef, showInputMenu, setShowInputMenu,
   showStampPanel, setShowStampPanel, showVoice, showLocation, showSecret,
-  showStylePicker, setShowStylePicker, msgStyle, lang, setLang,
+  showStylePicker, setShowStylePicker, msgStyle, setMsgStyle, lang, setLang,
   setShowVoice, setShowLocation, setShowSecret,
   setShowPollCreator, setShowSchedule, setScheduleText,
   selectedRoom, socket, currentUser, soundTheme, myStampSets, allStampSets, acquiredStampIds, showToast,
@@ -2519,8 +2521,6 @@ export default function App() {
     setSocket(null); setCurrentUser(null);
   }, [socket]);
 
-  if (!currentUser) return <AuthScreen onLogin={handleLogin} />;
-
   const handleAcceptCall = useCallback(() => {
     if (!incomingCall) return;
     if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
@@ -2601,6 +2601,8 @@ export default function App() {
   const handleCloseReadLater = useCallback(() => setShowReadLater(false), []);
   const handleCloseContact = useCallback(() => setShowContact(false), []);
   const handleCloseVoiceCall = useCallback(() => { stopRingtone(); setVoiceCall(null); }, []);
+
+  if (!currentUser) return <AuthScreen onLogin={handleLogin} />;
 
   const tabsElement = (
     <>

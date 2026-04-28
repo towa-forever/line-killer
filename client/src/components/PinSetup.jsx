@@ -1,4 +1,4 @@
-import React, { useState } from 'react'; // useCallback追加済み
+import React, { useState, useCallback } from 'react';
 import axios from 'axios';
 
 // PIN設定・変更コンポーネント
@@ -18,7 +18,7 @@ export function PinSetup({ enabled, onClose }) {
       setDone(true);
     } catch (e) { setError(e.response?.data?.error || '設定に失敗しました'); }
     finally { setSaving(false); }
-  };
+  }, []);
 
   const disable = useCallback(async () => {
     if (!window.confirm('2段階認証を無効にしますか？')) return;
@@ -89,7 +89,7 @@ export function PinVerify({ onSuccess, onCancel }) {
       onSuccess();
     } catch (e) { setError('PINが違います'); setPin(''); }
     finally { setLoading(false); }
-  };
+  }, []);
 
   return (
     <div style={{ position:'fixed', inset:0, background:'linear-gradient(160deg,#06c755,#03a040)', zIndex:99999, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:32 }}>

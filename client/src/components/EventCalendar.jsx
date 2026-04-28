@@ -53,7 +53,7 @@ export default function EventCalendar({ room, currentUser, socket, onClose }) {
     const first = new Date(y, m, 1).getDay();
     const days = new Date(y, m + 1, 0).getDate();
     return { first, days };
-  };
+  }, []);
   const { first, days } = daysInMonth();
   const eventDays = new Set(events.map(e => {
     const d = new Date(e.start_at);

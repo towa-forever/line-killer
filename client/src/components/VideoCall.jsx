@@ -103,7 +103,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (_) {}
     }
     iceBufRef.current = [];
-  };
+  }, []);
 
   // メディア取得
   const getMedia = useCallback(async () => {
@@ -211,7 +211,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       await pc.setLocalDescription({ type: rawOffer.type, sdp });
       console.log('[発信] offer送信 to:', targetUserId);
       socket.emit('call:start', { roomId, offer: pc.localDescription, to: targetUserId });
-    };
+    }, []);
 
     // ---- 着信応答 ----
     const answerCall = useCallback(async () => {
@@ -232,7 +232,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       await pc.setLocalDescription({ type: rawAnswer.type, sdp });
       console.log('[着信] answer送信 to:', targetUserId);
       socket.emit('call:answer', { answer: pc.localDescription, to: targetUserId });
-    };
+    }, []);
 
     // ---- answer受信（発信側） ----
     const onAnswered = async ({ answer }) => {
@@ -307,17 +307,17 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     socket?.emit('call:end', { roomId, to: targetUserId, duration: dur });
     clearInterval(durationTimer.current);
     safeEnd();
-  };
+  }, []);
 
   const toggleMute = useCallback(() => {
     localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
     setIsMuted(m => !m);
-  };
+  }, []);
 
   const toggleCamera = useCallback(() => {
     localStreamRef.current?.getVideoTracks().forEach(t => { t.enabled = !t.enabled; });
     setIsCamOff(c => !c);
-  };
+  }, []);
 
   const toggleScreen = useCallback(async () => {
     if (isScreen) {

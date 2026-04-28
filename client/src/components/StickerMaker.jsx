@@ -41,7 +41,7 @@ export default function StickerMaker({ onSend, onClose }) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, W/2, H/2);
-  };
+  }, []);
 
   const handleSend = useCallback(async () => {
     const canvas = canvasRef.current;

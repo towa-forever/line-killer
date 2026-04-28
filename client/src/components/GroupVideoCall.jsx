@@ -174,7 +174,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     Object.values(pcsRef.current).forEach(pc => pc.close());
     onEnd();
-  };
+  }, []);
 
   // 全員終話（ホストのみ）
   const endCallAll = useCallback(() => {
@@ -182,17 +182,17 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     Object.values(pcsRef.current).forEach(pc => pc.close());
     onEnd();
-  };
+  }, []);
 
   const toggleMute = useCallback(() => {
     localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
     setIsMuted(m => !m);
-  };
+  }, []);
 
   const toggleCamera = useCallback(() => {
     localStreamRef.current?.getVideoTracks().forEach(t => { t.enabled = !t.enabled; });
     setIsCamOff(c => !c);
-  };
+  }, []);
 
   // カメラ切り替え（内カメ⇔外カメ）
   const switchCamera = useCallback(async () => {
@@ -203,7 +203,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
     } catch(e) {
       setError('カメラ切り替えに失敗したで');
     }
-  };
+  }, []);
 
   const toggleScreenShare = useCallback(async () => {
     if (isScreenSharing) {

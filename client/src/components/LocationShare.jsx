@@ -22,7 +22,7 @@ export default function LocationShare({ socket, roomId, currentUser, onSent, onC
       (err) => { setError('位置情報の取得に失敗したで'); setLoading(false); },
       { enableHighAccuracy: true, timeout: 10000 }
     );
-  };
+  }, [socket, roomId, currentUser, onSent]);
 
   return (
     <div style={{ background:'var(--surface)', border:'1.5px solid #4d96ff', borderRadius:20, padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>

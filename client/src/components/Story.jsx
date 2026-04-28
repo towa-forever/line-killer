@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'; // useCallback追加済み
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const SERVER = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
@@ -39,7 +39,7 @@ export function StoryBar({ currentUser, friendsList, socket }) { // eslint-disab
       setPosting(false);
       if (fileRef.current) fileRef.current.value = '';
     }
-  };
+  }, []);
 
   return (
     <>

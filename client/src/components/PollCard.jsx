@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; // useCallback追加済み
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 export default function PollCard({ pollId, initialPoll, currentUser }) {
@@ -26,7 +26,7 @@ export default function PollCard({ pollId, initialPoll, currentUser }) {
       const res = await axios.post('/api/polls/' + poll.id + '/vote', { optionId: optId });
       setPoll(res.data);
     } catch { /* 無視 */ }
-  };
+  }, [poll]);
 
   const submitFreeText = useCallback(async () => {
     if (!freeText.trim() || submittingFree) return;
