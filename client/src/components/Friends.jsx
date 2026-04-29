@@ -128,7 +128,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
       img.src = URL.createObjectURL(file);
     } catch { showMsg('読み取りに失敗しました', 'error'); }
     e.target.value = '';
-  };
+  }, [showMsg]);
 
   const isFriend  = (userId) => friends.some(f => String(f.id || f._id) === String(userId));
   const isOnline  = (userId) => onlineUsers.includes(userId);

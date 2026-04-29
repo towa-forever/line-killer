@@ -300,7 +300,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       const sender = pcRef.current?.getSenders().find(s => s.track?.kind === 'video');
       if (sender) await sender.replaceTrack(nt);
     } catch (e) { console.error('[switchCamera]', e); }
-  };
+  }, [facing]);
 
   const endCall = useCallback(() => {
     const dur = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
@@ -346,7 +346,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
         setIsScreen(true);
       } catch (e) { if (e.name !== 'NotAllowedError') setError('画面共有を開始できませんでした'); }
     }
-  };
+  }, [isScreen, facing]);
 
   const iceLabel = { checking:'🔄 経路確認中', failed:'⚠️ 再接続中…', disconnected:'⚠️ 不安定' };
   const statusText = { connecting:'接続中…', ringing:'呼び出し中…', ended:'通話終了', rejected:'拒否されました' };

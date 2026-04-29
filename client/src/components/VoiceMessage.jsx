@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 // 録音して音声メッセージを送るコンポーネント
