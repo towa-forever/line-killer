@@ -232,7 +232,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       await pc.setLocalDescription({ type: rawAnswer.type, sdp });
       console.log('[着信] answer送信 to:', targetUserId);
       socket.emit('call:answer', { answer: pc.localDescription, to: targetUserId });
-    }, []);
+    };
 
     // ---- answer受信（発信側） ----
     const onAnswered = async ({ answer }) => {
