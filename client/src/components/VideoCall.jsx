@@ -198,7 +198,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     let mounted = true;
 
     // ---- 発信 ----
-    const startCall = useCallback(async () => {
+    const startCall = async () => {
       const stream = await getMedia();
       if (!stream || !mounted) return;
       localStreamRef.current = stream;
@@ -211,10 +211,10 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       await pc.setLocalDescription({ type: rawOffer.type, sdp });
       console.log('[発信] offer送信 to:', targetUserId);
       socket.emit('call:start', { roomId, offer: pc.localDescription, to: targetUserId });
-    }, []);
+    };
 
     // ---- 着信応答 ----
-    const answerCall = useCallback(async () => {
+    const answerCall = async () => {
       if (!incomingOffer) { console.error('[着信] incomingOfferがない'); safeEnd(); return; }
       const stream = await getMedia();
       if (!stream || !mounted) return;
