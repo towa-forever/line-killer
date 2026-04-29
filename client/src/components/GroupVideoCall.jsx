@@ -229,7 +229,7 @@ export default function GroupVideoCall({ socket, currentUser, roomId, members, r
         setIsScreenSharing(true);
       } catch(e) {}
     }
-  };
+  }, [isScreenSharing]);
 
   const allStreams = [
     { userId: 'local', name: currentUser?.username + '（自分）', isLocal: true },

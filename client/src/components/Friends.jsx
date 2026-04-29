@@ -90,7 +90,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
     setConfirmDialog({ text: 'この友達を削除しますか？', onOk: async () => {
       try { await axios.delete(`/api/friends/${friendId}`); fetchFriends(); } catch {}
     }});
-  };
+  }, [fetchFriends]);
 
   const handleQrScan = useCallback(async (e) => {
     const file = e.target.files[0];

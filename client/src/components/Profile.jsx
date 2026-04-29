@@ -81,7 +81,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
     } catch (err) {
       setMessage('更新に失敗しました');
     } finally { setSaving(false); }
-  };
+  }, [displayName, bio, avatarFile, coverFile, onUpdate]);
 
   // QRコード画像からユーザー名を読み取り
   const handleQrImageUpload = useCallback(async (e) => {

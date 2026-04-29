@@ -131,7 +131,7 @@ export default function Timeline({ currentUser, socket }) {
         setPosts((prev) => prev.filter((p) => p.id !== postId));
       } catch (err) { console.error(err); }
     }});
-  };
+  }, []);
 
   const isLiked = useCallback((post) => post.likes?.some((l) => l === currentUser?._id || l === currentUser?.id), [currentUser]);
 

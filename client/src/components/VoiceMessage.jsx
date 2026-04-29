@@ -57,7 +57,7 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
       }), 1000);
       drawWave();
     } catch(e) { setError('マイクのアクセスが必要やで'); }
-  };
+  }, []);
 
   const drawWave = () => {
     const canvas = canvasRef.current;
@@ -98,7 +98,7 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
       });
       onSent?.();
     } catch(e) { setState('preview'); setError('送信に失敗したで'); }
-  };
+  }, [audioBlob, duration, socket, roomId, currentUser, onSent]);
 
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 

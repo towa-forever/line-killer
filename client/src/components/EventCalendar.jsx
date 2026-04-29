@@ -43,7 +43,7 @@ export default function EventCalendar({ room, currentUser, socket, onClose }) {
     }));
     try { await axios.patch('/api/events/' + eventId + '/attend', { status }); }
     catch { /* サーバーエラー時はsocket経由で正しい状態に戻る */ }
-  };
+  }, [currentUser]);
 
   const STATUS_COLOR = { going: '#06c755', maybe: '#ff9500', notgoing: '#ff3b30', pending: 'var(--text2)' };
 

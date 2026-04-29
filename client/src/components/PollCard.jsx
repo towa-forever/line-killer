@@ -37,14 +37,14 @@ export default function PollCard({ pollId, initialPoll, currentUser }) {
       setFreeText('');
     } catch { /* 無視 */ }
     finally { setSubmittingFree(false); }
-  };
+  }, [poll, freeText, submittingFree]);
 
   const close = useCallback(async () => {
     try {
       const res = await axios.post('/api/polls/' + poll.id + '/close');
       setPoll(res.data);
     } catch { /* 無視 */ }
-  };
+  }, [poll]);
 
   const displayedFree = showAllFree ? freeAnswers : freeAnswers.slice(0, 3);
 

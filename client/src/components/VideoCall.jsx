@@ -120,7 +120,7 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
         }
       }
     }
-  };
+  }, []);
 
   // PeerConnection作成
   const createPC = useCallback((stream) => {

@@ -88,7 +88,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       if (!pcRef.current) return;
       await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
     };
-    const handleEnd = useCallback(() => { cleanup(); onClose(); }, []);
+    const handleEnd = () => { cleanup(); onClose(); };
 
     socket.on('voice:answer', handleAnswer);
     socket.on('voice:ice', handleIce);
