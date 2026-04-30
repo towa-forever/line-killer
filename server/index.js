@@ -73,7 +73,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(compression()); // gzip圧縮（全ルートに有効）
-app.use(helmet({ contentSecurityPolicy: false })); // セキュリティヘッダー
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false, crossOriginResourcePolicy: false })); // セキュリティヘッダー
 
 // ログイン・登録のレートリミット（ブルートフォース対策）
 // レートリミット（ブルートフォース対策のみ・緩め設定）
@@ -82,7 +82,7 @@ const authLimiter = rateLimit({
   max: 500, // 十分に緩め
   message: { error: 'リクエストが多すぎます。しばらく待ってから試してください' },
   standardHeaders: true, legacyHeaders: false,
-  validate: { xForwardedForHeader: false }, // Renderのプロキシ環境でのX-Forwarded-Forエラーを抑制
+  validate: { xForwardedForHeader: false, ip: false }, // Renderのプロキシ環境対応
   skip: (req) => !!req.headers.authorization, // 認証済みはスキップ
 });
 app.use('/api/auth/login', authLimiter);
