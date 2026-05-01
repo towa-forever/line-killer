@@ -273,6 +273,8 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       socket.off('call:ice',      onIce);
       socket.off('call:ended',    onEnded);
       socket.off('call:rejected', onReject);
+      clearInterval(durationTimer.current);
+      clearTimeout(restartTimer.current);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

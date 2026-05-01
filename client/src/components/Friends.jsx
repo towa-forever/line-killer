@@ -311,7 +311,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
                 <Avatar user={user} size={48} />
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontWeight:700, fontSize:15 }}>{user.display_name || user.username}</div>
-                  <div style={{ fontSize:12, color:'var(--text2)' }}>ID: {user.username}</div>
+                  <div style={{ fontSize:12, color:'var(--text2)' }}>ID: {user.id} · @{user.username}</div>
                 </div>
                 {isFriend(user.id||user._id)
                   ? <span style={{ fontSize:13, color:'#06c755', fontWeight:700 }}>✓ 友達</span>
