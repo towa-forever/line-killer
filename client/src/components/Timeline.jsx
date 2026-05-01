@@ -76,11 +76,6 @@ export default function Timeline({ currentUser, socket }) {
     reader.onload = (ev) => setNewPostImagePreview(ev.target.result);
     reader.readAsDataURL(file);
   }, []);
-  // パスワード確認なしで直接投稿（サーバーが管理者チェック）
-  const openPasswordModal = useCallback(() => {
-    if (!newPostText.trim() && !newPostImage) return;
-    handlePost();
-  }, [newPostText, newPostImage]);
   const handlePost = useCallback(async () => {
     if (!newPostText.trim() && !newPostImage) return;
     setPosting(true);
@@ -105,7 +100,12 @@ export default function Timeline({ currentUser, socket }) {
     } finally {
       setPosting(false);
     }
-  }, []);
+  }, [newPostText, newPostImage]);
+  // パスワード確認なしで直接投稿（サーバーが管理者チェック）
+  const openPasswordModal = useCallback(() => {
+    if (!newPostText.trim() && !newPostImage) return;
+    handlePost();
+  }, [newPostText, newPostImage, handlePost]);
 
   const handleLike = useCallback(async (postId) => {
     try {
