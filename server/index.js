@@ -594,7 +594,7 @@ app.post('/api/auth/register', async (req, res) => {
       pinEnabled: false, secretQuestion: '', blockedUsers: [],
       mutedRooms: [], bookmarks: [], coins: 100, parentAccountId: null,
     }});
-  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+  } catch(e) { console.error('register error:', e); res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
 app.post('/api/auth/login', async (req, res) => {
