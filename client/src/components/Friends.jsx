@@ -291,11 +291,11 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
 
           {/* ID検索カード */}
           <div style={{ background:'var(--surface)', borderRadius:16, padding:16, marginBottom:12, boxShadow:'0 1px 4px rgba(0,0,0,0.07)' }}>
-            <div style={{ fontWeight:700, fontSize:15, marginBottom:4 }}>🔍 IDで友達追加</div>
-            <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12 }}>相手のID（ユーザー名）を入力して検索</div>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:4 }}>🔍 友達を検索</div>
+            <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12 }}>ユーザーID または ユーザー名で検索できるで！</div>
             <div style={{ display:'flex', gap:8, marginBottom: searchResults.length > 0 ? 12 : 0 }}>
               <input className="form-input" style={{ flex:1, marginBottom:0, borderRadius:24, paddingLeft:16 }}
-                placeholder="例: towa0806"
+                placeholder="ID例: towa0806 / ユーザー名でもOK"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()} />

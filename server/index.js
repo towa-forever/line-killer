@@ -1047,7 +1047,13 @@ app.get('/api/users/search', async (req, res) => {
     const q = (req.query.q || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 50);
     if (!q) return res.json([]);
     const users = await User.find(
-      { username: { $regex: q, $options: 'i' }, id: { $ne: decoded.id } },
+      {
+        $or: [
+          { username: { $regex: q, $options: 'i' } },
+          { id: { $regex: q, $options: 'i' } }
+        ],
+        id: { $ne: decoded.id }
+      },
       { id: 1, username: 1, display_name: 1, avatar: 1, status: 1, bio: 1, is_official: 1 }
     ).limit(20).lean();
     res.json(users);
