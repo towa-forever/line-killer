@@ -76,6 +76,33 @@ export default function Timeline({ currentUser, socket }) {
     reader.onload = (ev) => setNewPostImagePreview(ev.target.result);
     reader.readAsDataURL(file);
   }, []);
+  // 指紋認証（WebAuthn / FaceID / TouchID）
+  const verifyBiometric = useCallback(async () => {
+    // WebAuthnが使えない環境はスキップして直接投稿
+    if (!window.PublicKeyCredential) return true;
+    try {
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+      await navigator.credentials.get({
+        publicKey: {
+          challenge,
+          timeout: 60000,
+          userVerification: 'required',
+          rpId: window.location.hostname,
+        }
+      });
+      return true;
+    } catch (e) {
+      // キャンセルまたは失敗
+      if (e.name === 'NotAllowedError') {
+        setError('指紋・顔認証がキャンセルされました');
+        return false;
+      }
+      // 未登録デバイスなど → 直接投稿許可
+      return true;
+    }
+  }, []);
+
   const handlePost = useCallback(async () => {
     if (!newPostText.trim() && !newPostImage) return;
     setPosting(true);
@@ -86,8 +113,7 @@ export default function Timeline({ currentUser, socket }) {
       formData.append('content', newPostText);
       if (newPostImage) formData.append('image', newPostImage);
 
-      const res = await axios.post('/api/posts', formData);
-      setPosts((prev) => [res.data, ...prev]);
+      await axios.post('/api/posts', formData);
       setNewPostText('');
       setNewPostImage(null);
       setNewPostImagePreview(null);
@@ -102,10 +128,11 @@ export default function Timeline({ currentUser, socket }) {
     }
   }, [newPostText, newPostImage]);
   // パスワード確認なしで直接投稿（サーバーが管理者チェック）
-  const openPasswordModal = useCallback(() => {
+  const openPasswordModal = useCallback(async () => {
     if (!newPostText.trim() && !newPostImage) return;
-    handlePost();
-  }, [newPostText, newPostImage, handlePost]);
+    const ok = await verifyBiometric();
+    if (ok) handlePost();
+  }, [newPostText, newPostImage, handlePost, verifyBiometric]);
 
   const handleLike = useCallback(async (postId) => {
     try {

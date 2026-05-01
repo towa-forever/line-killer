@@ -416,7 +416,8 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
         <div style={{ display:'flex', gap:16, padding:'16px 20px',
           paddingBottom:'calc(20px + env(safe-area-inset-bottom))',
           justifyContent:'center', alignItems:'center',
-          background:'rgba(0,0,0,0.85)', flexWrap:'wrap' }}>
+          background:'rgba(0,0,0,0.85)', flexWrap:'wrap',
+          minHeight:100, flexShrink:0 }}>
           <CallBtn onClick={toggleMute}    active={isMuted}   activeColor="#c0392b" label={isMuted ? 'ミュート中' : 'マイク'}>{isMuted ? '🔇' : '🎤'}</CallBtn>
           <CallBtn onClick={toggleCamera}  active={isCamOff}  activeColor="#c0392b" label={isCamOff ? 'カメラオフ' : 'カメラ'}>{isCamOff ? '📷' : '📹'}</CallBtn>
           <CallBtn onClick={switchCamera}  label="カメラ切替">🔄</CallBtn>

@@ -1089,11 +1089,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           <div className="message-time">
             {isMine && (() => {
               const readCount = (msg.read_by || []).filter(id => id !== currentUser.id).length;
-              if (readCount === 0) return null;
               return (
                 <span
-                  style={{ fontSize:11, color:'#06c755', marginRight:4, fontWeight:600, cursor:'pointer' }}
+                  style={{ fontSize:11, color: readCount > 0 ? '#06c755' : 'var(--text2)', marginRight:4, fontWeight:600, cursor: readCount > 0 ? 'pointer' : 'default', display:'inline-flex', alignItems:'center', gap:1 }}
                   onClick={() => {
+                    if (readCount === 0) return;
                     const detail = readByDetailMapRef.current[msg.id];
                     if (detail && detail.length > 0) {
                       const readers = detail.filter(r => r.id !== currentUser.id);
@@ -1106,9 +1106,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                       setShowReadDetail({ msgId: msg.id, readers });
                     }
                   }}
-                  title="タップで詳細表示"
+                  title={readCount > 0 ? 'タップで詳細表示' : '未読'}
                 >
-                  既読 {readCount > 1 ? readCount : ''}
+                  {readCount > 0 ? (
+                    <>{readCount > 1 ? `✓✓ ${readCount}` : '✓✓'}</>
+                  ) : (
+                    <span style={{opacity:0.4}}>✓</span>
+                  )}
                 </span>
               );
             })()}
