@@ -62,7 +62,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
       if (res.data.filter(u => u.id !== currentUser?.id).length === 0) showMsg('ユーザーが見つかりませんでした', 'error');
     } catch { showMsg('検索に失敗しました', 'error'); }
     finally { setSearching(false); }
-  }, []);
+  }, [searchQuery, currentUser, showMsg]);
 
   const sendRequest = useCallback(async (userId) => {
     try {
