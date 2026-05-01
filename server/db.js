@@ -30,6 +30,7 @@ const UserSchema = new mongoose.Schema({
   official_verified: { type: Boolean, default: false }, // 管理者承認済み
   bio: { type: String, default: '' },
   status: { type: String, default: '' },
+  auto_status_rules: { type: [{ fromHour: Number, toHour: Number, status: String }], default: [] },
   avatar_frame: { type: String, default: 'none' },
   sound_theme: { type: String, default: 'default' },
   acquired_stamps: { type: [Number], default: [] },

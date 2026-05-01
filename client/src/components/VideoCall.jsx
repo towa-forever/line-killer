@@ -74,6 +74,10 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   const startTimeRef   = useRef(null);
   const durationTimer  = useRef(null);
   const restartTimer   = useRef(null);
+  const [chatOpen, setChatOpen]   = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatMsgs, setChatMsgs]   = useState([]);
+  const chatEndRef = useRef(null);
 
   const [status,    setStatus]    = useState(isCaller ? 'ringing' : 'connecting');
   const [isMuted,   setIsMuted]   = useState(false);
@@ -267,12 +271,17 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
 
     if (isCaller) startCall(); else answerCall();
 
+    const onCallChat = ({ from, text }) => {
+      setChatMsgs(prev => [...prev, { from, text, mine: false, ts: Date.now() }]);
+    };
+    socket.on('call:chat', onCallChat);
     return () => {
       mounted = false;
       socket.off('call:answered', onAnswered);
       socket.off('call:ice',      onIce);
       socket.off('call:ended',    onEnded);
       socket.off('call:rejected', onReject);
+      socket.off('call:chat',     onCallChat);
       clearInterval(durationTimer.current);
       clearTimeout(restartTimer.current);
     };
@@ -303,6 +312,15 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       if (sender) await sender.replaceTrack(nt);
     } catch (e) { console.error('[switchCamera]', e); }
   }, [facing]);
+
+  const sendCallChat = useCallback(() => {
+    if (!chatInput.trim()) return;
+    const text = chatInput.trim();
+    setChatInput('');
+    setChatMsgs(prev => [...prev, { from: currentUser?.displayName || currentUser?.username || 'あなた', text, mine: true, ts: Date.now() }]);
+    socket?.emit('call:chat', { roomId, to: targetUserId, text, from: currentUser?.displayName || currentUser?.username });
+    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+  }, [chatInput, socket, roomId, targetUserId, currentUser]);
 
   const endCall = useCallback(() => {
     const dur = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
@@ -351,6 +369,10 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
   }, [isScreen, facing]);
 
   const iceLabel = { checking:'🔄 経路確認中', failed:'⚠️ 再接続中…', disconnected:'⚠️ 不安定' };
+  React.useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMsgs]);
+
   const statusText = { connecting:'接続中…', ringing:'呼び出し中…', ended:'通話終了', rejected:'拒否されました' };
 
   // ---- 最小化 ----
@@ -422,8 +444,57 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
           <CallBtn onClick={toggleCamera}  active={isCamOff}  activeColor="#c0392b" label={isCamOff ? 'カメラオフ' : 'カメラ'}>{isCamOff ? '📷' : '📹'}</CallBtn>
           <CallBtn onClick={switchCamera}  label="カメラ切替">🔄</CallBtn>
           <CallBtn onClick={toggleScreen}  active={isScreen}  activeColor="#f39c12" label={isScreen ? '共有中' : '画面共有'}>{isScreen ? '🖥️' : '📺'}</CallBtn>
-          <CallBtn onClick={onToggleMinimize} label="チャットへ">💬</CallBtn>
+          <CallBtn onClick={() => setChatOpen(v => !v)} active={chatOpen} activeColor="#2980b9" label="チャット">💬</CallBtn>
           <CallBtn onClick={endCall} active={true} activeColor="#e74c3c" size={64} label="終了">📵</CallBtn>
+        </div>
+      )}
+
+      {/* 通話中チャットパネル */}
+      {chatOpen && (
+        <div style={{
+          position:'absolute', bottom: status !== 'ended' && status !== 'rejected' ? 120 : 20,
+          right:12, width:280, maxHeight:320,
+          background:'rgba(20,20,30,0.92)', borderRadius:16,
+          display:'flex', flexDirection:'column', overflow:'hidden',
+          boxShadow:'0 4px 24px rgba(0,0,0,0.5)', zIndex:6000,
+          border:'1px solid rgba(255,255,255,0.1)'
+        }}>
+          <div style={{ padding:'8px 12px', borderBottom:'1px solid rgba(255,255,255,0.1)', fontSize:13, color:'white', fontWeight:700 }}>
+            💬 通話中チャット
+          </div>
+          <div style={{ flex:1, overflowY:'auto', padding:'8px 10px', minHeight:80, maxHeight:200 }}>
+            {chatMsgs.length === 0 && (
+              <div style={{ textAlign:'center', color:'rgba(255,255,255,0.4)', fontSize:12, marginTop:16 }}>メッセージを送ってみよう</div>
+            )}
+            {chatMsgs.map((m, i) => (
+              <div key={i} style={{ marginBottom:6, display:'flex', flexDirection:'column', alignItems: m.mine ? 'flex-end' : 'flex-start' }}>
+                {!m.mine && <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', marginBottom:2 }}>{m.from}</div>}
+                <div style={{
+                  background: m.mine ? '#06c755' : 'rgba(255,255,255,0.15)',
+                  color:'white', borderRadius:12, padding:'5px 10px', fontSize:13,
+                  maxWidth:'85%', wordBreak:'break-word'
+                }}>{m.text}</div>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+          <div style={{ display:'flex', gap:6, padding:'6px 8px', borderTop:'1px solid rgba(255,255,255,0.1)' }}>
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && sendCallChat()}
+              placeholder="メッセージ..."
+              style={{
+                flex:1, padding:'6px 10px', borderRadius:10, border:'none',
+                background:'rgba(255,255,255,0.1)', color:'white', fontSize:13,
+                outline:'none'
+              }}
+            />
+            <button onClick={sendCallChat}
+              style={{ padding:'6px 12px', borderRadius:10, background:'#06c755', border:'none', color:'white', fontSize:13, cursor:'pointer', fontWeight:700 }}>
+              送
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -1112,14 +1112,15 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
 app.patch('/api/users/me/settings', async (req, res) => {
   try {
     const decoded = auth(req);
-    const { status, displayName, bio, avatarFrame, soundTheme, showOnline } = req.body;
+    const { status, displayName, bio, avatarFrame, soundTheme, showOnline, autoStatusRules } = req.body;
     const update = {};
-    if (status !== undefined)      update.status = status;
-    if (displayName !== undefined) update.display_name = displayName;
-    if (bio !== undefined)         update.bio = bio;
-    if (avatarFrame !== undefined) update.avatar_frame = avatarFrame;
-    if (soundTheme !== undefined)  update.sound_theme = soundTheme;
-    if (showOnline !== undefined)  update.show_online = showOnline === 'true' || showOnline === true;
+    if (status !== undefined)          update.status = status;
+    if (displayName !== undefined)     update.display_name = displayName;
+    if (bio !== undefined)             update.bio = bio;
+    if (avatarFrame !== undefined)     update.avatar_frame = avatarFrame;
+    if (soundTheme !== undefined)      update.sound_theme = soundTheme;
+    if (showOnline !== undefined)      update.show_online = showOnline === 'true' || showOnline === true;
+    if (autoStatusRules !== undefined) update.auto_status_rules = autoStatusRules;
     const user = await User.findOneAndUpdate({ id: decoded.id }, update, { returnDocument: 'after' });
     if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
     const userRes = {
@@ -1995,6 +1996,11 @@ io.on('connection', async (socket) => {
     io.to('user_' + to).emit('call:ice', { candidate, from: socket.user.id });
   });
 
+  socket.on('call:chat', ({ to, text, from }) => {
+    if (!to || !text) return;
+    io.to('user_' + to).emit('call:chat', { from: from || socket.user.id, text });
+  });
+
   socket.on('call:end', async ({ roomId, to, duration }) => {
     if (to) {
       io.to('user_' + to).emit('call:ended', { from: socket.user.id });
@@ -2811,6 +2817,24 @@ setInterval(async () => {
       await ScheduledMessage.findOneAndUpdate({ id: sm.id }, { sent: true }, {returnDocument:'after'});
     }
   } catch(e) { console.error('スケジュール送信エラー:', e); }
+}, 60000);
+
+// ステータス自動変更（1分ごと）
+setInterval(async () => {
+  try {
+    const nowHour = new Date().getHours();
+    const users = await User.find({ 'auto_status_rules.0': { $exists: true } }, { id: 1, auto_status_rules: 1 }).lean();
+    for (const user of users) {
+      const rule = user.auto_status_rules.find(r => {
+        if (r.fromHour <= r.toHour) return nowHour >= r.fromHour && nowHour < r.toHour;
+        return nowHour >= r.fromHour || nowHour < r.toHour; // 深夜をまたぐ場合
+      });
+      if (rule) {
+        await User.findOneAndUpdate({ id: user.id }, { status: rule.status });
+        io.emit('user:status_update', { userId: user.id, status: rule.status });
+      }
+    }
+  } catch(e) { console.error('ステータス自動変更エラー:', e); }
 }, 60000);
 
 const clientBuild = join(__dirname, '../client/build');

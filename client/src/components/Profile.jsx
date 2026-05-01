@@ -7,6 +7,77 @@ const ContactForm = lazy(() => import('./ContactForm'));
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 
+// ステータス自動変更コンポーネント
+function AutoStatusRules({ currentUser, saveSettings }) {
+  const [rules, setRules] = React.useState(currentUser?.autoStatusRules || []);
+  const [adding, setAdding] = React.useState(false);
+  const [newRule, setNewRule] = React.useState({ fromHour: 23, toHour: 7, status: '🌙 おやすみ' });
+
+  const presets = [
+    { label: '🌙 夜おやすみ', fromHour: 23, toHour: 7, status: '🌙 おやすみ' },
+    { label: '💼 仕事中', fromHour: 9, toHour: 18, status: '💼 仕事中' },
+    { label: '🏫 学校', fromHour: 8, toHour: 16, status: '🏫 授業中' },
+  ];
+
+  const saveRules = (newRules) => {
+    setRules(newRules);
+    saveSettings({ autoStatusRules: newRules });
+  };
+
+  return (
+    <div style={{ padding:'12px 0', borderBottom:'1px solid var(--border)' }}>
+      <div style={{ fontSize:13, marginBottom:8 }}>⏰ ステータス自動変更</div>
+      {rules.length === 0 && !adding && (
+        <div style={{ fontSize:12, color:'var(--text2)', marginBottom:8 }}>時間帯でステータスを自動変更できるで</div>
+      )}
+      {rules.map((r, i) => (
+        <div key={i} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6, background:'var(--surface2)', borderRadius:10, padding:'6px 10px' }}>
+          <span style={{ fontSize:12, flex:1 }}>{r.fromHour}:00〜{r.toHour}:00 → <b>{r.status}</b></span>
+          <button onClick={() => saveRules(rules.filter((_, j) => j !== i))}
+            style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:16 }}>✕</button>
+        </div>
+      ))}
+      {adding ? (
+        <div style={{ background:'var(--surface2)', borderRadius:12, padding:12, marginBottom:8 }}>
+          <div style={{ fontSize:12, color:'var(--text2)', marginBottom:8 }}>プリセット：</div>
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
+            {presets.map(p => (
+              <button key={p.label} onClick={() => setNewRule({ fromHour: p.fromHour, toHour: p.toHour, status: p.status })}
+                style={{ padding:'4px 10px', borderRadius:16, fontSize:12, border:'1px solid var(--border)', background:'var(--surface)', cursor:'pointer' }}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:8 }}>
+            <input type="number" min={0} max={23} value={newRule.fromHour}
+              onChange={e => setNewRule(r => ({...r, fromHour: Number(e.target.value)}))}
+              style={{ width:50, padding:'4px 6px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:13 }} />
+            <span style={{ fontSize:12 }}>:00 〜</span>
+            <input type="number" min={0} max={23} value={newRule.toHour}
+              onChange={e => setNewRule(r => ({...r, toHour: Number(e.target.value)}))}
+              style={{ width:50, padding:'4px 6px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:13 }} />
+            <span style={{ fontSize:12 }}>:00</span>
+          </div>
+          <input value={newRule.status} onChange={e => setNewRule(r => ({...r, status: e.target.value}))}
+            placeholder="ステータス（例：🌙 おやすみ）" maxLength={40}
+            style={{ width:'100%', padding:'6px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:13, marginBottom:8, boxSizing:'border-box' }} />
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={() => { if (newRule.status.trim()) saveRules([...rules, newRule]); setAdding(false); }}
+              style={{ flex:1, padding:'6px 0', borderRadius:10, background:'var(--primary)', color:'white', border:'none', fontSize:13, fontWeight:700, cursor:'pointer' }}>追加</button>
+            <button onClick={() => setAdding(false)}
+              style={{ flex:1, padding:'6px 0', borderRadius:10, background:'var(--surface)', border:'1px solid var(--border)', fontSize:13, cursor:'pointer', color:'var(--text)' }}>キャンセル</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)}
+          style={{ padding:'6px 14px', borderRadius:10, fontSize:12, border:'1px dashed var(--border)', background:'none', color:'var(--text2)', cursor:'pointer' }}>
+          ＋ ルールを追加
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccount, darkMode, onToggleDark, darkAutoMode, onToggleAuto, onContact, onOpenPinSetup, onNavigate }) {
   const [editing, setEditing] = useState(false);
   const [showContact, setShowContact] = useState(false);
@@ -258,6 +329,9 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
             <button onClick={() => saveSettings({ status: statusText })} style={{ padding:'0 12px', borderRadius:10, background:'var(--primary)', color:'white', border:'none', fontSize:13, fontWeight:700, cursor:'pointer' }}>保存</button>
           </div>
         </div>
+
+        {/* ステータス自動変更 */}
+        <AutoStatusRules currentUser={currentUser} saveSettings={saveSettings} />
 
         {/* アバターフレーム */}
         <div style={{ padding:'12px 0', borderBottom:'1px solid var(--border)' }}>
