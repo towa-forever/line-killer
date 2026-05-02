@@ -1274,7 +1274,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   { icon:'📞', label:'音声通話', action: () => {
                     if (selectedRoom?.members?.length > 2) { showToast?.('音声通話はDMのみ対応やで', 'error'); return; }
                     const otherId = selectedRoom?.members?.find(m => m !== currentUser.id);
-                    setVoiceCall({ targetUser: otherId ? { id: otherId, displayName: selectedRoom.name } : null, isIncoming: false, roomId: selectedRoom?.id, callId: null });
+                    const otherDetail = selectedRoom?.memberDetails?.find(m => m.id === otherId);
+                    setVoiceCall({ targetUser: otherId ? { id: otherId, displayName: otherDetail?.displayName || otherDetail?.username || selectedRoom.name, avatar: otherDetail?.avatar } : null, isIncoming: false, roomId: selectedRoom?.id, callId: null });
                   } },
                   { icon:'🤖', label:'AIアシスタント', action: () => setShowAI(true) },
                   { icon:'🌈', label:'背景を変える', action: () => setShowBgPicker(true) },
@@ -2767,7 +2768,7 @@ export default function App() {
         )}
 
         {/* 音声通話 */}
-        {voiceCall && voiceCall._accepted && (
+        {voiceCall && (voiceCall._accepted || !voiceCall.isIncoming) && (
           <ErrorBoundary><Suspense fallback={null}>
             <VoiceCall
               socket={socket}

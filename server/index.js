@@ -2057,7 +2057,7 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('voice:ice', ({ to, candidate, callId }) => {
-    io.to('user_' + to).emit('call:ice', { candidate, from: socket.user.id, callId });
+    io.to('user_' + to).emit('voice:ice', { candidate, from: socket.user.id, callId });
   });
 
 // 通話時間フォーマット

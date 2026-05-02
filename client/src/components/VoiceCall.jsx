@@ -60,7 +60,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       if (['disconnected','failed','closed'].includes(pc.connectionState)) onClose();
     };
     return pc;
-  }, [socket, targetUser]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [socket, targetUser, startTimer, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 発信
   const startCall = useCallback(async () => {
@@ -100,8 +100,9 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       socket.off('voice:ice', handleIce);
       socket.off('voice:end', handleEnd);
       socket.off('voice:reject', handleEnd);
+      cleanup();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isIncoming, startCall, socket, cleanup, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 着信応答
   const acceptCall = useCallback(async () => {
@@ -119,12 +120,12 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       socket.emit('voice:answer', { to: targetUser.id, answer, callId: callIdRef.current });
       startTimer();
     } catch (e) { console.error(e); onClose(); }
-  }, []);
+  }, [createPC, incomingOffer, socket, targetUser, onClose, startTimer]);
 
   const rejectCall = useCallback(() => {
     socket.emit('voice:reject', { to: targetUser.id, callId: callIdRef.current });
     cleanup(); onClose();
-  }, []);
+  }, [socket, targetUser, cleanup, onClose]);
 
   const endCall = useCallback(() => {
     const duration = callStartRef.current ? Math.floor((Date.now() - callStartRef.current) / 1000) : 0;
@@ -137,7 +138,7 @@ export default function VoiceCall({ socket, currentUser, targetUser, roomId, isI
       localStream.current.getAudioTracks().forEach(t => { t.enabled = muted; });
       setMuted(m => !m);
     }
-  }, []);
+  }, [muted]);
 
   const avatarSrc = targetUser?.avatar;
 
