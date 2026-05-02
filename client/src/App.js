@@ -14,6 +14,8 @@ import './App.css';
 import ErrorBoundary from './components/ErrorBoundary';
 const Friends = lazy(() => import('./components/Friends'));
 const Timeline = lazy(() => import('./components/Timeline'));
+const Voom = lazy(() => import('./components/Voom'));
+const NewsTab = lazy(() => import('./components/NewsTab'));
 const StampShop = lazy(() => import('./components/StampShop'));
 const Album = lazy(() => import('./components/Album'));
 const VideoCall = lazy(() => import('./components/VideoCall'));
@@ -2267,6 +2269,8 @@ const TabBar = React.memo(function TabBar({ activeTab, setActiveTab, notificatio
     { id: 'chat',      label: 'トーク',       icon: '💬' },
     { id: 'friends',   label: '友達',         icon: '👥' },
     { id: 'timeline',  label: 'お知らせ',      icon: '📢' },
+    { id: 'voom',       label: 'VOOM',          icon: '🎬' },
+    { id: 'news',       label: 'ニュース',       icon: '📰' },
     { id: 'stampshop', label: 'ショップ',      icon: '🎫' },
     { id: 'profile',   label: 'プロフィール',  icon: '👤' },
   ];

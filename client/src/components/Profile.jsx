@@ -7,6 +7,106 @@ const ContactForm = lazy(() => import('./ContactForm'));
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 
+// 公式アカウント申請・管理コンポーネント
+function OfficialAccountPanel({ currentUser, saveSettings }) {
+  const isAdmin = (currentUser?.username || '').trim().toLowerCase() === 'とわ';
+  const isOfficial = currentUser?.is_official;
+  const [showApply, setShowApply] = React.useState(false);
+  const [reason, setReason] = React.useState('');
+  const [category, setCategory] = React.useState('その他');
+  const [requests, setRequests] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [msg, setMsg] = React.useState('');
+
+  const CATEGORIES = ['ビジネス', 'クリエイター', 'ニュース', 'エンタメ', 'ゲーム', 'その他'];
+
+  React.useEffect(() => {
+    if (isAdmin) {
+      import('axios').then(({ default: axios }) => {
+        axios.get('/api/official/requests').then(r => setRequests(r.data)).catch(() => {});
+      });
+    }
+  }, [isAdmin]);
+
+  const handleApply = async () => {
+    if (!reason.trim()) return;
+    setLoading(true);
+    try {
+      const { default: axios } = await import('axios');
+      await axios.post('/api/official/apply', { reason, category });
+      setMsg('申請しました！管理者の承認をお待ちください');
+      setShowApply(false);
+    } catch (e) {
+      setMsg(e.response?.data?.error || '申請に失敗しました');
+    } finally { setLoading(false); }
+  };
+
+  const handleReview = async (id, action, userId) => {
+    try {
+      const { default: axios } = await import('axios');
+      await axios.patch(`/api/official/requests/${id}`, { action });
+      setRequests(prev => prev.filter(r => r.id !== id));
+      setMsg(action === 'approve' ? '承認しました！' : '拒否しました');
+    } catch (e) { setMsg('操作に失敗しました'); }
+  };
+
+  return (
+    <div style={{ padding:'12px 0', borderBottom:'1px solid var(--border)' }}>
+      <div style={{ fontSize:13, marginBottom:8, display:'flex', alignItems:'center', gap:6 }}>
+        ✅ 公式アカウント
+        {isOfficial && <span style={{ fontSize:11, background:'#1DB874', color:'white', borderRadius:10, padding:'2px 8px' }}>認証済み</span>}
+      </div>
+      {msg && <div style={{ fontSize:12, color:'var(--primary)', marginBottom:8 }}>{msg}</div>}
+      {isOfficial ? (
+        <div style={{ fontSize:13, color:'var(--text2)' }}>あなたは公式アカウントです 🎉</div>
+      ) : !isAdmin && !showApply ? (
+        <button onClick={() => setShowApply(true)}
+          style={{ padding:'6px 16px', borderRadius:10, border:'1px dashed var(--border)', background:'none', color:'var(--text2)', cursor:'pointer', fontSize:12 }}>
+          公式アカウントを申請する
+        </button>
+      ) : !isAdmin && showApply && (
+        <div style={{ background:'var(--surface2)', borderRadius:12, padding:12 }}>
+          <div style={{ fontSize:12, color:'var(--text2)', marginBottom:8 }}>申請理由と目的を教えてください</div>
+          <select value={category} onChange={e => setCategory(e.target.value)}
+            style={{ width:'100%', padding:'7px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:13, marginBottom:8, outline:'none' }}>
+            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <textarea value={reason} onChange={e => setReason(e.target.value)}
+            placeholder="公式アカウントが必要な理由..." rows={3}
+            style={{ width:'100%', padding:'7px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:13, resize:'none', boxSizing:'border-box', outline:'none', marginBottom:8 }} />
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={handleApply} disabled={loading || !reason.trim()}
+              style={{ flex:1, padding:'7px 0', borderRadius:10, background:'var(--primary)', color:'white', border:'none', fontSize:13, fontWeight:700, cursor:'pointer', opacity: loading || !reason.trim() ? 0.5 : 1 }}>申請する</button>
+            <button onClick={() => setShowApply(false)}
+              style={{ flex:1, padding:'7px 0', borderRadius:10, border:'1px solid var(--border)', background:'none', color:'var(--text)', fontSize:13, cursor:'pointer' }}>キャンセル</button>
+          </div>
+        </div>
+      )}
+      {/* 管理者用: 申請一覧 */}
+      {isAdmin && requests.length > 0 && (
+        <div style={{ marginTop:8 }}>
+          <div style={{ fontSize:12, color:'var(--text2)', marginBottom:6 }}>📋 申請一覧（{requests.length}件）</div>
+          {requests.map(r => (
+            <div key={r.id} style={{ background:'var(--surface2)', borderRadius:10, padding:10, marginBottom:8 }}>
+              <div style={{ fontWeight:700, fontSize:13, marginBottom:2 }}>@{r.username} <span style={{ fontSize:11, color:'var(--text2)' }}>{r.category}</span></div>
+              <div style={{ fontSize:12, color:'var(--text2)', marginBottom:8 }}>{r.reason}</div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={() => handleReview(r.id, 'approve', r.user_id)}
+                  style={{ flex:1, padding:'5px 0', borderRadius:8, background:'#1DB874', color:'white', border:'none', fontSize:12, fontWeight:700, cursor:'pointer' }}>✅ 承認</button>
+                <button onClick={() => handleReview(r.id, 'reject', r.user_id)}
+                  style={{ flex:1, padding:'5px 0', borderRadius:8, background:'#e74c3c', color:'white', border:'none', fontSize:12, fontWeight:700, cursor:'pointer' }}>❌ 拒否</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {isAdmin && requests.length === 0 && (
+        <div style={{ fontSize:12, color:'var(--text2)' }}>申請中のアカウントはありません</div>
+      )}
+    </div>
+  );
+}
+
 // ステータス自動変更コンポーネント
 function AutoStatusRules({ currentUser, saveSettings }) {
   const [rules, setRules] = React.useState(currentUser?.autoStatusRules || []);
@@ -329,6 +429,9 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
             <button onClick={() => saveSettings({ status: statusText })} style={{ padding:'0 12px', borderRadius:10, background:'var(--primary)', color:'white', border:'none', fontSize:13, fontWeight:700, cursor:'pointer' }}>保存</button>
           </div>
         </div>
+
+        {/* 公式アカウント */}
+        <OfficialAccountPanel currentUser={currentUser} saveSettings={saveSettings} />
 
         {/* ステータス自動変更 */}
         <AutoStatusRules currentUser={currentUser} saveSettings={saveSettings} />

@@ -28,7 +28,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 
-const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription } = require('./db');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription, News, OfficialRequest } = require('./db');
 
 const app = express();
 // Render等のリバースプロキシ対応（express-rate-limitのX-Forwarded-Forエラー解消）
@@ -1408,6 +1408,195 @@ app.delete('/api/posts/:postId/comments/:commentId', async (req, res) => {
     res.json({ ok: true });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
+
+// ===== VOOM API =====
+// VOOM投稿一覧
+app.get('/api/voom', async (req, res) => {
+  try {
+    auth(req);
+    const posts = await Post.find({ type: 'voom' }).sort({ created_at: -1 }).limit(50).lean();
+    res.json(posts);
+  } catch (e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+// VOOM投稿（誰でも可）
+app.post('/api/voom', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'video', maxCount: 1 }]), async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { username: 1, display_name: 1, avatar: 1 }).lean();
+    if (!user) return res.status(401).json({ error: 'ユーザーが見つかりません' });
+    const { content } = req.body;
+    if (!content && !req.files?.image && !req.files?.video) return res.status(400).json({ error: '内容を入力してください' });
+    const imageFile = req.files?.image?.[0];
+    const videoFile = req.files?.video?.[0];
+    const post = await Post.create({
+      id: uuidv4(), user_id: decoded.id,
+      username: user.username, display_name: user.display_name || user.username,
+      avatar: user.avatar || null,
+      content: content || '', type: 'voom',
+      image: imageFile ? `/uploads/${imageFile.filename}` : null,
+      video: videoFile ? `/uploads/${videoFile.filename}` : null,
+    });
+    io.emit('voom:new', post);
+    res.json(post);
+  } catch (e) { const s = (e?.name?.includes('JsonWebToken') || e?.name?.includes('TokenExpired')) ? 401 : 500; res.status(s).json({ error: s === 401 ? '認証エラー' : e.message }); }
+});
+
+// VOOMリポスト
+app.post('/api/voom/:postId/repost', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { username: 1, display_name: 1, avatar: 1 }).lean();
+    const original = await Post.findOne({ id: req.params.postId }).lean();
+    if (!original) return res.status(404).json({ error: '投稿が見つかりません' });
+    // すでにリポスト済みチェック
+    const already = await Post.findOne({ repost_of: req.params.postId, user_id: decoded.id });
+    if (already) {
+      await Post.deleteOne({ id: already.id });
+      await Post.findOneAndUpdate({ id: req.params.postId }, { $pull: { reposts: decoded.id } });
+      io.emit('voom:unreposted', { postId: req.params.postId, userId: decoded.id });
+      return res.json({ reposted: false });
+    }
+    const repost = await Post.create({
+      id: uuidv4(), user_id: decoded.id,
+      username: user.username, display_name: user.display_name || user.username,
+      avatar: user.avatar, content: req.body.comment || '',
+      type: 'voom', repost_of: original.id,
+      repost_user: { id: original.user_id, username: original.username, display_name: original.display_name, avatar: original.avatar },
+    });
+    await Post.findOneAndUpdate({ id: req.params.postId }, { $addToSet: { reposts: decoded.id } });
+    io.emit('voom:reposted', { postId: req.params.postId, repost, userId: decoded.id });
+    res.json({ reposted: true, repost });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// VOOM いいね（既存のpost:likeと共用）
+app.post('/api/voom/:postId/like', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const post = await Post.findOne({ id: req.params.postId });
+    if (!post) return res.status(404).json({ error: '投稿が見つかりません' });
+    const liked = post.likes.includes(decoded.id);
+    const update = liked ? { $pull: { likes: decoded.id } } : { $addToSet: { likes: decoded.id } };
+    await Post.findOneAndUpdate({ id: req.params.postId }, update);
+    const updated = await Post.findOne({ id: req.params.postId }).lean();
+    io.emit('voom:liked', { postId: req.params.postId, likes: updated.likes });
+    res.json({ likes: updated.likes });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// VOOM削除
+app.delete('/api/voom/:postId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { username: 1 }).lean();
+    const post = await Post.findOne({ id: req.params.postId });
+    if (!post) return res.status(404).json({ error: '投稿が見つかりません' });
+    if (post.user_id !== decoded.id && user.username !== ADMIN_USERNAME) return res.status(403).json({ error: '削除権限がありません' });
+    await Post.deleteOne({ id: req.params.postId });
+    io.emit('voom:deleted', { postId: req.params.postId });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== ニュース API =====
+app.get('/api/news', async (req, res) => {
+  try {
+    const news = await News.find().sort({ published_at: -1 }).limit(50).lean();
+    res.json(news);
+  } catch (e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+// ニュース投稿（管理者のみ）
+app.post('/api/news', upload.single('image'), async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { username: 1 }).lean();
+    if (user.username.trim().toLowerCase() !== ADMIN_USERNAME.trim().toLowerCase()) return res.status(403).json({ error: '管理者のみ投稿できます' });
+    const { title, content, url, category } = req.body;
+    if (!title) return res.status(400).json({ error: 'タイトルを入力してください' });
+    const item = await News.create({
+      id: uuidv4(), title, content: content || '',
+      image: req.file ? getFileUrl(req) : null,
+      url: url || null, category: category || '一般',
+      source: 'manual',
+    });
+    io.emit('news:new', item);
+    res.json(item);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ニュース削除（管理者のみ）
+app.delete('/api/news/:id', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { username: 1 }).lean();
+    if (user.username.trim().toLowerCase() !== ADMIN_USERNAME.trim().toLowerCase()) return res.status(403).json({ error: '管理者のみ削除できます' });
+    await News.deleteOne({ id: req.params.id });
+    io.emit('news:deleted', { id: req.params.id });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== 公式アカウント API =====
+// 公式アカウント付与（管理者が即時付与）
+app.post('/api/users/:userId/official', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const admin = await User.findOne({ id: decoded.id }, { username: 1 }).lean();
+    if (admin.username.trim().toLowerCase() !== ADMIN_USERNAME.trim().toLowerCase()) return res.status(403).json({ error: '管理者のみ操作できます' });
+    const { official, category } = req.body;
+    await User.findOneAndUpdate({ id: req.params.userId }, { is_official: !!official, official_verified: !!official, official_category: category || '' });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 公式アカウント申請（一般ユーザー）
+app.post('/api/official/apply', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { username: 1, is_official: 1 }).lean();
+    if (user.is_official) return res.status(400).json({ error: 'すでに公式アカウントです' });
+    const existing = await OfficialRequest.findOne({ user_id: decoded.id, status: 'pending' });
+    if (existing) return res.status(400).json({ error: '申請中です。承認をお待ちください' });
+    const { reason, category } = req.body;
+    if (!reason) return res.status(400).json({ error: '申請理由を入力してください' });
+    const req_ = await OfficialRequest.create({
+      id: uuidv4(), user_id: decoded.id, username: user.username,
+      reason, category: category || 'その他',
+    });
+    res.json(req_);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 公式申請一覧（管理者のみ）
+app.get('/api/official/requests', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const admin = await User.findOne({ id: decoded.id }, { username: 1 }).lean();
+    if (admin.username.trim().toLowerCase() !== ADMIN_USERNAME.trim().toLowerCase()) return res.status(403).json({ error: '管理者のみ閲覧できます' });
+    const requests = await OfficialRequest.find({ status: 'pending' }).sort({ created_at: -1 }).lean();
+    res.json(requests);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 公式申請 承認/拒否（管理者のみ）
+app.patch('/api/official/requests/:id', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const admin = await User.findOne({ id: decoded.id }, { username: 1 }).lean();
+    if (admin.username.trim().toLowerCase() !== ADMIN_USERNAME.trim().toLowerCase()) return res.status(403).json({ error: '管理者のみ操作できます' });
+    const { action } = req.body; // 'approve' | 'reject'
+    const request = await OfficialRequest.findOne({ id: req.params.id });
+    if (!request) return res.status(404).json({ error: '申請が見つかりません' });
+    await OfficialRequest.findOneAndUpdate({ id: req.params.id }, { status: action === 'approve' ? 'approved' : 'rejected' });
+    if (action === 'approve') {
+      await User.findOneAndUpdate({ id: request.user_id }, { is_official: true, official_verified: true, official_category: request.category });
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 
 // 部屋
 app.get('/api/rooms', async (req, res) => {

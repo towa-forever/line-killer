@@ -109,11 +109,39 @@ const PostSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   user_id: String,
   username: String,
+  display_name: String,
   avatar: String,
   content: String,
   image: String,
+  video: String,
+  type: { type: String, default: 'post' },
+  repost_of: { type: String, default: null },
+  repost_user: { type: Object, default: null },
   likes: { type: [String], default: [] },
-  comments: { type: [{ id: String, user_id: String, username: String, content: String, created_at: { type: Date, default: Date.now } }], default: [] },
+  reposts: { type: [String], default: [] },
+  comments: { type: [{ id: String, user_id: String, username: String, display_name: String, avatar: String, content: String, created_at: { type: Date, default: Date.now } }], default: [] },
+  created_at: { type: Date, default: Date.now }
+});
+
+const NewsSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  title: { type: String, required: true },
+  content: String,
+  image: String,
+  url: String,
+  source: { type: String, default: 'manual' },
+  category: { type: String, default: '一般' },
+  published_at: { type: Date, default: Date.now },
+  created_at: { type: Date, default: Date.now }
+});
+
+const OfficialRequestSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  user_id: String,
+  username: String,
+  reason: String,
+  category: String,
+  status: { type: String, default: 'pending' },
   created_at: { type: Date, default: Date.now }
 });
 
@@ -258,6 +286,8 @@ module.exports = {
   Friend: mongoose.model('Friend', FriendSchema),
   FriendRequest: mongoose.model('FriendRequest', FriendRequestSchema),
   Post: mongoose.model('Post', PostSchema),
+  News: mongoose.model('News', NewsSchema),
+  OfficialRequest: mongoose.model('OfficialRequest', OfficialRequestSchema),
   ScheduledMessage: mongoose.model('ScheduledMessage', ScheduledMessageSchema),
   Poll: mongoose.model('Poll', PollSchema),
   Task: mongoose.model('Task', TaskSchema),
