@@ -140,7 +140,7 @@ function MemoryGame({ onShare, onBack }) {
 }
 
 const TYPING_SENTENCES = [
-  'LINE Killerで楽しくチャット！',
+  'WakkaChatで楽しくチャット！',
   'おはようございます！今日もよろしく！',
   '今日のランチは何食べる？',
   'プログラミングって楽しいよね！',

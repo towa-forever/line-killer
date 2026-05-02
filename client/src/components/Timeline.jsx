@@ -176,7 +176,7 @@ export default function Timeline({ currentUser, socket }) {
       {/* ヘッダー */}
       <div style={{ background:'#06c755', color:'white', padding:'16px 16px 18px', paddingTop:'calc(16px + env(safe-area-inset-top))' }}>
         <div className="timeline-header">📢 お知らせ</div>
-        <div style={{ fontSize:12, opacity:0.85 }}>LINE Killerからの最新情報</div>
+        <div style={{ fontSize:12, opacity:0.85 }}>WakkaChatからの最新情報</div>
       </div>
 
       {/* エラー・成功通知 */}
@@ -254,7 +254,7 @@ export default function Timeline({ currentUser, socket }) {
                   </div>
                   <div style={{ flex:1 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                      <span style={{ fontWeight:700, fontSize:15 }}>LINE Killer</span>
+                      <span style={{ fontWeight:700, fontSize:15 }}>WakkaChat</span>
                       <span style={{ fontSize:11, background:'#06c755', color:'white', borderRadius:10, padding:'1px 7px', fontWeight:600 }}>公式</span>
                     </div>
                     <div style={{ fontSize:11, color:'var(--text2)' }}>{timeAgo(post.created_at)}</div>

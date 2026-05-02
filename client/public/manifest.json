@@ -1,6 +1,6 @@
 {
-  "short_name": "LINE Killer",
-  "name": "LINE Killer - チャットアプリ",
+  "short_name": "WakkaChat",
+  "name": "WakkaChat - チャットアプリ",
   "icons": [
     {
       "src": "favicon.ico",
@@ -23,8 +23,8 @@
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#06c755",
-  "background_color": "#ffffff",
+  "theme_color": "#1DB874",
+  "background_color": "#1DB874",
   "description": "LINE風チャットアプリ",
   "lang": "ja",
   "scope": "/"

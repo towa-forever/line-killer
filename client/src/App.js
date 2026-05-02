@@ -84,8 +84,18 @@ function AuthScreen({ onLogin }) {
     <div className="auth-screen">
       <div className="auth-card">
         <div className="auth-logo">
-          <span className="logo-icon">💬</span>
-          <h1>LINE Killer</h1>
+          <span className="logo-icon">
+            <svg width="56" height="56" viewBox="0 0 80 80" style={{borderRadius:16}}>
+              <rect width="80" height="80" rx="20" fill="#1DB874"/>
+              <circle cx="40" cy="38" r="22" fill="none" stroke="white" strokeWidth="6" opacity="0.3"/>
+              <rect x="22" y="26" width="36" height="22" rx="10" fill="white"/>
+              <path d="M28 48 L24 56 L36 50" fill="white"/>
+              <circle cx="32" cy="37" r="2.5" fill="#1DB874"/>
+              <circle cx="40" cy="37" r="2.5" fill="#1DB874"/>
+              <circle cx="48" cy="37" r="2.5" fill="#1DB874"/>
+            </svg>
+          </span>
+          <h1>WakkaChat</h1>
           <p>LINEを超えるチャットアプリ</p>
         </div>
         <form onSubmit={handleSubmit}>
@@ -488,7 +498,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   // タブの未読バッジ
   useEffect(() => {
     const total = Object.values(unreadCounts).reduce((s, n) => s + n, 0);
-    document.title = total > 0 ? `(${total}) LINE Killer` : 'LINE Killer';
+    document.title = total > 0 ? `(${total}) WakkaChat` : 'WakkaChat';
   }, [unreadCounts]);
 
   useEffect(() => {

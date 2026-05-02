@@ -1,4 +1,4 @@
-// LINE Killer Service Worker
+// WakkaChat Service Worker
 
 // インストール時：即座に有効化
 self.addEventListener('install', () => {
@@ -12,7 +12,7 @@ self.addEventListener('activate', (event) => {
 // Push通知
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
-  const title = data.title || 'LINE Killer';
+  const title = data.title || 'WakkaChat';
   const options = {
     body: data.body || '新しいメッセージがあります',
     icon: '/logo192.png',
