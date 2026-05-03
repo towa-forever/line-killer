@@ -15,7 +15,7 @@ export default function AdminPanel({ currentUser, onClose }) {
   const [editUser, setEditUser]     = useState(null); // 公式設定モーダル
   const [category, setCategory]     = useState('その他');
 
-  const isAdmin = (currentUser?.username || '').trim().toLowerCase() === ADMIN_USERNAME.trim().toLowerCase();
+  const isAdmin = currentUser?.isAdmin || (currentUser?.username || '').trim().toLowerCase() === ADMIN_USERNAME.trim().toLowerCase();
 
   const fetchUsers = useCallback(async (q = '') => {
     setLoading(true);

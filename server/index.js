@@ -627,6 +627,7 @@ app.post('/api/auth/login', async (req, res) => {
       parentAccountId: user.parent_account_id || null,
       isOfficial: user.is_official || false,
       officialCategory: user.official_category || '',
+      isAdmin: user.username.trim().toLowerCase() === ADMIN_USERNAME.trim().toLowerCase(),
     }});
   } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
@@ -647,6 +648,7 @@ app.get('/api/auth/me', async (req, res) => {
       coins: user.coins || 0,
       isOfficial: user.is_official || false,
       officialCategory: user.official_category || '',
+      isAdmin: user.username.trim().toLowerCase() === ADMIN_USERNAME.trim().toLowerCase(),
     }});
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
