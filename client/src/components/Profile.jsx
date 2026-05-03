@@ -178,7 +178,7 @@ function AutoStatusRules({ currentUser, saveSettings }) {
   );
 }
 
-export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccount, darkMode, onToggleDark, darkAutoMode, onToggleAuto, onContact, onOpenPinSetup, onNavigate }) {
+export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccount, darkMode, onToggleDark, darkAutoMode, onToggleAuto, onContact, onOpenPinSetup, onNavigate, onOpenAdmin }) {
   const [editing, setEditing] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser?.displayName || '');

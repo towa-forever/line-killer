@@ -1503,6 +1503,86 @@ app.delete('/api/voom/:postId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ===== 管理者API =====
+const adminAuth = async (req) => {
+  const decoded = auth(req);
+  const user = await User.findOne({ id: decoded.id }, { username: 1 }).lean();
+  if (!user || user.username.trim().toLowerCase() !== ADMIN_USERNAME.trim().toLowerCase())
+    throw Object.assign(new Error('管理者のみアクセス可能'), { status: 403 });
+  return decoded;
+};
+
+// ユーザー一覧（管理者）
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    await adminAuth(req);
+    const { q } = req.query;
+    const filter = q ? { $or: [{ username: { $regex: q, $options: 'i' } }, { display_name: { $regex: q, $options: 'i' } }, { id: { $regex: q, $options: 'i' } }] } : {};
+    const users = await User.find(filter, { password: 0 }).sort({ created_at: -1 }).limit(100).lean();
+    res.json(users);
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+// ユーザーに公式マーク付与/剥奪（管理者）
+app.patch('/api/admin/users/:userId/official', async (req, res) => {
+  try {
+    await adminAuth(req);
+    const { official, category } = req.body;
+    const user = await User.findOneAndUpdate(
+      { id: req.params.userId },
+      { is_official: !!official, official_verified: !!official, official_category: category || '' },
+      { returnDocument: 'after' }
+    ).lean();
+    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    res.json({ ok: true });
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+// ユーザー削除（管理者）
+app.delete('/api/admin/users/:userId', async (req, res) => {
+  try {
+    const decoded = await adminAuth(req);
+    if (req.params.userId === decoded.id) return res.status(400).json({ error: '自分自身は削除できません' });
+    await User.deleteOne({ id: req.params.userId });
+    res.json({ ok: true });
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+// 公式申請一覧（管理者）- 既存と統合
+app.get('/api/admin/official-requests', async (req, res) => {
+  try {
+    await adminAuth(req);
+    const requests = await OfficialRequest.find({ status: 'pending' }).sort({ created_at: -1 }).lean();
+    res.json(requests);
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+// 公式申請 承認/拒否（管理者）
+app.patch('/api/admin/official-requests/:id', async (req, res) => {
+  try {
+    await adminAuth(req);
+    const { action } = req.body;
+    const request = await OfficialRequest.findOne({ id: req.params.id });
+    if (!request) return res.status(404).json({ error: '申請が見つかりません' });
+    await OfficialRequest.findOneAndUpdate({ id: req.params.id }, { status: action === 'approve' ? 'approved' : 'rejected' });
+    if (action === 'approve') {
+      await User.findOneAndUpdate({ id: request.user_id }, { is_official: true, official_verified: true, official_category: request.category });
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+// 管理者自身を即時公式化
+app.post('/api/admin/self-official', async (req, res) => {
+  try {
+    const decoded = await adminAuth(req);
+    const { official, category } = req.body;
+    await User.findOneAndUpdate({ id: decoded.id }, { is_official: !!official, official_verified: !!official, official_category: category || '管理者' });
+    res.json({ ok: true });
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+
 // ===== 公式アカウント 一斉送信API =====
 // 公式アカウントから友達全員にDMを一斉送信
 app.post('/api/official/broadcast', upload.single('image'), async (req, res) => {

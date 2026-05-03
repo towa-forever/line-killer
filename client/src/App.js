@@ -15,6 +15,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 const Friends = lazy(() => import('./components/Friends'));
 const Timeline = lazy(() => import('./components/Timeline'));
 const Voom = lazy(() => import('./components/Voom'));
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const StampShop = lazy(() => import('./components/StampShop'));
 const Album = lazy(() => import('./components/Album'));
 const VideoCall = lazy(() => import('./components/VideoCall'));
@@ -2404,6 +2405,7 @@ export default function App() {
   const [showSubAccounts, setShowSubAccounts] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [showBroadcast, setShowBroadcast] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
   const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId, roomId }
   const [showGift, setShowGift] = useState(null);
   const [showReadLater, setShowReadLater] = useState(false);
@@ -2730,7 +2732,7 @@ export default function App() {
       </div>
       <div style={tabVisible('profile')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-          <Profile currentUser={currentUser} onUpdate={handleProfileUpdate} onLogout={handleLogout} onContact={handleContactOpen}
+          <Profile currentUser={currentUser} onOpenAdmin={currentUser?.username === 'とわ' ? () => setShowAdmin(true) : null} onUpdate={handleProfileUpdate} onLogout={handleLogout} onContact={handleContactOpen}
             darkMode={darkMode} onToggleDark={handleToggleDark}
             darkAutoMode={darkAutoMode} onToggleAuto={handleToggleAuto}
             onOpenPinSetup={handleOpenPinSetup}
@@ -2834,6 +2836,13 @@ export default function App() {
         )}
 
         {/* お問い合わせ */}
+
+        {/* 管理者パネル */}
+        {showAdmin && (
+          <ErrorBoundary><Suspense fallback={null}>
+            <AdminPanel currentUser={currentUser} onClose={() => setShowAdmin(false)} />
+          </Suspense></ErrorBoundary>
+        )}
 
         {/* 公式アカウント 一斉送信モーダル */}
         {showBroadcast && (
