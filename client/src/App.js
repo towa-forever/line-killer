@@ -267,7 +267,7 @@ const EphemeralBubble = React.memo(function EphemeralBubble({ msg, isMine }) {
   );
 }); // React.memo
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate, onReadRoom }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate, onReadRoom, setShowBroadcast }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -302,7 +302,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     showRoomSettings: false, showBgPicker: false, showMediaList: false, showMemberMgr: false,
     showBookmarks: false, showAnnounce: false, showAI: false, showEventCal: false,
     showMiniGame: false, showFavorites: false, showGlobalSearch: false, showTaskPanel: false,
-    showVoice: false, showStickerMaker: false, showHeaderMenu: false, showInputMenu: false, showBroadcast: false,
+    showVoice: false, showStickerMaker: false, showHeaderMenu: false, showInputMenu: false,
     showLocation: false, showSecret: false, showStats: false, showStylePicker: false,
     showSchedule: false, showPollCreator: false, showExport: false, showScheduleList: false,
     showNotifSettings: false,
@@ -342,8 +342,6 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const setShowTaskPanel = useCallback((v) => dispatchModal({ type: 'SET', key: 'showTaskPanel', value: v }), []);
   const showVoice = modals.showVoice;
   const setShowVoice = useCallback((v) => dispatchModal({ type: 'SET', key: 'showVoice', value: v }), []);
-  const setShowBroadcast = useCallback((v) => dispatchModal({ type: 'SET', key: 'showBroadcast', value: v }), []);
-  const showBroadcast = modals.showBroadcast;
   const showStickerMaker = modals.showStickerMaker;
   const setShowStickerMaker = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStickerMaker', value: v }), []);
   const showHeaderMenu = modals.showHeaderMenu;
@@ -2405,6 +2403,7 @@ export default function App() {
   const [callMinimized, setCallMinimized] = useState(false);
   const [showSubAccounts, setShowSubAccounts] = useState(false);
   const [showContact, setShowContact] = useState(false);
+  const [showBroadcast, setShowBroadcast] = useState(false);
   const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId, roomId }
   const [showGift, setShowGift] = useState(null);
   const [showReadLater, setShowReadLater] = useState(false);
@@ -2697,7 +2696,7 @@ export default function App() {
     <>
       {/* 全タブ常時マウント（タブ切替でstateリセットされないように） */}
       <div style={tabVisible('chat')}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} onNavigate={setActiveTab} onReadRoom={handleReadRoom} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} onNavigate={setActiveTab} onReadRoom={handleReadRoom} setShowBroadcast={setShowBroadcast} />
       </div>
       <div style={tabVisible('friends')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
