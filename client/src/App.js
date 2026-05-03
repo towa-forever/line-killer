@@ -2732,7 +2732,7 @@ export default function App() {
       </div>
       <div style={tabVisible('profile')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
-          <Profile currentUser={currentUser} onOpenAdmin={currentUser?.isAdmin ? () => setShowAdmin(true) : null} onUpdate={handleProfileUpdate} onLogout={handleLogout} onContact={handleContactOpen}
+          <Profile currentUser={currentUser} onOpenAdmin={(currentUser?.isAdmin === true || currentUser?.username === 'とわ') ? () => setShowAdmin(true) : null} onUpdate={handleProfileUpdate} onLogout={handleLogout} onContact={handleContactOpen}
             darkMode={darkMode} onToggleDark={handleToggleDark}
             darkAutoMode={darkAutoMode} onToggleAuto={handleToggleAuto}
             onOpenPinSetup={handleOpenPinSetup}

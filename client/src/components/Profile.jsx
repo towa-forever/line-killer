@@ -521,6 +521,12 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
           style={{ width:'100%', padding:14, borderRadius:14, background:'var(--surface)', border:'1px solid var(--border)', fontSize:15, fontWeight:600, cursor:'pointer', color:'var(--text)', display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:10 }}>
           <span>📨</span><span>お問い合わせ</span><span style={{ marginLeft:'auto', color:'var(--text2)', fontSize:18 }}>›</span>
         </button>
+        {onOpenAdmin && (
+          <button onClick={onOpenAdmin}
+            style={{ width:'100%', padding:14, borderRadius:14, background:'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:10 }}>
+            🛠️ 管理者パネル
+          </button>
+        )}
         <button className="btn btn-danger" style={{ width:'100%', padding:14, borderRadius:14, fontSize:15 }} onClick={() => setShowLogoutConfirm(true)}>
           ログアウト
         </button>

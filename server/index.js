@@ -1108,6 +1108,9 @@ app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { nam
       bookmarks: user.bookmarked_messages || [],
       coins: user.coins || 0,
       parentAccountId: user.parent_account_id || null,
+      isOfficial: user.is_official || false,
+      officialCategory: user.official_category || '',
+      isAdmin: user.username.trim().toLowerCase() === ADMIN_USERNAME.trim().toLowerCase(),
     };
     io.to('user_' + decoded.id).emit('user:updated', userRes);
     res.json(userRes);
@@ -1139,6 +1142,9 @@ app.patch('/api/users/me/settings', async (req, res) => {
       blockedUsers: user.blocked_users || [], mutedRooms: user.muted_rooms || [],
       bookmarks: user.bookmarked_messages || [], coins: user.coins || 0,
       parentAccountId: user.parent_account_id || null,
+      isOfficial: user.is_official || false,
+      officialCategory: user.official_category || '',
+      isAdmin: user.username.trim().toLowerCase() === ADMIN_USERNAME.trim().toLowerCase(),
     };
     res.json(userRes);
   } catch(e) { res.status(500).json({ error: e.message }); }
