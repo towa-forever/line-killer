@@ -625,6 +625,8 @@ app.post('/api/auth/login', async (req, res) => {
       bookmarks: user.bookmarked_messages || [],
       coins: user.coins || 0,
       parentAccountId: user.parent_account_id || null,
+      isOfficial: user.is_official || false,
+      officialCategory: user.official_category || '',
     }});
   } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
@@ -643,6 +645,8 @@ app.get('/api/auth/me', async (req, res) => {
       pinEnabled: user.pin_enabled || false, secretQuestion: user.secret_question || '',
       blockedUsers: user.blocked_users || [], showOnline: user.show_online !== false,
       coins: user.coins || 0,
+      isOfficial: user.is_official || false,
+      officialCategory: user.official_category || '',
     }});
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
@@ -1499,43 +1503,63 @@ app.delete('/api/voom/:postId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ===== ニュース API =====
-app.get('/api/news', async (req, res) => {
-  try {
-    const news = await News.find().sort({ published_at: -1 }).limit(50).lean();
-    res.json(news);
-  } catch (e) { res.status(500).json({ error: 'サーバーエラー' }); }
-});
-
-// ニュース投稿（管理者のみ）
-app.post('/api/news', upload.single('image'), async (req, res) => {
+// ===== 公式アカウント 一斉送信API =====
+// 公式アカウントから友達全員にDMを一斉送信
+app.post('/api/official/broadcast', upload.single('image'), async (req, res) => {
   try {
     const decoded = auth(req);
-    const user = await User.findOne({ id: decoded.id }, { username: 1 }).lean();
-    if (user.username.trim().toLowerCase() !== ADMIN_USERNAME.trim().toLowerCase()) return res.status(403).json({ error: '管理者のみ投稿できます' });
-    const { title, content, url, category } = req.body;
-    if (!title) return res.status(400).json({ error: 'タイトルを入力してください' });
-    const item = await News.create({
-      id: uuidv4(), title, content: content || '',
-      image: req.file ? getFileUrl(req) : null,
-      url: url || null, category: category || '一般',
-      source: 'manual',
-    });
-    io.emit('news:new', item);
-    res.json(item);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+    const sender = await User.findOne({ id: decoded.id }, { username: 1, display_name: 1, avatar: 1, is_official: 1 }).lean();
+    if (!sender.is_official) return res.status(403).json({ error: '公式アカウントのみ使用できます' });
 
-// ニュース削除（管理者のみ）
-app.delete('/api/news/:id', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const user = await User.findOne({ id: decoded.id }, { username: 1 }).lean();
-    if (user.username.trim().toLowerCase() !== ADMIN_USERNAME.trim().toLowerCase()) return res.status(403).json({ error: '管理者のみ削除できます' });
-    await News.deleteOne({ id: req.params.id });
-    io.emit('news:deleted', { id: req.params.id });
-    res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const { content } = req.body;
+    if (!content && !req.file) return res.status(400).json({ error: 'メッセージを入力してください' });
+
+    // 送信者の友達を全員取得
+    const friends = await Friend.find({ user_id: decoded.id }, { friend_id: 1 }).lean();
+    if (friends.length === 0) return res.json({ sent: 0 });
+
+    let sentCount = 0;
+    for (const f of friends) {
+      try {
+        // DMルームを取得 or 作成
+        const membersSorted = [decoded.id, f.friend_id].sort();
+        let room = await Room.findOne({ type: 'dm', members: { $all: membersSorted, $size: 2 } }).lean();
+        if (!room) {
+          const friendUser = await User.findOne({ id: f.friend_id }, { username: 1, display_name: 1 }).lean();
+          room = await Room.create({
+            id: uuidv4(),
+            name: friendUser?.display_name || friendUser?.username || f.friend_id,
+            type: 'dm',
+            members: membersSorted,
+            created_by: decoded.id,
+          });
+        }
+
+        // メッセージ作成
+        const msgId = uuidv4();
+        const msg = await Message.create({
+          id: msgId,
+          room_id: room.id,
+          sender_id: decoded.id,
+          sender_name: sender.display_name || sender.username,
+          sender_avatar: sender.avatar || null,
+          content: content || '',
+          image: req.file ? getFileUrl(req) : null,
+          type: 'text',
+        });
+
+        // リアルタイム送信
+        io.to(room.id).emit('message:new', msg);
+        io.to('user_' + f.friend_id).emit('message:new', msg);
+        sentCount++;
+      } catch (_) {}
+    }
+
+    res.json({ sent: sentCount });
+  } catch (e) {
+    const s = (e?.name?.includes('JsonWebToken') || e?.name?.includes('TokenExpired')) ? 401 : 500;
+    res.status(s).json({ error: s === 401 ? '認証エラー' : e.message });
+  }
 });
 
 // ===== 公式アカウント API =====

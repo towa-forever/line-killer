@@ -15,7 +15,6 @@ import ErrorBoundary from './components/ErrorBoundary';
 const Friends = lazy(() => import('./components/Friends'));
 const Timeline = lazy(() => import('./components/Timeline'));
 const Voom = lazy(() => import('./components/Voom'));
-const NewsTab = lazy(() => import('./components/NewsTab'));
 const StampShop = lazy(() => import('./components/StampShop'));
 const Album = lazy(() => import('./components/Album'));
 const VideoCall = lazy(() => import('./components/VideoCall'));
@@ -303,7 +302,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     showRoomSettings: false, showBgPicker: false, showMediaList: false, showMemberMgr: false,
     showBookmarks: false, showAnnounce: false, showAI: false, showEventCal: false,
     showMiniGame: false, showFavorites: false, showGlobalSearch: false, showTaskPanel: false,
-    showVoice: false, showStickerMaker: false, showHeaderMenu: false, showInputMenu: false,
+    showVoice: false, showStickerMaker: false, showHeaderMenu: false, showInputMenu: false, showBroadcast: false,
     showLocation: false, showSecret: false, showStats: false, showStylePicker: false,
     showSchedule: false, showPollCreator: false, showExport: false, showScheduleList: false,
     showNotifSettings: false,
@@ -343,6 +342,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const setShowTaskPanel = useCallback((v) => dispatchModal({ type: 'SET', key: 'showTaskPanel', value: v }), []);
   const showVoice = modals.showVoice;
   const setShowVoice = useCallback((v) => dispatchModal({ type: 'SET', key: 'showVoice', value: v }), []);
+  const setShowBroadcast = useCallback((v) => dispatchModal({ type: 'SET', key: 'showBroadcast', value: v }), []);
+  const showBroadcast = modals.showBroadcast;
   const showStickerMaker = modals.showStickerMaker;
   const setShowStickerMaker = useCallback((v) => dispatchModal({ type: 'SET', key: 'showStickerMaker', value: v }), []);
   const showHeaderMenu = modals.showHeaderMenu;
@@ -1286,6 +1287,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     axios.get('/api/rooms/' + selectedRoom.id + '/schedules').then(r => { setScheduleList(r.data || []); setShowScheduleList(true); }).catch(() => setShowScheduleList(true));
                   }},
                   { icon:'🔔', label:'通知設定', action: () => setShowNotifSettings(true) },
+                  ...(currentUser?.isOfficial ? [{ icon:'📣', label:'一斉送信', action: () => setShowBroadcast(true) }] : []),
                 ].map(item => (
                   <button key={item.label} className="header-menu-item" onClick={() => { setShowHeaderMenu(false); item.action(); }}>
                     <span className="header-menu-icon">{item.icon}</span>
@@ -2264,13 +2266,81 @@ const InputArea = React.memo(function InputArea({
   );
 });
 
+
+// 公式アカウント 一斉送信モーダル
+function BroadcastModal({ currentUser, onClose, showToast }) {
+  const [text, setText] = React.useState('');
+  const [image, setImage] = React.useState(null);
+  const [preview, setPreview] = React.useState(null);
+  const [sending, setSending] = React.useState(false);
+  const fileRef = React.useRef(null);
+
+  const handleSend = async () => {
+    if (!text.trim() && !image) return;
+    setSending(true);
+    try {
+      const fd = new FormData();
+      fd.append('content', text);
+      if (image) fd.append('image', image);
+      const res = await axios.post('/api/official/broadcast', fd);
+      showToast?.(`✅ ${res.data.sent}人に送信しました！`, 'success');
+      onClose();
+    } catch (e) {
+      showToast?.(e.response?.data?.error || '送信に失敗しました', 'error');
+    } finally { setSending(false); }
+  };
+
+  const handleImage = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImage(file);
+    const reader = new FileReader();
+    reader.onload = ev => setPreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'flex-end' }}>
+      <div style={{ background:'var(--surface)', width:'100%', borderRadius:'20px 20px 0 0', padding:20, maxHeight:'80vh', display:'flex', flexDirection:'column' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+          <div>
+            <div style={{ fontWeight:700, fontSize:18 }}>📣 一斉送信</div>
+            <div style={{ fontSize:12, color:'var(--text2)' }}>友達全員のDMにメッセージを送信</div>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:24, cursor:'pointer', color:'var(--text2)' }}>✕</button>
+        </div>
+
+        <textarea value={text} onChange={e => setText(e.target.value)}
+          placeholder="送信するメッセージを入力..."
+          style={{ flex:1, minHeight:120, padding:'10px 12px', borderRadius:12, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)', fontSize:15, resize:'none', outline:'none', marginBottom:12 }} />
+
+        {preview && (
+          <div style={{ position:'relative', marginBottom:12, display:'inline-block' }}>
+            <img src={preview} alt="" style={{ maxWidth:160, maxHeight:120, borderRadius:10, objectFit:'cover' }} />
+            <button onClick={() => { setImage(null); setPreview(null); }}
+              style={{ position:'absolute', top:4, right:4, background:'rgba(0,0,0,0.6)', border:'none', color:'white', borderRadius:'50%', width:22, height:22, cursor:'pointer', fontSize:12 }}>✕</button>
+          </div>
+        )}
+
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <button onClick={() => fileRef.current?.click()} style={{ background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--text2)' }}>🖼️</button>
+          <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleImage} />
+          <button onClick={handleSend} disabled={sending || (!text.trim() && !image)}
+            style={{ padding:'10px 28px', borderRadius:20, background:'#1DB874', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer', opacity: sending || (!text.trim() && !image) ? 0.5 : 1 }}>
+            {sending ? '送信中...' : '📣 全員に送信'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TabBar = React.memo(function TabBar({ activeTab, setActiveTab, notifications, onClearNotif }) {
   const tabs = [
     { id: 'chat',      label: 'トーク',       icon: '💬' },
     { id: 'friends',   label: '友達',         icon: '👥' },
     { id: 'timeline',  label: 'お知らせ',      icon: '📢' },
     { id: 'voom',       label: 'VOOM',          icon: '🎬' },
-    { id: 'news',       label: 'ニュース',       icon: '📰' },
     { id: 'stampshop', label: 'ショップ',      icon: '🎫' },
     { id: 'profile',   label: 'プロフィール',  icon: '👤' },
   ];
@@ -2765,6 +2835,11 @@ export default function App() {
         )}
 
         {/* お問い合わせ */}
+
+        {/* 公式アカウント 一斉送信モーダル */}
+        {showBroadcast && (
+          <BroadcastModal currentUser={currentUser} onClose={() => setShowBroadcast(false)} showToast={showToast} />
+        )}
         {showContact && (
           <ErrorBoundary><Suspense fallback={null}>
             <ContactForm currentUser={currentUser} onClose={handleCloseContact} />
