@@ -268,7 +268,7 @@ const EphemeralBubble = React.memo(function EphemeralBubble({ msg, isMine }) {
   );
 }); // React.memo
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate, onReadRoom, setShowBroadcast }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate, onReadRoom, setShowBroadcast, pinnedRooms = [], setPinnedRooms }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -2426,10 +2426,10 @@ export default function App() {
   const [showSubAccounts, setShowSubAccounts] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [showBroadcast, setShowBroadcast] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
   const [pinnedRooms, setPinnedRooms] = useState(() => {
     try { return JSON.parse(localStorage.getItem('pinnedRooms') || '[]'); } catch { return []; }
   });
-  const [showAdmin, setShowAdmin] = useState(false);
   const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId, roomId }
   const [showGift, setShowGift] = useState(null);
   const [showReadLater, setShowReadLater] = useState(false);
@@ -2685,13 +2685,7 @@ export default function App() {
   }, []);
   const handleStampAcquire = useCallback((id) => setAcquiredStampIds(prev => [...prev, id]), []);
   const handleNavigateRoom = useCallback(() => setActiveTab('chat'), []);
-  const handleProfileUpdate = useCallback((u) => {
-    setCurrentUser(u);
-    if (u?.pinnedRooms) {
-      setPinnedRooms(u.pinnedRooms);
-      localStorage.setItem('pinnedRooms', JSON.stringify(u.pinnedRooms));
-    }
-  }, []);
+  const handleProfileUpdate = useCallback((u) => setCurrentUser(u), []);
   const handleContactOpen = useCallback(() => setShowContact(true), []);
   const handleToggleDark = useCallback(() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(d => !d); }, []);
   const handleToggleAuto = useCallback(() => {
@@ -2728,7 +2722,7 @@ export default function App() {
     <>
       {/* 全タブ常時マウント（タブ切替でstateリセットされないように） */}
       <div style={tabVisible('chat')}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} onNavigate={setActiveTab} onReadRoom={handleReadRoom} setShowBroadcast={setShowBroadcast} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} onNavigate={setActiveTab} onReadRoom={handleReadRoom} setShowBroadcast={setShowBroadcast} pinnedRooms={pinnedRooms} setPinnedRooms={setPinnedRooms} />
       </div>
       <div style={tabVisible('friends')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
