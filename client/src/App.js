@@ -1181,7 +1181,14 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <div className="room-empty-text">まだトークがないで！<br/>右上の ✏️ からトークを始めよう</div>
             </div>
           )}
-          {React.useMemo(() => rooms.map((room) => {
+          {React.useMemo(() => [...rooms].sort((a,b) => {
+            const ap = pinnedRooms.includes(a.id) ? 1 : 0;
+            const bp = pinnedRooms.includes(b.id) ? 1 : 0;
+            if (ap !== bp) return bp - ap;
+            const ta = new Date(a.lastActivity || a.lastMessage?.createdAt || 0).getTime();
+            const tb = new Date(b.lastActivity || b.lastMessage?.createdAt || 0).getTime();
+            return tb - ta;
+          }).map((room) => {
             const lastMsg = room.lastMessage;
             // DMの場合は相手のアバターを表示
             const isDM = room.members?.length === 2;
@@ -1194,7 +1201,20 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             const roomName = isDM && otherMember ? (otherMember.displayName || otherMember.username || room.name) : room.name;
             return (
               <div key={room.id} className={`room-item ${selectedRoom?.id === room.id ? 'active' : ''}`}
-                onClick={() => setSelectedRoom(room)}>
+                onClick={() => setSelectedRoom(room)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  const isPinned = pinnedRooms.includes(room.id);
+                  if (window.confirm(isPinned ? `「${roomName}」のピン留めを解除しますか？` : `「${roomName}」をピン留めしますか？`)) {
+                    axios.post(`/api/rooms/${room.id}/pin`).then(res => {
+                      const next = res.data.pinned
+                        ? [...pinnedRooms, room.id]
+                        : pinnedRooms.filter(id => id !== room.id);
+                      setPinnedRooms(next);
+                      localStorage.setItem('pinnedRooms', JSON.stringify(next));
+                    }).catch(() => {});
+                  }
+                }}>
                 <div style={{ position:'relative' }}>
                   <AvatarImg src={roomAvatar} name={roomName} size={40} frame="none" />
                   {/* オンラインドット */}
@@ -1218,6 +1238,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <div className="room-info">
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                     <div className={`room-name ${unreadCounts[room.id] > 0 ? 'unread' : ''}`}>
+                      {pinnedRooms.includes(room.id) && <span style={{ fontSize:11, marginRight:3 }}>📌</span>}
                       {roomName}
                       {mutedRooms.has(room.id) && <span style={{ fontSize:11, color:'var(--text2)', marginLeft:4 }}>🔕</span>}
                     </div>
@@ -1229,7 +1250,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 </div>
               </div>
             );
-          }), [rooms, selectedRoom, currentUser, onlineUsers, unreadCounts, mutedRooms])}
+          }), [rooms, selectedRoom, currentUser, onlineUsers, unreadCounts, mutedRooms, pinnedRooms])}
         </div>
       </div>
 
@@ -2405,6 +2426,9 @@ export default function App() {
   const [showSubAccounts, setShowSubAccounts] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [showBroadcast, setShowBroadcast] = useState(false);
+  const [pinnedRooms, setPinnedRooms] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('pinnedRooms') || '[]'); } catch { return []; }
+  });
   const [showAdmin, setShowAdmin] = useState(false);
   const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId, roomId }
   const [showGift, setShowGift] = useState(null);
@@ -2661,7 +2685,13 @@ export default function App() {
   }, []);
   const handleStampAcquire = useCallback((id) => setAcquiredStampIds(prev => [...prev, id]), []);
   const handleNavigateRoom = useCallback(() => setActiveTab('chat'), []);
-  const handleProfileUpdate = useCallback((u) => setCurrentUser(u), []);
+  const handleProfileUpdate = useCallback((u) => {
+    setCurrentUser(u);
+    if (u?.pinnedRooms) {
+      setPinnedRooms(u.pinnedRooms);
+      localStorage.setItem('pinnedRooms', JSON.stringify(u.pinnedRooms));
+    }
+  }, []);
   const handleContactOpen = useCallback(() => setShowContact(true), []);
   const handleToggleDark = useCallback(() => { setDarkAutoMode(false); localStorage.setItem('darkAutoMode','false'); setDarkMode(d => !d); }, []);
   const handleToggleAuto = useCallback(() => {

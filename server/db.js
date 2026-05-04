@@ -31,6 +31,7 @@ const UserSchema = new mongoose.Schema({
   bio: { type: String, default: '' },
   status: { type: String, default: '' },
   auto_status_rules: { type: [{ fromHour: Number, toHour: Number, status: String }], default: [] },
+  pinned_rooms: { type: [String], default: [] }, // ピン留めしたルームID
   avatar_frame: { type: String, default: 'none' },
   sound_theme: { type: String, default: 'default' },
   acquired_stamps: { type: [Number], default: [] },

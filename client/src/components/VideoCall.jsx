@@ -161,7 +161,6 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
     pc.oniceconnectionstatechange = () => {
       const s = pc.iceConnectionState;
       setIceState(s);
-      console.log('[ICE]', s);
       if (['connected', 'completed'].includes(s)) {
         setStatus('active');
         if (!startTimeRef.current) {
@@ -172,7 +171,6 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
         }
       }
       if (s === 'failed') {
-        console.log('[ICE] failed → restartIce');
         try { pc.restartIce(); } catch (_) {}
       }
       if (s === 'disconnected') {
@@ -186,10 +184,8 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
 
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
-      console.log('[PC]', s);
       if (s === 'connected') setStatus('active');
       if (s === 'failed') {
-        console.log('[PC] failed → safeEnd');
         safeEnd();
       }
     };
@@ -213,7 +209,6 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       const rawOffer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
       const sdp = preferVP8(rawOffer.sdp);
       await pc.setLocalDescription({ type: rawOffer.type, sdp });
-      console.log('[発信] offer送信 to:', targetUserId);
       socket.emit('call:start', { roomId, offer: pc.localDescription, to: targetUserId });
     };
 
@@ -234,13 +229,11 @@ export default function VideoCall({ currentUser, socket, roomId, targetUserId, i
       const rawAnswer = await pc.createAnswer();
       const sdp = preferVP8(rawAnswer.sdp);
       await pc.setLocalDescription({ type: rawAnswer.type, sdp });
-      console.log('[着信] answer送信 to:', targetUserId);
       socket.emit('call:answer', { answer: pc.localDescription, to: targetUserId });
     };
 
     // ---- answer受信（発信側） ----
     const onAnswered = async ({ answer }) => {
-      console.log('[発信] answered受信, signalingState:', pcRef.current?.signalingState);
       if (!pcRef.current) return;
       if (pcRef.current.signalingState !== 'have-local-offer') return;
       try {

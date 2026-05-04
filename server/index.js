@@ -628,6 +628,7 @@ app.post('/api/auth/login', async (req, res) => {
       isOfficial: user.is_official || false,
       officialCategory: user.official_category || '',
       isAdmin: user.username.trim().toLowerCase() === ADMIN_USERNAME.trim().toLowerCase(),
+      pinnedRooms: user.pinned_rooms || [],
     }});
   } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
@@ -649,6 +650,7 @@ app.get('/api/auth/me', async (req, res) => {
       isOfficial: user.is_official || false,
       officialCategory: user.official_category || '',
       isAdmin: user.username.trim().toLowerCase() === ADMIN_USERNAME.trim().toLowerCase(),
+      pinnedRooms: user.pinned_rooms || [],
     }});
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
@@ -1420,6 +1422,21 @@ app.delete('/api/posts/:postId/comments/:commentId', async (req, res) => {
     res.json({ ok: true });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
+
+// ===== トークピン留めAPI =====
+app.post('/api/rooms/:roomId/pin', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { pinned_rooms: 1 }).lean();
+    const isPinned = (user.pinned_rooms || []).includes(req.params.roomId);
+    const update = isPinned
+      ? { $pull: { pinned_rooms: req.params.roomId } }
+      : { $addToSet: { pinned_rooms: req.params.roomId } };
+    await User.findOneAndUpdate({ id: decoded.id }, update);
+    res.json({ pinned: !isPinned });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 
 // ===== 公式アカウント（ボット）API =====
 
@@ -2967,7 +2984,7 @@ app.get('/sitemap.xml', (req, res) => {
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://line-killer-server.onrender.com/</loc>
+    <loc>${process.env.CLIENT_URL || "https://line-killer-server.onrender.com"}/</loc>
     <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -2977,7 +2994,7 @@ app.get('/sitemap.xml', (req, res) => {
 
 app.get('/robots.txt', (req, res) => {
   res.header('Content-Type', 'text/plain');
-  res.send('User-agent: *\nAllow: /\nSitemap: https://line-killer-server.onrender.com/sitemap.xml');
+  res.send('User-agent: *\nAllow: /\nSitemap: ${process.env.CLIENT_URL || "https://line-killer-server.onrender.com"}/sitemap.xml');
 });
 
 // ===== TWA用 assetlinks.json =====
