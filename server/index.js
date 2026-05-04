@@ -28,7 +28,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 
-const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription, News, OfficialRequest } = require('./db');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription, News, OfficialRequest, OfficialAccount } = require('./db');
 
 const app = express();
 // Render等のリバースプロキシ対応（express-rate-limitのX-Forwarded-Forエラー解消）
@@ -1420,6 +1420,156 @@ app.delete('/api/posts/:postId/comments/:commentId', async (req, res) => {
     res.json({ ok: true });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
+
+// ===== 公式アカウント（ボット）API =====
+
+// 公式アカウント一覧（全ユーザー見られる）
+app.get('/api/official-accounts', async (req, res) => {
+  try {
+    const accounts = await OfficialAccount.find().sort({ created_at: -1 }).lean();
+    // フォロワー数だけ返す（全IDは不要）
+    const result = accounts.map(a => ({ ...a, followerCount: a.followers.length, isFollowing: false }));
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 公式アカウント一覧（ログイン済み・自分のフォロー状態付き）
+app.get('/api/official-accounts/me', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const accounts = await OfficialAccount.find().sort({ created_at: -1 }).lean();
+    const result = accounts.map(a => ({
+      ...a,
+      followerCount: a.followers.length,
+      isFollowing: a.followers.includes(decoded.id),
+    }));
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 公式アカウント作成（管理者のみ）
+app.post('/api/official-accounts', upload.single('avatar'), async (req, res) => {
+  try {
+    const decoded = await adminAuth(req);
+    const { name, description, category } = req.body;
+    if (!name) return res.status(400).json({ error: '名前を入力してください' });
+    const account = await OfficialAccount.create({
+      id: uuidv4(),
+      name,
+      description: description || '',
+      avatar: req.file ? getFileUrl(req) : null,
+      category: category || 'その他',
+      created_by: decoded.id,
+    });
+    res.json(account);
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+// 公式アカウント更新（管理者のみ）
+app.patch('/api/official-accounts/:accountId', upload.single('avatar'), async (req, res) => {
+  try {
+    await adminAuth(req);
+    const { name, description, category } = req.body;
+    const update = {};
+    if (name) update.name = name;
+    if (description !== undefined) update.description = description;
+    if (category) update.category = category;
+    if (req.file) update.avatar = getFileUrl(req);
+    const account = await OfficialAccount.findOneAndUpdate({ id: req.params.accountId }, update, { returnDocument: 'after' }).lean();
+    res.json(account);
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+// 公式アカウント削除（管理者のみ）
+app.delete('/api/official-accounts/:accountId', async (req, res) => {
+  try {
+    await adminAuth(req);
+    await OfficialAccount.deleteOne({ id: req.params.accountId });
+    res.json({ ok: true });
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+// 友達追加/解除
+app.post('/api/official-accounts/:accountId/follow', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const account = await OfficialAccount.findOne({ id: req.params.accountId });
+    if (!account) return res.status(404).json({ error: 'アカウントが見つかりません' });
+    const isFollowing = account.followers.includes(decoded.id);
+    if (isFollowing) {
+      await OfficialAccount.findOneAndUpdate({ id: req.params.accountId }, { $pull: { followers: decoded.id } });
+    } else {
+      await OfficialAccount.findOneAndUpdate({ id: req.params.accountId }, { $addToSet: { followers: decoded.id } });
+      // 友達追加時にウェルカムメッセージをDM送信
+      const user = await User.findOne({ id: decoded.id }, { username: 1 }).lean();
+      const welcomeRoom = await getOrCreateDMRoom(decoded.id, account.id, account.name, account.avatar);
+      if (welcomeRoom && account.description) {
+        const msg = await Message.create({
+          id: uuidv4(),
+          room_id: welcomeRoom.id,
+          sender_id: account.id,
+          sender_name: account.name,
+          sender_avatar: account.avatar,
+          content: account.description,
+          type: 'text',
+        });
+        io.to(welcomeRoom.id).emit('message:new', msg);
+        io.to('user_' + decoded.id).emit('message:new', msg);
+      }
+    }
+    res.json({ isFollowing: !isFollowing });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 公式アカウントから一斉DM送信（管理者のみ）
+app.post('/api/official-accounts/:accountId/broadcast', upload.single('image'), async (req, res) => {
+  try {
+    await adminAuth(req);
+    const account = await OfficialAccount.findOne({ id: req.params.accountId }).lean();
+    if (!account) return res.status(404).json({ error: 'アカウントが見つかりません' });
+    const { content } = req.body;
+    if (!content && !req.file) return res.status(400).json({ error: 'メッセージを入力してください' });
+    let sentCount = 0;
+    for (const followerId of account.followers) {
+      try {
+        const room = await getOrCreateDMRoom(followerId, account.id, account.name, account.avatar);
+        if (!room) continue;
+        const msg = await Message.create({
+          id: uuidv4(),
+          room_id: room.id,
+          sender_id: account.id,
+          sender_name: account.name,
+          sender_avatar: account.avatar,
+          content: content || '',
+          image: req.file ? getFileUrl(req) : null,
+          type: 'text',
+        });
+        io.to(room.id).emit('message:new', msg);
+        io.to('user_' + followerId).emit('message:new', msg);
+        sentCount++;
+      } catch (_) {}
+    }
+    res.json({ sent: sentCount, total: account.followers.length });
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+// DMルーム取得 or 作成（公式アカウント用ヘルパー）
+async function getOrCreateDMRoom(userId, officialId, officialName, officialAvatar) {
+  const membersSorted = [userId, officialId].sort();
+  let room = await Room.findOne({ type: 'dm', members: { $all: membersSorted, $size: 2 } }).lean();
+  if (!room) {
+    room = await Room.create({
+      id: uuidv4(),
+      name: officialName,
+      type: 'dm',
+      members: membersSorted,
+      avatar: officialAvatar,
+      created_by: officialId,
+    });
+  }
+  return room;
+}
+
 
 // ===== VOOM API =====
 // VOOM投稿一覧

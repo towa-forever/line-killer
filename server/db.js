@@ -135,6 +135,18 @@ const NewsSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+// 公式アカウント（ボット）スキーマ
+const OfficialAccountSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  description: { type: String, default: '' },
+  avatar: { type: String, default: null },
+  category: { type: String, default: 'その他' },
+  followers: { type: [String], default: [] },
+  created_by: String,
+  created_at: { type: Date, default: Date.now }
+});
+
 const OfficialRequestSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   user_id: String,
@@ -288,6 +300,7 @@ module.exports = {
   Post: mongoose.model('Post', PostSchema),
   News: mongoose.model('News', NewsSchema),
   OfficialRequest: mongoose.model('OfficialRequest', OfficialRequestSchema),
+  OfficialAccount: mongoose.model('OfficialAccount', OfficialAccountSchema),
   ScheduledMessage: mongoose.model('ScheduledMessage', ScheduledMessageSchema),
   Poll: mongoose.model('Poll', PollSchema),
   Task: mongoose.model('Task', TaskSchema),

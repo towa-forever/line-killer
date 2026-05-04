@@ -18,9 +18,17 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
   const [messageType, setMessageType] = useState('success'); // success | error
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [officialAccounts, setOfficialAccounts] = useState([]);
   const qrInputRef = useRef(null);
 
   const showMsg = useCallback((text, type = 'success') => { setMessage(text); setMessageType(type); setTimeout(() => setMessage(''), 3000); }, []);
+
+  const fetchOfficialAccounts = useCallback(async () => {
+    try {
+      const res = await axios.get('/api/official-accounts/me');
+      setOfficialAccounts(res.data);
+    } catch (e) {}
+  }, []);
 
   const fetchFriends  = useCallback(async () => {
     try {
@@ -163,6 +171,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
     { id:'requests', icon:'📩', label:'申請',   badge:requests.length },
     { id:'add',      icon:'➕', label:'追加',   badge:0 },
     { id:'qr',       icon:'📷', label:'QRコード', badge:0 },
+    { id:'official',  icon:'✅', label:'公式',    badge:0 },
   ];
 
   return (
@@ -187,7 +196,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
         <div className="friends-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}><span>友達</span></div>
         <div style={{ display:'flex' }}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'list') fetchFriends(); if (t.id === 'requests') fetchRequests(); }}
+            <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'list') fetchFriends(); if (t.id === 'requests') fetchRequests(); if (t.id === 'official') fetchOfficialAccounts(); }}
               style={{ flex:1, padding:'8px 0 10px', background:'none', border:'none', color: tab===t.id ? 'white' : 'rgba(255,255,255,0.65)', fontSize:11, fontWeight: tab===t.id ? 700 : 400, cursor:'pointer', position:'relative',
                 borderBottom: tab===t.id ? '2.5px solid white' : '2.5px solid transparent', transition:'all 0.15s' }}>
               <div style={{ fontSize:20, marginBottom:2 }}>{t.icon}</div>
@@ -353,6 +362,53 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
       )}
 
       {/* ===== QRコード ===== */}
+
+      {/* 公式アカウントタブ */}
+      {tab === 'official' && (
+        <div style={{ padding:'0 0 20px' }}>
+          <div style={{ padding:'12px 16px', fontSize:13, color:'var(--text2)' }}>
+            公式アカウントを友達追加すると、トーク一覧にメッセージが届くで！
+          </div>
+          {officialAccounts.length === 0 && (
+            <div style={{ textAlign:'center', padding:40, color:'var(--text2)' }}>公式アカウントがまだありません</div>
+          )}
+          {officialAccounts.map(acc => (
+            <div key={acc.id} style={{ padding:'14px 16px', borderBottom:'1px solid var(--border)', display:'flex', gap:12, alignItems:'center' }}>
+              <div style={{ width:52, height:52, borderRadius:16, background:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, overflow:'hidden', flexShrink:0 }}>
+                {acc.avatar
+                  ? <img src={acc.avatar.startsWith('http') ? acc.avatar : `${SERVER_URL}${acc.avatar}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  : '🤖'}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
+                  <span style={{ fontWeight:700, fontSize:16 }}>{acc.name}</span>
+                  <span style={{ fontSize:11, background:'#1DB874', color:'white', borderRadius:8, padding:'1px 6px' }}>公式</span>
+                </div>
+                <div style={{ fontSize:12, color:'var(--text2)', marginBottom:2 }}>{acc.category} · 👥 {acc.followerCount}人</div>
+                {acc.description && <div style={{ fontSize:13, color:'var(--text2)', overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>{acc.description}</div>}
+              </div>
+              <button onClick={async () => {
+                try {
+                  const res = await axios.post(`/api/official-accounts/${acc.id}/follow`);
+                  setOfficialAccounts(prev => prev.map(a => a.id === acc.id
+                    ? { ...a, isFollowing: res.data.isFollowing, followerCount: a.followerCount + (res.data.isFollowing ? 1 : -1) }
+                    : a
+                  ));
+                  showMsg(res.data.isFollowing ? `${acc.name}を友達追加したで！` : `${acc.name}を削除しました`, res.data.isFollowing ? 'success' : 'error');
+                  if (res.data.isFollowing) fetchFriends();
+                } catch (e) { showMsg('エラーが発生しました', 'error'); }
+              }} style={{
+                padding:'7px 14px', borderRadius:20, border:'none', fontSize:13, fontWeight:700, cursor:'pointer', flexShrink:0,
+                background: acc.isFollowing ? 'var(--surface2)' : '#1DB874',
+                color: acc.isFollowing ? 'var(--text2)' : 'white',
+              }}>
+                {acc.isFollowing ? '追加済み' : '追加'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {tab === 'qr' && (
         <div style={{ padding:'20px 16px' }}>
           {/* マイQRコード */}

@@ -9,6 +9,15 @@ export default function AdminPanel({ currentUser, onClose }) {
   const [tab, setTab]               = useState('users');
   const [users, setUsers]           = useState([]);
   const [requests, setRequests]     = useState([]);
+  const [accounts, setAccounts]     = useState([]);
+  const [newAccName, setNewAccName] = useState('');
+  const [newAccDesc, setNewAccDesc] = useState('');
+  const [newAccCat, setNewAccCat]   = useState('その他');
+  const [newAccAvatar, setNewAccAvatar] = useState(null);
+  const [broadcastTarget, setBroadcastTarget] = useState(null);
+  const [broadcastText, setBroadcastText] = useState('');
+  const [creating, setCreating]     = useState(false);
+  const fileRef = React.useRef(null);
   const [search, setSearch]         = useState('');
   const [loading, setLoading]       = useState(false);
   const [msg, setMsg]               = useState('');
@@ -26,6 +35,13 @@ export default function AdminPanel({ currentUser, onClose }) {
     finally { setLoading(false); }
   }, []);
 
+  const fetchAccounts = useCallback(async () => {
+    try {
+      const res = await axios.get('/api/official-accounts/me');
+      setAccounts(res.data);
+    } catch (e) {}
+  }, []);
+
   const fetchRequests = useCallback(async () => {
     try {
       const res = await axios.get('/api/admin/official-requests');
@@ -37,7 +53,8 @@ export default function AdminPanel({ currentUser, onClose }) {
     if (!isAdmin) return;
     fetchUsers();
     fetchRequests();
-  }, [isAdmin, fetchUsers, fetchRequests]);
+    fetchAccounts();
+  }, [isAdmin, fetchUsers, fetchRequests, fetchAccounts]);
 
   const handleSearch = (e) => {
     setSearch(e.target.value);
@@ -99,6 +116,7 @@ export default function AdminPanel({ currentUser, onClose }) {
         {[
           { id:'users', label:'👥 ユーザー管理' },
           { id:'official', label:'✅ 公式申請' },
+          { id:'bot', label:'🤖 公式アカウント' },
           { id:'self', label:'⚡ 自分の設定' },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -179,6 +197,83 @@ export default function AdminPanel({ currentUser, onClose }) {
           </div>
         )}
 
+
+        {/* 公式アカウント管理 */}
+        {tab === 'bot' && (
+          <div>
+            {/* 新規作成フォーム */}
+            <div style={{ padding:16, borderBottom:'1px solid var(--border)', background:'var(--surface)' }}>
+              <div style={{ fontWeight:700, fontSize:15, marginBottom:12 }}>➕ 新規公式アカウント作成</div>
+              <div style={{ display:'flex', gap:12, marginBottom:10 }}>
+                <div onClick={() => fileRef.current?.click()}
+                  style={{ width:56, height:56, borderRadius:16, background:'var(--surface2)', border:'1px dashed var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:24, flexShrink:0 }}>
+                  {newAccAvatar ? <img src={URL.createObjectURL(newAccAvatar)} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:16 }} /> : '📷'}
+                </div>
+                <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }} onChange={e => setNewAccAvatar(e.target.files[0])} />
+                <div style={{ flex:1 }}>
+                  <input value={newAccName} onChange={e => setNewAccName(e.target.value)}
+                    placeholder="アカウント名（例：WakkaChatニュース）*"
+                    style={{ width:'100%', padding:'8px 10px', borderRadius:10, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)', fontSize:14, outline:'none', boxSizing:'border-box', marginBottom:6 }} />
+                  <select value={newAccCat} onChange={e => setNewAccCat(e.target.value)}
+                    style={{ width:'100%', padding:'7px 10px', borderRadius:10, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)', fontSize:13, outline:'none' }}>
+                    {['ニュース', 'エンタメ', 'ゲーム', 'ビジネス', 'クリエイター', 'その他'].map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <textarea value={newAccDesc} onChange={e => setNewAccDesc(e.target.value)}
+                placeholder="説明文・ウェルカムメッセージ（友達追加時に自動送信）"
+                style={{ width:'100%', minHeight:60, padding:'8px 10px', borderRadius:10, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)', fontSize:13, resize:'none', boxSizing:'border-box', outline:'none', marginBottom:10 }} />
+              <button onClick={async () => {
+                if (!newAccName.trim()) return;
+                setCreating(true);
+                try {
+                  const fd = new FormData();
+                  fd.append('name', newAccName);
+                  fd.append('description', newAccDesc);
+                  fd.append('category', newAccCat);
+                  if (newAccAvatar) fd.append('avatar', newAccAvatar);
+                  await axios.post('/api/official-accounts', fd);
+                  setNewAccName(''); setNewAccDesc(''); setNewAccAvatar(null);
+                  setMsg('✅ 公式アカウントを作成しました！');
+                  fetchAccounts();
+                } catch (e) { setMsg(e.response?.data?.error || '作成に失敗しました'); }
+                finally { setCreating(false); }
+              }} disabled={creating || !newAccName.trim()}
+                style={{ width:'100%', padding:'10px 0', borderRadius:12, background:'#1DB874', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer', opacity: creating || !newAccName.trim() ? 0.5 : 1 }}>
+                {creating ? '作成中...' : '🤖 作成する'}
+              </button>
+            </div>
+
+            {/* 既存アカウント一覧 */}
+            {accounts.length === 0 && (
+              <div style={{ textAlign:'center', padding:32, color:'var(--text2)' }}>公式アカウントがまだありません</div>
+            )}
+            {accounts.map(acc => (
+              <div key={acc.id} style={{ padding:'14px 16px', borderBottom:'1px solid var(--border)' }}>
+                <div style={{ display:'flex', gap:12, alignItems:'center', marginBottom:10 }}>
+                  <div style={{ width:48, height:48, borderRadius:14, background:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, overflow:'hidden', flexShrink:0 }}>
+                    {acc.avatar ? <img src={acc.avatar.startsWith('http') ? acc.avatar : `${SERVER_URL}${acc.avatar}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : '🤖'}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:15 }}>{acc.name}</div>
+                    <div style={{ fontSize:12, color:'var(--text2)' }}>{acc.category} · 👥 {acc.followerCount}人</div>
+                  </div>
+                  <button onClick={async () => {
+                    if (!window.confirm(`「${acc.name}」を削除しますか？`)) return;
+                    await axios.delete(`/api/official-accounts/${acc.id}`).catch(() => {});
+                    fetchAccounts();
+                  }} style={{ padding:'5px 10px', borderRadius:8, background:'#e74c3c', color:'white', border:'none', fontSize:12, cursor:'pointer' }}>削除</button>
+                </div>
+                {acc.description && <div style={{ fontSize:13, color:'var(--text2)', marginBottom:8, lineHeight:1.5 }}>{acc.description}</div>}
+                <button onClick={() => { setBroadcastTarget(acc); setBroadcastText(''); }}
+                  style={{ width:'100%', padding:'8px 0', borderRadius:10, background:'var(--primary)', color:'white', border:'none', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+                  📣 メッセージ一斉送信（{acc.followerCount}人）
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* 管理者自身の設定 */}
         {tab === 'self' && (
           <div style={{ padding:20 }}>
@@ -229,6 +324,36 @@ export default function AdminPanel({ currentUser, onClose }) {
         )}
       </div>
 
+
+      {/* 公式アカウント一斉送信モーダル */}
+      {broadcastTarget && (
+        <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'flex-end', zIndex:100 }}>
+          <div style={{ background:'var(--surface)', width:'100%', borderRadius:'20px 20px 0 0', padding:20 }}>
+            <div style={{ fontWeight:700, fontSize:16, marginBottom:4 }}>📣 {broadcastTarget.name}</div>
+            <div style={{ fontSize:13, color:'var(--text2)', marginBottom:12 }}>{broadcastTarget.followerCount}人に送信します</div>
+            <textarea value={broadcastText} onChange={e => setBroadcastText(e.target.value)}
+              placeholder="送信するメッセージを入力..." rows={4}
+              style={{ width:'100%', padding:'10px 12px', borderRadius:12, border:'1px solid var(--border)', background:'var(--surface2)', color:'var(--text)', fontSize:15, resize:'none', boxSizing:'border-box', outline:'none', marginBottom:12 }} />
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={async () => {
+                if (!broadcastText.trim()) return;
+                try {
+                  const res = await axios.post(`/api/official-accounts/${broadcastTarget.id}/broadcast`, { content: broadcastText });
+                  setMsg(`✅ ${res.data.sent}人に送信しました！`);
+                  setBroadcastTarget(null);
+                } catch (e) { setMsg(e.response?.data?.error || '送信に失敗しました'); }
+              }} disabled={!broadcastText.trim()}
+                style={{ flex:1, padding:'10px 0', borderRadius:12, background:'#1DB874', color:'white', border:'none', fontSize:15, fontWeight:700, cursor:'pointer', opacity: !broadcastText.trim() ? 0.5 : 1 }}>
+                全員に送信
+              </button>
+              <button onClick={() => setBroadcastTarget(null)}
+                style={{ flex:1, padding:'10px 0', borderRadius:12, border:'1px solid var(--border)', background:'none', color:'var(--text)', fontSize:15, cursor:'pointer' }}>
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 公式設定モーダル */}
       {editUser && (
         <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'flex-end', zIndex:100 }}>
