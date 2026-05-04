@@ -1515,6 +1515,16 @@ app.post('/api/official-accounts/:accountId/follow', async (req, res) => {
         });
         io.to(welcomeRoom.id).emit('message:new', msg);
         io.to('user_' + decoded.id).emit('message:new', msg);
+        // ウェルカムメッセージのPush通知
+        const sub = pushSubscriptions.get(decoded.id);
+        if (sub) {
+          webpush.sendNotification(sub, JSON.stringify({
+            title: account.name,
+            body: account.description.slice(0, 80),
+            tag: welcomeRoom.id,
+            url: '/',
+          })).catch(() => {});
+        }
       }
     }
     res.json({ isFollowing: !isFollowing });
@@ -1546,6 +1556,16 @@ app.post('/api/official-accounts/:accountId/broadcast', upload.single('image'), 
         });
         io.to(room.id).emit('message:new', msg);
         io.to('user_' + followerId).emit('message:new', msg);
+        // Push通知
+        const sub = pushSubscriptions.get(followerId);
+        if (sub) {
+          webpush.sendNotification(sub, JSON.stringify({
+            title: account.name,
+            body: (content || '').slice(0, 80) || '📎 ファイル',
+            tag: room.id,
+            url: '/',
+          })).catch(() => {});
+        }
         sentCount++;
       } catch (_) {}
     }
@@ -1871,8 +1891,9 @@ app.get('/api/rooms', async (req, res) => {
 
     // 全メンバーIDを収集して一括取得（N+1解消）
     const allMemberIds = [...new Set(rooms.flatMap(r => r.members))];
-    const [allUsers, lastMsgs] = await Promise.all([
+    const [allUsers, allOfficialAccounts, lastMsgs] = await Promise.all([
       User.find({ id: { $in: allMemberIds } }, { id: 1, username: 1, display_name: 1, avatar: 1 }).lean(),
+      OfficialAccount.find({ id: { $in: allMemberIds } }, { id: 1, name: 1, avatar: 1, description: 1 }).lean(),
       // 各ルームの最新メッセージを集約で一括取得
       Message.aggregate([
         { $match: { room_id: { $in: roomIds }, deleted: false } },
@@ -1882,12 +1903,16 @@ app.get('/api/rooms', async (req, res) => {
     ]);
 
     const userMap = Object.fromEntries(allUsers.map(u => [u.id, u]));
+    const officialMap = Object.fromEntries(allOfficialAccounts.map(a => [a.id, a]));
     const lastMsgMap = Object.fromEntries(lastMsgs.map(m => [m._id, m]));
 
     const roomsWithLast = rooms.map(r => {
       const memberDetails = r.members.map(mid => {
         const u = userMap[mid];
-        return u ? { id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar } : { id: mid, username: mid, displayName: mid, avatar: null };
+        if (u) return { id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar };
+        const oa = officialMap[mid];
+        if (oa) return { id: oa.id, username: oa.name, displayName: oa.name, avatar: oa.avatar, isOfficial: true };
+        return { id: mid, username: mid, displayName: mid, avatar: null };
       });
       const lastMsg = lastMsgMap[r.id];
       return {
@@ -2004,7 +2029,15 @@ app.post('/api/rooms/:roomId/members', async (req, res) => {
     if (!room) return res.status(403).json({ error: '権限なし' });
     // memberDetailsを含めてroom:newを送信
     const memberUsers = await User.find({ id: { $in: room.members } }, { id: 1, username: 1, display_name: 1, avatar: 1 }).lean();
-    const memberDetails = memberUsers.map(u => ({ id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar }));
+    const officialMembers = await OfficialAccount.find({ id: { $in: room.members } }, { id: 1, name: 1, avatar: 1 }).lean();
+    const officialMemberMap = Object.fromEntries(officialMembers.map(a => [a.id, a]));
+    const memberDetails = room.members.map(mid => {
+      const u = memberUsers.find(u => u.id === mid);
+      if (u) return { id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar };
+      const oa = officialMemberMap[mid];
+      if (oa) return { id: oa.id, username: oa.name, displayName: oa.name, avatar: oa.avatar, isOfficial: true };
+      return { id: mid, username: mid, displayName: mid, avatar: null };
+    });
     const roomObj = { id: room.id, name: room.name, icon: room.icon, members: room.members, memberDetails, pinned_message_id: room.pinned_message_id, lastMessage: null };
     memberIds.forEach(mid => io.to('user_' + mid).emit('room:new', roomObj));
     io.to(req.params.roomId).emit('room:members_updated', { roomId: req.params.roomId, members: room.members });
