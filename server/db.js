@@ -55,6 +55,17 @@ const UserSchema = new mongoose.Schema({
   // ギフト履歴
   gift_sent: { type: Number, default: 0 },
   gift_received: { type: Number, default: 0 },
+  badges: { type: [String], default: [] }, // 獲得バッジID一覧
+  message_count: { type: Number, default: 0 }, // 送信メッセージ数
+  login_count: { type: Number, default: 0 }, // ログイン回数
+  last_login_date: { type: String, default: null }, // YYYY-MM-DD形式
+  login_streak: { type: Number, default: 0 }, // 連続ログイン日数
+  theme: {
+    primaryColor: { type: String, default: null },
+    bgColor: { type: String, default: null },
+    fontFamily: { type: String, default: null }
+  },
+  notification_sounds: { type: Map, of: String, default: {} },
 });
 
 const RoomSchema = new mongoose.Schema({
@@ -82,12 +93,24 @@ const MessageSchema = new mongoose.Schema({
   file_data: mongoose.Schema.Types.Mixed,
   reply_to: mongoose.Schema.Types.Mixed,
   edited: { type: Boolean, default: false },
+  edit_history: { type: [{ content: String, edited_at: Date }], default: [] },
   deleted: { type: Boolean, default: false },
   expires_at: { type: Date, default: null },
   read_by: [String],
   reactions: [{ emoji: String, user_id: String }],
   forwarded: { type: Boolean, default: false },
   stamp_label: { type: String, default: null },
+  created_at: { type: Date, default: Date.now }
+});
+
+const ThreadMessageSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  parent_id: { type: String, required: true }, // 親メッセージID
+  room_id: { type: String, required: true },
+  sender_id: String,
+  sender_name: String,
+  sender_avatar: { type: String, default: null },
+  content: String,
   created_at: { type: Date, default: Date.now }
 });
 
@@ -311,4 +334,5 @@ module.exports = {
   GameCoin: mongoose.model('GameCoin', GameCoinSchema),
   GameItem: mongoose.model('GameItem', GameItemSchema),
   Favorite: mongoose.model('Favorite', FavoriteSchema),
+  ThreadMessage: mongoose.model('ThreadMessage', ThreadMessageSchema),
 };

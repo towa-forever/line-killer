@@ -380,6 +380,42 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [msgMenu, setMsgMenu] = useState(null); // { msg, x, y } 長押しメニュー
   const [editingMessage, setEditingMessage] = useState(null); // { id, content }
   const [showReadDetail, setShowReadDetail] = useState(null); // { msgId, readers: [] }
+  const [showEditHistory, setShowEditHistory] = useState(null); // { msgId, history: [], current }
+  const [showBadges, setShowBadges] = useState(false);
+  const [showRanking, setShowRanking] = useState(false);
+  const [rankingData, setRankingData] = useState([]);
+  const [rankingType, setRankingType] = useState('message');
+  const [showFileManager, setShowFileManager] = useState(false);
+  const [roomFiles, setRoomFiles] = useState([]);
+  const [roomStats, setRoomStats] = useState(null);
+  const [showTheme, setShowTheme] = useState(false);
+  const [showDailyBonus, setShowDailyBonus] = useState(false);
+  const [dailyBonusResult, setDailyBonusResult] = useState(null);
+  const [showNotifSound, setShowNotifSound] = useState(false);
+  const [notifSound, setNotifSound] = useState('default');
+  const [showMusicShare, setShowMusicShare] = useState(false);
+  const [musicUrl, setMusicUrl] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [showFortune, setShowFortune] = useState(false);
+  const [fortuneResult, setFortuneResult] = useState(null);
+  const [fortuneSign, setFortuneSign] = useState('牡羊座');
+  const [showTodo, setShowTodo] = useState(false);
+  const [extractedTodos, setExtractedTodos] = useState([]);
+  const [showCommunity, setShowCommunity] = useState(false);
+  const [communityList, setCommunityList] = useState([]);
+  const [showRoulette, setShowRoulette] = useState(false);
+  const [rouletteResult, setRouletteResult] = useState(null);
+  const [showBirthday, setShowBirthday] = useState(false);
+  const [birthdayFriends, setBirthdayFriends] = useState([]);
+  const [showSpamReport, setShowSpamReport] = useState(null); // { id, type, name }
+  const [badgeList, setBadgeList] = useState([]);
+  const [badgeToast, setBadgeToast] = useState(null); // 新バッジ獲得トースト
+  const [threadMsg, setThreadMsg] = useState(null); // スレッド表示中の親メッセージ
+  const [threadMessages, setThreadMessages] = useState([]); // スレッドのメッセージ一覧
+  const [threadInput, setThreadInput] = useState('');
+  const [emotions, setEmotions] = useState({}); // { msgId: emoji }
+  const [wakkabotLoading, setWakkabotLoading] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(null); // { id, name, avatar, status }
   const [readByDetailMap, setReadByDetailMap] = useState({}); // msgId -> [{id,name,avatar}]
   const [bookmarkedMsgs, setBookmarkedMsgs] = useState([]);
@@ -401,8 +437,6 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [polls, setPolls] = useState({});
   const [chatBg, setChatBg] = useState(() => localStorage.getItem('chatBg') || 'default');
   const [editText, setEditText] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [mentionSuggestions, setMentionSuggestions] = useState([]); // @補完候補
   const [scheduleList, setScheduleList] = useState([]); // スケジュール済みメッセージ
@@ -641,12 +675,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         setMessages(prev => [...prev, sysMsg]);
       }
     });
-    socket.on('message:edited', ({ messageId, content: newContent, roomId: editRoomId }) => {
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: newContent, edited: true } : m));
+    socket.on('message:edited', ({ messageId, content: newContent, roomId: editRoomId, edit_history }) => {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: newContent, edited: true, edit_history: edit_history || m.edit_history } : m));
       // 全キャッシュを更新（どのルームのメッセージかに関わらず）
       Object.keys(messagesCache.current).forEach(rid => {
         if (Array.isArray(messagesCache.current[rid]))
-          messagesCache.current[rid] = messagesCache.current[rid].map(m => m.id === messageId ? { ...m, content: newContent, edited: true } : m);
+          messagesCache.current[rid] = messagesCache.current[rid].map(m => m.id === messageId ? { ...m, content: newContent, edited: true, edit_history: edit_history || m.edit_history } : m);
       });
     });
     socket.on('message:deleted', ({ messageId, roomId: delRoomId }) => {
@@ -663,6 +697,17 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                  : prev.filter(u => u !== username)
       );
     });
+    socket.on('thread:new', ({ parentId, msg }) => {
+      if (threadMsg?.id === parentId) {
+        setThreadMessages(prev => [...prev, msg]);
+      }
+    });
+    socket.on('badges:awarded', ({ badges }) => {
+      if (badges && badges.length > 0) {
+        setBadgeToast(badges[0]);
+        setTimeout(() => setBadgeToast(null), 4000);
+      }
+    });
     return () => {
       socket.off('message:receive'); socket.off('message:new'); socket.off('message:read_update');
       socket.off('message:reacted'); socket.off('room:new'); socket.off('room:updated');
@@ -670,6 +715,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       socket.off('room:pinned'); socket.off('poll:updated');
       socket.off('room:announcement'); socket.off('typing:update');
       socket.off('room:left'); socket.off('room:members_updated');
+      socket.off('badges:awarded');
+      socket.off('thread:new');
     };
   }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -800,9 +847,20 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || !selectedRoom || !socket) return;
     sounds.send(soundTheme);
+    const sentText = inputText;
     socket.emit('message:send', { roomId: selectedRoom.id, content: inputText, type: 'text', replyTo: replyTo ? { id: replyTo.id, content: replyTo.content, senderName: replyTo.senderName } : null });
     setInputText('');
     setReplyTo(null);
+    // WakkaBOT検出
+    if (sentText.includes('@WakkaBOT') || sentText.includes('@わっかBOT')) {
+      setWakkabotLoading(true);
+      const history = messages.slice(-10);
+      axios.post('/api/ai/wakkabot', { message: sentText, history }).then(r => {
+        if (r.data?.result) {
+          socket.emit('message:send', { roomId: selectedRoom.id, content: `🤖 WakkaBOT: ${r.data.result}`, type: 'text' });
+        }
+      }).catch(() => {}).finally(() => setWakkabotLoading(false));
+    }
     // 下書きをクリア
     if (selectedRoom?.id) {
       draftRef.current[selectedRoom.id] = '';
@@ -1098,6 +1156,30 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               ))}
             </div>
           )}
+          {emotions[msg.id] && (
+            <div style={{ fontSize:18, textAlign: isMine ? 'right' : 'left', marginBottom:2, opacity:0.85 }}
+              title="AI感情分析結果">
+              {emotions[msg.id]}
+            </div>
+          )}
+          {msg.edited && (
+            <div style={{ fontSize:11, color:'var(--text2)', marginBottom:2, display:'flex', alignItems:'center', gap:4 }}>
+              <button
+                style={{ fontSize:11, color:'var(--text2)', background:'none', border:'none', cursor:'pointer', padding:0, textDecoration:'underline dotted' }}
+                onClick={() => {
+                  if (msg.edit_history?.length > 0) {
+                    setShowEditHistory({ msgId: msg.id, history: msg.edit_history, current: msg.content });
+                  } else {
+                    socket?.emit('message:edit_history', { messageId: msg.id });
+                    socket?.once('message:edit_history_result', ({ messageId, edit_history }) => {
+                      if (messageId === msg.id) setShowEditHistory({ msgId: msg.id, history: edit_history, current: msg.content });
+                    });
+                  }
+                }}
+                title="編集履歴を見る"
+              >✏️ 編集済み</button>
+            </div>
+          )}
           <div className="message-time">
             {isMine && (() => {
               const readCount = (msg.read_by || []).filter(id => id !== currentUser.id).length;
@@ -1307,6 +1389,38 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     axios.get('/api/rooms/' + selectedRoom.id + '/schedules').then(r => { setScheduleList(r.data || []); setShowScheduleList(true); }).catch(() => setShowScheduleList(true));
                   }},
                   { icon:'🔔', label:'通知設定', action: () => setShowNotifSettings(true) },
+                  { icon:'🏅', label:'バッジ', action: () => { axios.get('/api/badges').then(r => { setBadgeList(r.data); setShowBadges(true); }).catch(() => {}); } },
+                  { icon:'🎰', label:'デイリーボーナス', action: () => {
+                    axios.post('/api/daily-bonus').then(r => { setDailyBonusResult(r.data); setShowDailyBonus(true); }).catch(() => {});
+                  }},
+                  { icon:'🏆', label:'ランキング', action: () => {
+                    axios.get('/api/ranking?type=message').then(r => { setRankingData(r.data); setShowRanking(true); }).catch(() => {});
+                  }},
+                  { icon:'🎨', label:'テーマ', action: () => setShowTheme(true) },
+                  { icon:'📁', label:'ファイル管理', action: () => {
+                    axios.get('/api/rooms/' + selectedRoom.id + '/files').then(r => { setRoomFiles(r.data); setShowFileManager(true); }).catch(() => {});
+                  }},
+                  { icon:'📊', label:'グループ統計', action: () => {
+                    axios.get('/api/rooms/' + selectedRoom.id + '/stats').then(r => { setRoomStats(r.data); setShowStats(true); }).catch(() => {});
+                  }},
+                  { icon:'🔍', label:'メッセージ検索', action: () => { setSearchQuery(''); setSearchResults([]); setShowSearch(true); } },
+                  { icon:'🎰', label:'ルーレット', action: () => { setRouletteResult(null); setShowRoulette(true); } },
+                  { icon:'🔔', label:'通知音設定', action: () => {
+                    axios.get('/api/rooms/' + selectedRoom.id + '/notification').then(r => { setNotifSound(r.data.sound || 'default'); setShowNotifSound(true); }).catch(() => {});
+                  }},
+                  { icon:'🎵', label:'音楽シェア', action: () => setShowMusicShare(true) },
+                  { icon:'🔮', label:'AI占い', action: () => { setFortuneResult(null); setShowFortune(true); } },
+                  { icon:'✅', label:'AIタスク抽出', action: () => {
+                    axios.post('/api/ai/extract-todos', { messages: messages.slice(-30) })
+                      .then(r => { setExtractedTodos(r.data.todos || []); setShowTodo(true); })
+                      .catch(() => { setExtractedTodos([]); setShowTodo(true); });
+                  }},
+                  { icon:'🌍', label:'コミュニティ', action: () => {
+                    axios.get('/api/community/list').then(r => { setCommunityList(r.data); setShowCommunity(true); }).catch(() => {});
+                  }},
+                  { icon:'🎂', label:'誕生日', action: () => {
+                    axios.get('/api/friends/birthdays').then(r => { setBirthdayFriends(r.data); setShowBirthday(true); }).catch(() => {});
+                  }},
                   ...(currentUser?.isOfficial ? [{ icon:'📣', label:'一斉送信', action: () => setShowBroadcast(true) }] : []),
                 ].map(item => (
                   <button key={item.label} className="header-menu-item" onClick={() => { setShowHeaderMenu(false); item.action(); }}>
@@ -1356,31 +1470,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           )}</Portal>
           <Portal>{msgMenu && (
             <div style={{ position:'fixed', inset:0, zIndex:3000, background:'rgba(0,0,0,0.4)' }} onClick={handleCloseMsgMenu}>
-              {/* リアクションバー */}
-              <div style={{
-                position:'fixed',
-                bottom: 'calc(env(safe-area-inset-bottom) + 48px)',
-                left:'50%', transform:'translateX(-50%)',
-                display:'flex', gap:4, background:'var(--surface)',
-                borderRadius:32, padding:'8px 12px',
-                boxShadow:'0 4px 24px rgba(0,0,0,0.25)', zIndex:3002
-              }} onClick={e => e.stopPropagation()}>
-                {QUICK_REACTIONS.map(emoji => (
-                  <button key={emoji} onClick={() => handleReactFromMenu(emoji)}
-                    style={{ fontSize:26, padding:'4px 6px', border:'none', background:'none', cursor:'pointer', borderRadius:12, WebkitTapHighlightColor:'transparent' }}>{emoji}
-                  </button>
-                ))}
-                <button onClick={async () => {
-                  if (translating[msgMenu.msg.id]) { setTranslating(p => ({...p, [msgMenu.msg.id]: null})); setMsgMenu(null); return; }
-                  setTranslating(p => ({...p, [msgMenu.msg.id]: '翻訳中...'}));
-                  try {
-                    const res = await axios.post('/api/translate', { text: msgMenu.msg.content, targetLang: '日本語' });
-                    setTranslating(p => ({...p, [msgMenu.msg.id]: res.data.result}));
-                  } catch { setTranslating(p => ({...p, [msgMenu.msg.id]: '翻訳失敗'})); }
-                  setMsgMenu(null);
-                }} style={{ fontSize:20, padding:'4px 6px', border:'none', background:'none', cursor:'pointer', borderRadius:12, color:'var(--text2)' }}>🌐</button>
-              </div>
-              {/* アクションリスト（ボトムシート） */}
+              {/* アクションリスト（ボトムシート） ※リアクションも統合 */}
               <div style={{
                 position:'fixed', bottom:0, left:0, right:0,
                 background:'var(--surface)',
@@ -1388,8 +1478,30 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 overflow:'hidden', zIndex:3001,
                 paddingBottom:'env(safe-area-inset-bottom)',
                 boxShadow:'0 -4px 32px rgba(0,0,0,0.2)',
-                animation:'slideUp 0.22s ease'
+                animation:'slideUp 0.22s ease',
+                maxHeight:'85dvh', overflowY:'auto'
               }} onClick={(e) => e.stopPropagation()}>
+                {/* リアクションバー（ボトムシート上部に統合） */}
+                <div style={{
+                  display:'flex', gap:2, padding:'14px 12px 10px',
+                  borderBottom:'1px solid var(--border)',
+                  justifyContent:'center', flexWrap:'wrap'
+                }}>
+                  {QUICK_REACTIONS.map(emoji => (
+                    <button key={emoji} onClick={() => { handleReactFromMenu(emoji); setMsgMenu(null); }}
+                      style={{ fontSize:28, padding:'6px 8px', border:'none', background:'none', cursor:'pointer', borderRadius:12, WebkitTapHighlightColor:'transparent' }}>{emoji}
+                    </button>
+                  ))}
+                  <button onClick={async () => {
+                    if (translating[msgMenu.msg.id]) { setTranslating(p => ({...p, [msgMenu.msg.id]: null})); setMsgMenu(null); return; }
+                    setTranslating(p => ({...p, [msgMenu.msg.id]: '翻訳中...'}));
+                    try {
+                      const res = await axios.post('/api/translate', { text: msgMenu.msg.content, targetLang: '日本語' });
+                      setTranslating(p => ({...p, [msgMenu.msg.id]: res.data.result}));
+                    } catch { setTranslating(p => ({...p, [msgMenu.msg.id]: '翻訳失敗'})); }
+                    setMsgMenu(null);
+                  }} style={{ fontSize:22, padding:'6px 8px', border:'none', background:'none', cursor:'pointer', borderRadius:12, color:'var(--text2)', WebkitTapHighlightColor:'transparent' }}>🌐</button>
+                </div>
                 {[
                   { icon:'📌', label: pinnedMessage?.id === msgMenu.msg.id ? 'ピンを外す' : 'ピン留め', action: () => {
                     const newId = pinnedMessage?.id === msgMenu.msg.id ? null : msgMenu.msg.id;
@@ -1397,6 +1509,23 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     setPinnedMessage(newId ? msgMenu.msg : null);
                   }},
                   { icon:'↩', label:'返信', action: () => setReplyTo(msgMenu.msg) },
+                  { icon:'⚡', label:'TLDR', action: () => {
+                    axios.post('/api/ai/tldr', { text: msgMenu.msg.content })
+                      .then(r => { if(r.data?.result) alert(r.data.result); })
+                      .catch(() => {});
+                  }},
+                  { icon:'🚨', label:'報告', action: () => setShowSpamReport({ id: msgMenu.msg.id, type: 'message', name: msgMenu.msg.senderName }) },
+                  { icon:'🎭', label:'感情分析', action: () => {
+                    const text = msgMenu.msg.content;
+                    if (!text) return;
+                    axios.post('/api/ai/emotion', { text }).then(r => {
+                      if (r.data?.emoji) setEmotions(prev => ({ ...prev, [msgMenu.msg.id]: r.data.emoji }));
+                    }).catch(() => {});
+                  }},
+                  { icon:'💬', label:'スレッド', action: () => {
+                    setThreadMsg(msgMenu.msg);
+                    axios.get('/api/threads/' + msgMenu.msg.id).then(r => setThreadMessages(r.data || [])).catch(() => setThreadMessages([]));
+                  }},
                   { icon:'😊', label:'リアクション', action: () => setReactionPicker({ msgId: msgMenu.msg.id, x: msgMenu.x, y: msgMenu.y }) },
                   { icon:'📤', label:'転送', action: () => setForwardMsg(msgMenu.msg) },
                   { icon:'⭐', label: favoritesList.some(f => f.message_id === msgMenu.msg.id) ? 'お気に入り解除' : 'お気に入り', action: () => {
@@ -1739,6 +1868,601 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
           )}</Portal>
           {/* 既読詳細モーダル */}
+
+
+          {/* @WakkaBOT ヒント（入力欄にWakkaBOTと打ったとき） */}
+          {/* スレッドパネル（Slackライク） */}
+          {threadMsg && (
+            <div style={{
+              position:'fixed', right:0, top:0, bottom:0, width:'min(360px, 100vw)',
+              background:'var(--bg)', borderLeft:'1px solid var(--border)',
+              zIndex:800, display:'flex', flexDirection:'column',
+              boxShadow:'-4px 0 20px rgba(0,0,0,0.15)'
+            }}>
+              <div style={{ padding:'16px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10 }}>
+                <button onClick={() => setThreadMsg(null)} style={{ background:'none', border:'none', cursor:'pointer', fontSize:18, color:'var(--text2)' }}>✕</button>
+                <div style={{ fontWeight:700, fontSize:15 }}>💬 スレッド</div>
+              </div>
+              {/* 親メッセージ */}
+              <div style={{ padding:'12px 16px', background:'var(--surface)', borderBottom:'1px solid var(--border)', margin:'0' }}>
+                <div style={{ fontSize:12, color:'var(--text2)', marginBottom:4 }}>{threadMsg.senderName}</div>
+                <div style={{ fontSize:14, color:'var(--text)' }}>{threadMsg.content}</div>
+              </div>
+              {/* スレッド返信一覧 */}
+              <div style={{ flex:1, overflowY:'auto', padding:'8px 16px' }}>
+                {threadMessages.length === 0
+                  ? <p style={{ color:'var(--text2)', fontSize:13, textAlign:'center', margin:'24px 0' }}>まだ返信がないで！</p>
+                  : threadMessages.map((m, i) => (
+                    <div key={i} style={{ marginBottom:12, display:'flex', gap:8, alignItems:'flex-start' }}>
+                      <div style={{ width:32, height:32, borderRadius:'50%', background:'var(--primary)', color:'white', fontSize:13, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                        {m.senderName?.[0]?.toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize:12, color:'var(--text2)', marginBottom:2 }}>{m.senderName}</div>
+                        <div style={{ fontSize:14, color:'var(--text)', background:'var(--surface)', borderRadius:10, padding:'8px 12px', display:'inline-block', maxWidth:260 }}>{m.content}</div>
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+              {/* 入力欄 */}
+              <div style={{ padding:'12px 16px', borderTop:'1px solid var(--border)', display:'flex', gap:8 }}>
+                <input
+                  value={threadInput}
+                  onChange={e => setThreadInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey && threadInput.trim()) {
+                      e.preventDefault();
+                      socket?.emit('thread:send', { parentId: threadMsg.id, roomId: selectedRoom?.id, content: threadInput.trim() });
+                      setThreadInput('');
+                    }
+                  }}
+                  placeholder="返信を入力..."
+                  className="form-input"
+                  style={{ flex:1, fontSize:14 }}
+                />
+                <button
+                  className="btn btn-primary"
+                  style={{ padding:'8px 14px' }}
+                  onClick={() => {
+                    if (!threadInput.trim()) return;
+                    socket?.emit('thread:send', { parentId: threadMsg.id, roomId: selectedRoom?.id, content: threadInput.trim() });
+                    setThreadInput('');
+                  }}
+                >送信</button>
+              </div>
+            </div>
+          )}
+          {/* WakkaBOT処理中インジケーター */}
+          {wakkabotLoading && (
+            <div style={{
+              position:'fixed', bottom:80, left:'50%', transform:'translateX(-50%)',
+              background:'var(--surface)', border:'1px solid var(--border)',
+              borderRadius:20, padding:'10px 18px', zIndex:9998,
+              boxShadow:'0 4px 20px rgba(0,0,0,0.15)',
+              display:'flex', alignItems:'center', gap:8, fontSize:14
+            }}>
+              <span style={{ animation:'spin 1s linear infinite', display:'inline-block' }}>⚙️</span>
+              WakkaBOTが考え中...
+            </div>
+          )}
+
+
+          {/* ===== メッセージ検索 ===== */}
+          <Portal>{showSearch && (
+            <div className="modal-overlay" onClick={() => setShowSearch(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:420 }}>
+                <div className="modal-title">🔍 メッセージ検索</div>
+                <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+                  <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                    onKeyDown={e => { if(e.key==='Enter' && searchQuery.trim()) {
+                      axios.get('/api/rooms/' + selectedRoom?.id + '/search?q=' + encodeURIComponent(searchQuery))
+                        .then(r => setSearchResults(r.data)).catch(() => {});
+                    }}}
+                    placeholder="キーワードを入力..." className="form-input" style={{ flex:1 }} autoFocus />
+                  <button className="btn btn-primary" onClick={() => {
+                    if (!searchQuery.trim()) return;
+                    axios.get('/api/rooms/' + selectedRoom?.id + '/search?q=' + encodeURIComponent(searchQuery))
+                      .then(r => setSearchResults(r.data)).catch(() => {});
+                  }}>検索</button>
+                </div>
+                <div style={{ maxHeight:360, overflowY:'auto' }}>
+                  {searchResults.length === 0
+                    ? <p style={{ textAlign:'center', color:'var(--text2)', fontSize:13, margin:'20px 0' }}>検索結果なし</p>
+                    : searchResults.map(m => (
+                      <div key={m.id} style={{ padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                        <div style={{ fontSize:12, color:'var(--text2)', marginBottom:4 }}>
+                          {m.senderName} · {new Date(m.createdAt).toLocaleDateString('ja-JP')}
+                        </div>
+                        <div style={{ fontSize:14, color:'var(--text)' }}>{m.content}</div>
+                      </div>
+                    ))
+                  }
+                </div>
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowSearch(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== AI占い ===== */}
+          <Portal>{showFortune && (
+            <div className="modal-overlay" onClick={() => setShowFortune(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:380 }}>
+                <div className="modal-title">🔮 今日の運勢</div>
+                <select value={fortuneSign} onChange={e => setFortuneSign(e.target.value)} className="form-input" style={{ marginBottom:12 }}>
+                  {['牡羊座','牡牛座','双子座','蟹座','獅子座','乙女座','天秤座','蠍座','射手座','山羊座','水瓶座','魚座'].map(s => (
+                    <option key={s}>{s}</option>
+                  ))}
+                </select>
+                <button className="btn btn-primary" style={{ width:'100%', marginBottom:12 }} onClick={() => {
+                  setFortuneResult('読み込み中...');
+                  axios.get('/api/ai/fortune?sign=' + fortuneSign)
+                    .then(r => setFortuneResult(r.data.result))
+                    .catch(() => setFortuneResult('占いに失敗したで'));
+                }}>占う！</button>
+                {fortuneResult && (
+                  <div style={{ background:'var(--surface2)', borderRadius:12, padding:14, fontSize:14, lineHeight:1.8, whiteSpace:'pre-wrap' }}>
+                    {fortuneResult}
+                  </div>
+                )}
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowFortune(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== AI ToDo抽出 ===== */}
+          <Portal>{showTodo && (
+            <div className="modal-overlay" onClick={() => setShowTodo(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:400 }}>
+                <div className="modal-title">✅ AI タスク抽出</div>
+                {extractedTodos.length === 0
+                  ? <p style={{ textAlign:'center', color:'var(--text2)', margin:'20px 0', fontSize:14 }}>タスクが見つからんかったで</p>
+                  : extractedTodos.map((t, i) => (
+                    <div key={i} style={{ display:'flex', gap:10, padding:'10px 0', borderBottom:'1px solid var(--border)', alignItems:'flex-start' }}>
+                      <div style={{ fontSize:18, flexShrink:0 }}>📌</div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:14, fontWeight:500, color:'var(--text)' }}>{t.task}</div>
+                        {(t.who || t.deadline) && (
+                          <div style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>
+                            {t.who && `👤 ${t.who}`} {t.deadline && `📅 ${t.deadline}`}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                }
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowTodo(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== ルーレット ===== */}
+          <Portal>{showRoulette && (
+            <div className="modal-overlay" onClick={() => setShowRoulette(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:300, textAlign:'center' }}>
+                <div className="modal-title">🎰 ルーレット</div>
+                <div style={{ fontSize:13, color:'var(--text2)', marginBottom:16 }}>グループからランダムで1人を選ぶで！</div>
+                {rouletteResult
+                  ? <>
+                      <div style={{ fontSize:56, marginBottom:8 }}>🎯</div>
+                      <div style={{ fontSize:22, fontWeight:800, color:'var(--primary)', marginBottom:4 }}>{rouletteResult}</div>
+                      <div style={{ fontSize:13, color:'var(--text2)', marginBottom:16 }}>に決まったで！</div>
+                    </>
+                  : <div style={{ fontSize:56, marginBottom:16 }}>🎰</div>
+                }
+                <button className="btn btn-primary" style={{ width:'100%', marginBottom:8 }} onClick={() => {
+                  axios.get('/api/rooms/' + selectedRoom?.id + '/roulette')
+                    .then(r => setRouletteResult(r.data.username))
+                    .catch(() => {});
+                }}>まわす！</button>
+                <button className="btn btn-secondary" style={{ width:'100%' }} onClick={() => setShowRoulette(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== 誕生日 ===== */}
+          <Portal>{showBirthday && (
+            <div className="modal-overlay" onClick={() => setShowBirthday(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:380 }}>
+                <div className="modal-title">🎂 誕生日</div>
+                {birthdayFriends?.today?.length > 0 && (
+                  <div style={{ background:'var(--color-background-warning)', borderRadius:12, padding:12, marginBottom:12 }}>
+                    <div style={{ fontWeight:700, marginBottom:6, fontSize:14 }}>🎉 今日が誕生日！</div>
+                    {birthdayFriends.today.map(u => (
+                      <div key={u.id} style={{ fontSize:14 }}>🎁 {u.display_name || u.username}</div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontSize:13, fontWeight:600, marginBottom:8 }}>自分の誕生日を設定</div>
+                <select className="form-input" style={{ marginBottom:8 }}
+                  onChange={e => axios.patch('/api/users/me/birthday', { birthday: e.target.value }).catch(() => {})}>
+                  <option value="">選択してください</option>
+                  {Array.from({length:12}, (_,i) => i+1).map(m =>
+                    Array.from({length:31}, (_,d) => d+1).map(d => {
+                      const val = String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+                      return <option key={val} value={val}>{m}月{d}日</option>;
+                    })
+                  )}
+                </select>
+                <div style={{ fontSize:13, fontWeight:600, margin:'12px 0 8px' }}>友達の誕生日一覧</div>
+                <div style={{ maxHeight:200, overflowY:'auto' }}>
+                  {(birthdayFriends?.all || []).map(u => (
+                    <div key={u.id} style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid var(--border)', fontSize:13 }}>
+                      <span>{u.display_name || u.username}</span>
+                      <span style={{ color:'var(--text2)' }}>{u.birthday?.replace('-', '月')}日</span>
+                    </div>
+                  ))}
+                </div>
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowBirthday(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== コミュニティ ===== */}
+          <Portal>{showCommunity && (
+            <div className="modal-overlay" onClick={() => setShowCommunity(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:420 }}>
+                <div className="modal-title">🌍 オープンコミュニティ</div>
+                <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+                  <input id="community-code" placeholder="招待コードを入力" className="form-input" style={{ flex:1 }} />
+                  <button className="btn btn-primary" onClick={() => {
+                    const code = document.getElementById('community-code').value.trim();
+                    if (!code) return;
+                    axios.get('/api/community/join/' + code)
+                      .then(r => { alert(r.data.roomName + 'に参加したで！'); setShowCommunity(false); })
+                      .catch(() => alert('コードが間違っとるで'));
+                  }}>参加</button>
+                </div>
+                <div style={{ maxHeight:300, overflowY:'auto', marginBottom:12 }}>
+                  {communityList.length === 0
+                    ? <p style={{ textAlign:'center', color:'var(--text2)', fontSize:13, margin:'20px 0' }}>コミュニティがまだないで</p>
+                    : communityList.map(c => (
+                      <div key={c.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                        <div style={{ fontSize:28, flexShrink:0 }}>{c.icon || '🌍'}</div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontWeight:600, fontSize:14 }}>{c.name}</div>
+                          <div style={{ fontSize:12, color:'var(--text2)' }}>{c.memberCount}人 · コード: {c.invite_code}</div>
+                        </div>
+                        <button className="btn btn-primary" style={{ fontSize:12, padding:'6px 10px' }}
+                          onClick={() => axios.get('/api/community/join/' + c.invite_code).then(() => setShowCommunity(false)).catch(() => {})}>
+                          参加
+                        </button>
+                      </div>
+                    ))
+                  }
+                </div>
+                <button className="btn btn-secondary" style={{ width:'100%' }} onClick={() => setShowCommunity(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== スパム報告 ===== */}
+          <Portal>{showSpamReport && (
+            <div className="modal-overlay" onClick={() => setShowSpamReport(null)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:340 }}>
+                <div className="modal-title">🚨 報告する</div>
+                <div style={{ fontSize:14, color:'var(--text2)', marginBottom:12 }}>
+                  「{showSpamReport.name}」を報告しますか？
+                </div>
+                <textarea id="report-reason" placeholder="理由を入力（任意）" className="form-input" style={{ minHeight:80, marginBottom:12 }} />
+                <button className="btn btn-danger" style={{ width:'100%', marginBottom:8 }} onClick={() => {
+                  const reason = document.getElementById('report-reason').value;
+                  axios.post('/api/report', { targetId: showSpamReport.id, targetType: showSpamReport.type, reason })
+                    .then(() => { alert('報告を受け付けたで'); setShowSpamReport(null); })
+                    .catch(() => {});
+                }}>報告する</button>
+                <button className="btn btn-secondary" style={{ width:'100%' }} onClick={() => setShowSpamReport(null)}>キャンセル</button>
+              </div>
+            </div>
+          )}</Portal>
+          {/* ===== デイリーボーナスモーダル ===== */}
+          <Portal>{showDailyBonus && dailyBonusResult && (
+            <div className="modal-overlay" onClick={() => setShowDailyBonus(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:320, textAlign:'center' }}>
+                {dailyBonusResult.already ? (
+                  <>
+                    <div style={{ fontSize:48, marginBottom:8 }}>✅</div>
+                    <div className="modal-title">今日はもう受け取ったで！</div>
+                    <div style={{ color:'var(--text2)', fontSize:14, marginBottom:16 }}>明日またくてや👋</div>
+                    <div style={{ fontSize:13, color:'var(--text2)' }}>連続ログイン: {dailyBonusResult.streak}日🔥</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize:48, marginBottom:8 }}>🎰</div>
+                    <div className="modal-title">ボーナスゲット！</div>
+                    <div style={{ fontSize:40, fontWeight:800, color:'var(--primary)', margin:'12px 0' }}>+{dailyBonusResult.coinsEarned}コイン</div>
+                    <div style={{ fontSize:13, color:'var(--text2)', marginBottom:8 }}>
+                      基本: {dailyBonusResult.baseCoins}コイン ＋ 連続ボーナス: {dailyBonusResult.streakBonus}コイン
+                    </div>
+                    <div style={{ fontSize:13, color:'var(--primary)', fontWeight:600, marginBottom:16 }}>
+                      🔥 {dailyBonusResult.streak}日連続ログイン！
+                    </div>
+                    <div style={{ fontSize:14, color:'var(--text2)' }}>残高: {dailyBonusResult.coins}コイン</div>
+                  </>
+                )}
+                <button className="btn btn-primary" style={{ width:'100%', marginTop:16 }} onClick={() => setShowDailyBonus(false)}>やったで！</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== ランキングモーダル ===== */}
+          <Portal>{showRanking && (
+            <div className="modal-overlay" onClick={() => setShowRanking(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:400 }}>
+                <div className="modal-title">🏆 ランキング</div>
+                <div style={{ display:'flex', gap:6, marginBottom:12 }}>
+                  {[['message','💬 メッセ'], ['coins','💰 コイン'], ['streak','🔥 連続'], ['badges','🏅 バッジ']].map(([type, label]) => (
+                    <button key={type} onClick={() => {
+                      setRankingType(type);
+                      axios.get('/api/ranking?type=' + type).then(r => setRankingData(r.data)).catch(() => {});
+                    }} style={{
+                      flex:1, padding:'8px 4px', borderRadius:8, fontSize:12, fontWeight:600,
+                      background: rankingType === type ? 'var(--primary)' : 'var(--surface2)',
+                      color: rankingType === type ? 'white' : 'var(--text)',
+                      border:'none', cursor:'pointer'
+                    }}>{label}</button>
+                  ))}
+                </div>
+                <div style={{ maxHeight:360, overflowY:'auto' }}>
+                  {rankingData.map((u, i) => (
+                    <div key={u.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                      <div style={{ width:28, textAlign:'center', fontWeight:800, fontSize:16,
+                        color: i===0?'#FFD700': i===1?'#C0C0C0': i===2?'#CD7F32':'var(--text2)' }}>
+                        {i===0?'🥇': i===1?'🥈': i===2?'🥉': i+1}
+                      </div>
+                      <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--primary)', color:'white', fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                        {u.username?.[0]?.toUpperCase()}
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontWeight:600, fontSize:14 }}>{u.username}</div>
+                        <div style={{ fontSize:12, color:'var(--text2)' }}>
+                          {rankingType==='message' && `${u.message_count}メッセージ`}
+                          {rankingType==='coins' && `${u.coins}コイン`}
+                          {rankingType==='streak' && `${u.login_streak}日連続`}
+                          {rankingType==='badges' && `${u.badge_count}バッジ`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowRanking(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== ファイル管理モーダル ===== */}
+          <Portal>{showFileManager && (
+            <div className="modal-overlay" onClick={() => setShowFileManager(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:420 }}>
+                <div className="modal-title">📁 ファイル管理</div>
+                <div style={{ maxHeight:400, overflowY:'auto' }}>
+                  {roomFiles.length === 0
+                    ? <p style={{ textAlign:'center', color:'var(--text2)', margin:'24px 0' }}>ファイルがまだないで</p>
+                    : roomFiles.map((f, i) => (
+                      <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                        <div style={{ fontSize:28 }}>
+                          {f.type==='image'?'🖼️': f.type==='video'?'🎥': f.type==='audio'?'🎵':'📄'}
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                            {f.content || 'ファイル'}
+                          </div>
+                          <div style={{ fontSize:11, color:'var(--text2)' }}>
+                            {new Date(f.created_at).toLocaleDateString('ja-JP')}
+                          </div>
+                        </div>
+                        {f.content && (
+                          <a href={f.content.startsWith('http') ? f.content : `${window.location.origin}${f.content}`}
+                            target="_blank" rel="noopener noreferrer"
+                            style={{ fontSize:12, color:'var(--primary)', textDecoration:'none', padding:'4px 10px', border:'1px solid var(--primary)', borderRadius:8 }}>
+                            開く
+                          </a>
+                        )}
+                      </div>
+                    ))
+                  }
+                </div>
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowFileManager(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== グループ統計モーダル ===== */}
+          <Portal>{showStats && roomStats && (
+            <div className="modal-overlay" onClick={() => setShowStats(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:420 }}>
+                <div className="modal-title">📊 グループ統計</div>
+                <div style={{ textAlign:'center', marginBottom:16 }}>
+                  <div style={{ fontSize:36, fontWeight:800, color:'var(--primary)' }}>{roomStats.total}</div>
+                  <div style={{ fontSize:13, color:'var(--text2)' }}>総メッセージ数</div>
+                </div>
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontWeight:600, marginBottom:8, fontSize:14 }}>👑 送信数ランキング</div>
+                  {roomStats.ranking?.map((u, i) => (
+                    <div key={u.id} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                      <span style={{ width:20, fontSize:13, color:'var(--text2)' }}>{i+1}</span>
+                      <span style={{ flex:1, fontSize:14 }}>{u.name}</span>
+                      <div style={{ background:'var(--primary)', height:8, borderRadius:4, width: Math.max(8, (u.count / roomStats.total * 120)) + 'px' }} />
+                      <span style={{ fontSize:13, color:'var(--text2)', minWidth:30, textAlign:'right' }}>{u.count}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontWeight:600, marginBottom:8, fontSize:14 }}>🕐 時間帯別アクティビティ</div>
+                  <div style={{ display:'flex', gap:2, alignItems:'flex-end', height:60 }}>
+                    {roomStats.byHour?.map((count, h) => {
+                      const max = Math.max(...roomStats.byHour, 1);
+                      return (
+                        <div key={h} title={`${h}時: ${count}件`} style={{ flex:1, background:'var(--primary)', opacity: 0.3 + (count/max)*0.7, borderRadius:'2px 2px 0 0', height: Math.max(4, (count/max*56)) + 'px' }} />
+                      );
+                    })}
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--text2)', marginTop:2 }}>
+                    <span>0時</span><span>6時</span><span>12時</span><span>18時</span><span>23時</span>
+                  </div>
+                </div>
+                <button className="btn btn-secondary" style={{ width:'100%' }} onClick={() => setShowStats(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== 通知音設定モーダル ===== */}
+          <Portal>{showNotifSound && (
+            <div className="modal-overlay" onClick={() => setShowNotifSound(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:340 }}>
+                <div className="modal-title">🔔 通知音設定</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:16 }}>
+                  {[['default','🔔 デフォルト'], ['bell','🔔 ベル'], ['chime','🎵 チャイム'], ['pop','💬 ポップ'], ['none','🔕 通知なし']].map(([val, label]) => (
+                    <button key={val} onClick={() => setNotifSound(val)} style={{
+                      padding:'12px', borderRadius:10, textAlign:'left', fontSize:14,
+                      background: notifSound===val ? 'var(--primary)' : 'var(--surface2)',
+                      color: notifSound===val ? 'white' : 'var(--text)',
+                      border:'none', cursor:'pointer', fontWeight: notifSound===val ? 700 : 400
+                    }}>{label} {notifSound===val && '✓'}</button>
+                  ))}
+                </div>
+                <button className="btn btn-primary" style={{ width:'100%', marginBottom:8 }} onClick={() => {
+                  axios.patch('/api/rooms/' + selectedRoom?.id + '/notification', { sound: notifSound }).catch(() => {});
+                  setShowNotifSound(false);
+                }}>保存する</button>
+                <button className="btn btn-secondary" style={{ width:'100%' }} onClick={() => setShowNotifSound(false)}>キャンセル</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== 音楽シェアモーダル ===== */}
+          <Portal>{showMusicShare && (
+            <div className="modal-overlay" onClick={() => setShowMusicShare(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:360 }}>
+                <div className="modal-title">🎵 音楽をシェア</div>
+                <div style={{ fontSize:13, color:'var(--text2)', marginBottom:12 }}>
+                  SpotifyやYouTubeのURLを貼るとリッチに表示されるで
+                </div>
+                <input value={musicUrl} onChange={e => setMusicUrl(e.target.value)}
+                  placeholder="https://open.spotify.com/track/..."
+                  className="form-input" style={{ marginBottom:12 }} />
+                <button className="btn btn-primary" style={{ width:'100%', marginBottom:8 }} onClick={() => {
+                  if (!musicUrl.trim()) return;
+                  socket?.emit('message:send', { roomId: selectedRoom?.id, content: `🎵 ${musicUrl.trim()}`, type: 'text' });
+                  setMusicUrl('');
+                  setShowMusicShare(false);
+                }}>シェアする</button>
+                <button className="btn btn-secondary" style={{ width:'100%' }} onClick={() => setShowMusicShare(false)}>キャンセル</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== テーマ設定モーダル ===== */}
+          <Portal>{showTheme && (
+            <div className="modal-overlay" onClick={() => setShowTheme(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:360 }}>
+                <div className="modal-title">🎨 テーマカスタマイズ</div>
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontWeight:600, fontSize:13, marginBottom:8 }}>テーマカラー</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:8 }}>
+                    {[
+                      ['#667eea','紫'],['#06b6d4','水色'],['#10b981','緑'],
+                      ['#f59e0b','オレンジ'],['#ef4444','赤'],['#ec4899','ピンク'],
+                      ['#8b5cf6','バイオレット'],['#14b8a6','ティール'],['#f97316','オレンジ2'],['#6366f1','インディゴ']
+                    ].map(([color, name]) => (
+                      <button key={color} title={name} onClick={() => {
+                        document.documentElement.style.setProperty('--primary', color);
+                        axios.patch('/api/users/me/theme', { primaryColor: color }).catch(() => {});
+                      }} style={{
+                        width:'100%', aspectRatio:'1', borderRadius:12, background:color,
+                        border:'3px solid transparent', cursor:'pointer',
+                        boxShadow:'0 2px 8px rgba(0,0,0,0.2)'
+                      }} />
+                    ))}
+                  </div>
+                </div>
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontWeight:600, fontSize:13, marginBottom:8 }}>フォント</div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                    {[
+                      ['default','デフォルト（システム）'],
+                      ['serif','明朝体'],
+                      ['"Comic Sans MS"','丸文字'],
+                    ].map(([font, label]) => (
+                      <button key={font} onClick={() => {
+                        document.documentElement.style.setProperty('--font', font);
+                        axios.patch('/api/users/me/theme', { fontFamily: font }).catch(() => {});
+                      }} style={{
+                        padding:'10px 14px', borderRadius:10, textAlign:'left', fontSize:14,
+                        fontFamily: font === 'default' ? 'inherit' : font,
+                        background:'var(--surface2)', color:'var(--text)',
+                        border:'none', cursor:'pointer'
+                      }}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+                <button className="btn btn-secondary" style={{ width:'100%' }} onClick={() => setShowTheme(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+          {/* バッジ獲得トースト */}
+          {badgeToast && (
+            <div style={{
+              position:'fixed', bottom:80, left:'50%', transform:'translateX(-50%)',
+              background:'linear-gradient(135deg, #667eea, #764ba2)', color:'white',
+              borderRadius:16, padding:'12px 20px', zIndex:9999,
+              boxShadow:'0 8px 32px rgba(0,0,0,0.3)', animation:'slideUp 0.4s ease',
+              textAlign:'center', minWidth:200
+            }}>
+              <div style={{ fontSize:28, marginBottom:4 }}>🏆</div>
+              <div style={{ fontWeight:700, fontSize:15 }}>新バッジ獲得！</div>
+              <div style={{ fontSize:13, opacity:0.9, marginTop:2 }}>{badgeToast}</div>
+            </div>
+          )}
+          {/* バッジ一覧モーダル */}
+          <Portal>{showBadges && (
+            <div className="modal-overlay" onClick={() => setShowBadges(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:420 }}>
+                <div className="modal-title">🏅 バッジ一覧</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, maxHeight:400, overflowY:'auto' }}>
+                  {badgeList.map(b => (
+                    <div key={b.id} style={{
+                      padding:'12px', borderRadius:12, border: b.acquired ? '2px solid var(--primary)' : '1px solid var(--border)',
+                      background: b.acquired ? 'var(--surface)' : 'var(--surface2)', opacity: b.acquired ? 1 : 0.5,
+                      display:'flex', flexDirection:'column', alignItems:'center', gap:4, textAlign:'center'
+                    }}>
+                      <span style={{ fontSize:28, filter: b.acquired ? 'none' : 'grayscale(1)' }}>{b.emoji}</span>
+                      <div style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{b.label}</div>
+                      <div style={{ fontSize:11, color:'var(--text2)' }}>{b.desc}</div>
+                      {b.acquired && <div style={{ fontSize:10, color:'var(--primary)', fontWeight:700 }}>✓ 獲得済み</div>}
+                    </div>
+                  ))}
+                </div>
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowBadges(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+          <Portal>{showEditHistory && (
+            <div className="modal-overlay" onClick={() => setShowEditHistory(null)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:380 }}>
+                <div className="modal-title">✏️ 編集履歴</div>
+                <div style={{ maxHeight:320, overflowY:'auto' }}>
+                  {showEditHistory.history.length === 0
+                    ? <p style={{ color:'var(--text2)', fontSize:13, textAlign:'center', margin:'16px 0' }}>履歴がないで</p>
+                    : [...showEditHistory.history].reverse().map((h, i) => (
+                      <div key={i} style={{ borderBottom:'1px solid var(--border)', padding:'10px 0' }}>
+                        <div style={{ fontSize:11, color:'var(--text2)', marginBottom:4 }}>
+                          {new Date(h.edited_at).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}
+                          {i === 0 ? ' （最新の前）' : ''}
+                        </div>
+                        <div style={{ fontSize:14, color:'var(--text)', background:'var(--surface2)', borderRadius:8, padding:'8px 10px' }}>{h.content}</div>
+                      </div>
+                    ))
+                  }
+                  <div style={{ borderTop:'2px solid var(--primary)', paddingTop:10, marginTop:4 }}>
+                    <div style={{ fontSize:11, color:'var(--primary)', marginBottom:4, fontWeight:600 }}>現在のメッセージ</div>
+                    <div style={{ fontSize:14, color:'var(--text)', background:'var(--surface2)', borderRadius:8, padding:'8px 10px' }}>{showEditHistory.current}</div>
+                  </div>
+                </div>
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowEditHistory(null)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
           <Portal>{showReadDetail && (
             <div className="modal-overlay" onClick={() => setShowReadDetail(null)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
@@ -2754,6 +3478,11 @@ export default function App() {
           <Dashboard currentUser={currentUser} onNavigateRoom={handleNavigateRoom} />
         </Suspense></ErrorBoundary>
       </div>
+      <div style={tabVisible('voom')}>
+        <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
+          <Voom currentUser={currentUser} socket={socket} />
+        </Suspense></ErrorBoundary>
+      </div>
       <div style={tabVisible('profile')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
           <Profile currentUser={currentUser} onOpenAdmin={(currentUser?.isAdmin === true || currentUser?.username === 'とわ') ? () => setShowAdmin(true) : null} onUpdate={handleProfileUpdate} onLogout={handleLogout} onContact={handleContactOpen}
@@ -2778,6 +3507,12 @@ export default function App() {
           </Routes>
           <LocationAwareTabs tabsElement={tabsElement} />
         </main>
+        {/* LINE友達追加ボタン */}
+        <div style={{ position:'fixed', bottom:72, right:12, zIndex:900 }}>
+          <a href="https://lin.ee/vBfoiw4">
+            <img src="https://scdn.line-apps.com/n/line_add_friends/btn/ja.png" alt="友だち追加" height="36" border="0" style={{ display:'block' }} />
+          </a>
+        </div>
         <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} onClearNotif={handleClearNotif} />
         {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
         {groupCall && (

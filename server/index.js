@@ -28,7 +28,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 
-const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription, News, OfficialRequest, OfficialAccount } = require('./db');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription, News, OfficialRequest, OfficialAccount, ThreadMessage } = require('./db');
 
 const app = express();
 // Render等のリバースプロキシ対応（express-rate-limitのX-Forwarded-Forエラー解消）
@@ -611,6 +611,7 @@ app.post('/api/auth/login', async (req, res) => {
     const ua = req.headers['user-agent'] || '';
     await User.findOneAndUpdate({ id: user.id }, { $push: { login_history: { $each: [{ ip, ua, at: new Date() }], $slice: -20 } } }, {returnDocument:'after'});
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+    User.findOneAndUpdate({ id: user.id }, { $inc: { login_count: 1 } }).then(() => checkAndAwardBadges(user.id));
     res.json({ token, user: {
       id: user.id, username: user.username, avatar: user.avatar || null,
       displayName: user.display_name || user.username,
@@ -655,6 +656,34 @@ app.get('/api/auth/me', async (req, res) => {
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
+
+// ===== バッジシステム =====
+const BADGE_DEFINITIONS = [
+  { id: 'first_message',  label: '初メッセージ',   emoji: '💬', desc: '初めてメッセージを送った',         check: u => u.message_count >= 1 },
+  { id: 'chatter_100',    label: 'おしゃべり屋',   emoji: '🗣️', desc: 'メッセージを100件送った',          check: u => u.message_count >= 100 },
+  { id: 'chatter_1000',   label: 'トーク王',       emoji: '👑', desc: 'メッセージを1000件送った',         check: u => u.message_count >= 1000 },
+  { id: 'login_7',        label: '週間ログイン',   emoji: '📅', desc: '7回ログインした',                  check: u => u.login_count >= 7 },
+  { id: 'login_30',       label: '皆勤賞',         emoji: '🏅', desc: '30回ログインした',                 check: u => u.login_count >= 30 },
+  { id: 'gift_sender',    label: 'ギフト職人',     emoji: '🎁', desc: 'ギフトを送った',                  check: u => u.gift_sent >= 1 },
+  { id: 'gift_popular',   label: 'モテモテ',       emoji: '💝', desc: 'ギフトを5個以上もらった',         check: u => u.gift_received >= 5 },
+  { id: 'early_adopter',  label: 'アーリーアダプター', emoji: '🚀', desc: 'WakkaChatの初期ユーザー',    check: u => true }, // 登録済み全員
+];
+
+async function checkAndAwardBadges(userId) {
+  try {
+    const user = await User.findOne({ id: userId }).lean();
+    if (!user) return [];
+    const currentBadges = new Set(user.badges || []);
+    const newBadges = BADGE_DEFINITIONS
+      .filter(b => !currentBadges.has(b.id) && b.check(user))
+      .map(b => b.id);
+    if (newBadges.length > 0) {
+      await User.findOneAndUpdate({ id: userId }, { $push: { badges: { $each: newBadges } } });
+    }
+    return newBadges;
+  } catch(e) { return []; }
+}
+
 // /api/users/me のエイリアス（GETのみ）
 app.get('/api/users/me', async (req, res) => {
   try {
@@ -669,8 +698,40 @@ app.get('/api/users/me', async (req, res) => {
       avatarFrame: user.avatar_frame || 'none', soundTheme: user.sound_theme || 'default',
       pinEnabled: user.pin_enabled || false, secretQuestion: user.secret_question || '',
       blockedUsers: user.blocked_users || [], coins: user.coins || 0,
+      badges: user.badges || [], messageCount: user.message_count || 0,
     });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
+});
+
+
+// ===== バッジAPI =====
+app.get('/api/badges', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }).lean();
+    const acquired = new Set(user?.badges || []);
+    const result = BADGE_DEFINITIONS.map(b => ({
+      ...b,
+      check: undefined,
+      acquired: acquired.has(b.id)
+    }));
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+
+// ===== スレッド返信API =====
+app.get('/api/threads/:parentId', async (req, res) => {
+  try {
+    auth(req);
+    const threads = await ThreadMessage.find({ parent_id: req.params.parentId })
+      .sort({ created_at: 1 }).limit(200).lean();
+    res.json(threads.map(t => ({
+      id: t.id, parentId: t.parent_id, roomId: t.room_id,
+      senderId: t.sender_id, senderName: t.sender_name, senderAvatar: t.sender_avatar,
+      content: t.content, createdAt: t.created_at
+    })));
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
 // ===== 下書き保存 =====
@@ -2333,6 +2394,12 @@ io.on('connection', async (socket) => {
       createdAt: msg.created_at,
       expiresAt: msg.expires_at || null, expires_at: msg.expires_at || null,
     });
+    // バッジチェック（非同期・ノンブロッキング）
+    User.findOneAndUpdate({ id: socket.user.id }, { $inc: { message_count: 1 } }).then(() => {
+      checkAndAwardBadges(socket.user.id).then(newBadges => {
+        if (newBadges.length > 0) socket.emit('badges:awarded', { badges: newBadges });
+      });
+    });
 
     // Push通知: ルームにいない他のメンバーに通知
     const notifyBody = (() => {
@@ -2379,12 +2446,62 @@ io.on('connection', async (socket) => {
   socket.on('message:edit', async ({ roomId, messageId, content }) => {
     try {
       if (!content || !content.trim() || content.length > 4000) return;
+      const orig = await Message.findOne({ id: messageId, sender_id: socket.user.id });
+      if (!orig) return;
+      const historyEntry = { content: orig.content, edited_at: new Date() };
       const msg = await Message.findOneAndUpdate(
         { id: messageId, sender_id: socket.user.id },
-        { content: content.trim(), edited: true }, { returnDocument: 'after' }
+        {
+          content: content.trim(),
+          edited: true,
+          $push: { edit_history: { $each: [historyEntry], $slice: -10 } }
+        },
+        { returnDocument: 'after' }
       );
       if (!msg) return;
-      io.to(roomId).emit('message:edited', { messageId, content: content.trim(), roomId });
+      io.to(roomId).emit('message:edited', {
+        messageId,
+        content: content.trim(),
+        roomId,
+        edit_history: msg.edit_history
+      });
+    } catch(e) {}
+  });
+
+  socket.on('message:edit_history', async ({ messageId }) => {
+    try {
+      const msg = await Message.findOne({ id: messageId });
+      if (!msg) return;
+      socket.emit('message:edit_history_result', {
+        messageId,
+        edit_history: msg.edit_history || []
+      });
+    } catch(e) {}
+  });
+
+
+  socket.on('thread:send', async ({ parentId, roomId, content }) => {
+    try {
+      if (!content || !content.trim() || content.length > 4000) return;
+      const room = await Room.findOne({ id: roomId, members: socket.user.id }, { id: 1 }).lean();
+      if (!room) return;
+      const { v4: uuid4 } = require('uuid');
+      const id = uuid4();
+      const msg = await ThreadMessage.create({
+        id, parent_id: parentId, room_id: roomId,
+        sender_id: socket.user.id, sender_name: socket.user.username,
+        sender_avatar: socket.user.avatar || null,
+        content: content.trim()
+      });
+      io.to(roomId).emit('thread:new', {
+        parentId,
+        msg: {
+          id: msg.id, parentId, roomId,
+          senderId: socket.user.id, senderName: socket.user.username,
+          senderAvatar: socket.user.avatar || null,
+          content: content.trim(), createdAt: msg.created_at
+        }
+      });
     } catch(e) {}
   });
 
@@ -2858,12 +2975,44 @@ app.use('/api/game', (req, res, next) => {
 });
 
 // コイン残高取得 / 初期化
+
+// ===== ゲーム賭けAPI =====
+app.post('/api/game/bet', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { coins } = req.body;
+    if (!coins || coins <= 0) return res.json({ ok: true });
+    const user = await User.findOneAndUpdate(
+      { id: decoded.id, coins: { $gte: coins } },
+      { $inc: { coins: -coins } },
+      { returnDocument: 'after', projection: { coins: 1 } }
+    );
+    if (!user) return res.status(400).json({ error: 'コインが足りないで' });
+    res.json({ ok: true, newBalance: user.coins });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== ゲームショップ購入API =====
+app.post('/api/game/buy-item', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { itemId, price } = req.body;
+    if (!itemId || !price || price <= 0) return res.status(400).json({ error: '無効なリクエスト' });
+    const user = await User.findOneAndUpdate(
+      { id: decoded.id, coins: { $gte: price } },
+      { $inc: { coins: -price } },
+      { returnDocument: 'after', projection: { coins: 1 } }
+    );
+    if (!user) return res.status(400).json({ error: 'コインが足りないで' });
+    res.json({ ok: true, newBalance: user.coins });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/game/coins', async (req, res) => {
   try {
     const decoded = auth(req);
-    let wallet = await GameCoin.findOne({ user_id: decoded.id }).lean();
-    if (!wallet) wallet = await GameCoin.create({ user_id: decoded.id, coins: 100 });
-    res.json({ coins: wallet.coins });
+    const user = await User.findOne({ id: decoded.id }, { coins: 1 }).lean();
+    res.json({ coins: user?.coins ?? 0 });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
@@ -2878,7 +3027,10 @@ app.post('/api/game/score', async (req, res) => {
     const VALID_GAMES = ['puzzle', 'memory', 'quiz', 'runner', 'match', 'reflex', 'number', 'type', 'color', 'math'];
     if (!VALID_GAMES.includes(game)) return res.status(400).json({ error: '不正なゲーム名' });
     const user = await User.findOne({ id: decoded.id });
-    const coinsEarned = Math.min(Math.floor(score / 100), 100); // 1回最大100コインまで  // 100点ごとに1コイン
+    const { bet = 0, multiplier = 1 } = req.body;
+    const baseEarned = Math.min(Math.floor(score / 100), 100); // スコアベースのコイン
+    const betReturn = Math.floor(bet * multiplier); // 賭けコインの返還
+    const coinsEarned = baseEarned + betReturn; // 合計
     const id = 'gs_' + uuidv4();
     await GameScore.create({
       id, user_id: decoded.id,
@@ -2886,13 +3038,15 @@ app.post('/api/game/score', async (req, res) => {
       avatar: user?.avatar,
       game, score, coins_earned: coinsEarned
     });
-    // コインを加算
-    await GameCoin.findOneAndUpdate(
-      { user_id: decoded.id },
-      { $inc: { coins: coinsEarned }, updated_at: new Date() },
-      { upsert: true,returnDocument:'after'}
+    // コインをUser.coinsに加算（統合済み）
+    const updatedUser = await User.findOneAndUpdate(
+      { id: decoded.id },
+      { $inc: { coins: coinsEarned } },
+      { returnDocument: 'after', projection: { coins: 1 } }
     );
-    res.json({ ok: true, coinsEarned });
+    // バッジチェック
+    checkAndAwardBadges(decoded.id);
+    res.json({ ok: true, coinsEarned, totalCoins: updatedUser?.coins ?? 0 });
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 
@@ -2933,16 +3087,15 @@ app.post('/api/game/shop/buy', async (req, res) => {
     const existing = await GameItem.findOne({ user_id: decoded.id, item_id: itemId }).lean();
     if (existing) return res.status(400).json({ error: '既に持ってるで' });
     // 原子的にコインを減算（コインが足りない場合はnullが返る）
-    const wallet = await GameCoin.findOneAndUpdate(
-      { user_id: decoded.id, coins: { $gte: price } },
-      { $inc: { coins: -price }, updated_at: new Date() },
-      { returnDocument: 'after' }
+    const updatedUser = await User.findOneAndUpdate(
+      { id: decoded.id, coins: { $gte: price } },
+      { $inc: { coins: -price } },
+      { returnDocument: 'after', projection: { coins: 1 } }
     );
-    if (!wallet) return res.status(400).json({ error: 'コイン不足' });
+    if (!updatedUser) return res.status(400).json({ error: 'コイン不足' });
     const item = await GameItem.create({ id: 'gi_' + uuidv4(), user_id: decoded.id, item_type: itemType, item_id: itemId });
-    // アバターフレーム購入の場合はUserにも反映
     if (itemType === 'avatar_frame') await User.findOneAndUpdate({ id: decoded.id }, { avatar_frame: itemId });
-    res.json({ ok: true, item, remainingCoins: wallet.coins });
+    res.json({ ok: true, item, remainingCoins: updatedUser.coins });
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 
@@ -2951,8 +3104,8 @@ app.get('/api/game/items', async (req, res) => {
   try {
     const decoded = auth(req);
     const items = await GameItem.find({ user_id: decoded.id }).lean();
-    const wallet = await GameCoin.findOne({ user_id: decoded.id }).lean();
-    res.json({ items, coins: wallet?.coins || 0 });
+    const user = await User.findOne({ id: decoded.id }, { coins: 1 }).lean();
+    res.json({ items, coins: user?.coins || 0 });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
@@ -2961,13 +3114,11 @@ app.get('/api/game/me', async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id });
-    let wallet = await GameCoin.findOne({ user_id: decoded.id }).lean();
-    if (!wallet) { await GameCoin.create({ user_id: decoded.id, coins: 100 }); wallet = { coins: 100 }; }
     res.json({
       id: decoded.id,
       username: user?.display_name || user?.username,
       avatar: user?.avatar,
-      coins: wallet?.coins ?? 100,
+      coins: user?.coins ?? 0,
       avatarFrame: user?.avatar_frame,
     });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
@@ -3019,6 +3170,422 @@ app.get('/api/users/online', (req, res) => {
 });
 
 // ===== AI アシスタント =====
+
+
+
+// ===== グループ統計 =====
+app.get('/api/rooms/:roomId/stats', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }).lean();
+    if (!room) return res.status(403).json({ error: 'アクセス権なし' });
+
+    const msgs = await Message.find({ room_id: req.params.roomId, deleted: false }).lean();
+    const total = msgs.length;
+
+    // 送信者別カウント
+    const byUser = {};
+    msgs.forEach(m => {
+      if (!m.sender_id) return;
+      byUser[m.sender_id] = byUser[m.sender_id] || { name: m.sender_name, count: 0 };
+      byUser[m.sender_id].count++;
+    });
+    const ranking = Object.entries(byUser)
+      .map(([id, v]) => ({ id, name: v.name, count: v.count }))
+      .sort((a, b) => b.count - a.count).slice(0, 10);
+
+    // 時間帯別
+    const byHour = Array(24).fill(0);
+    msgs.forEach(m => { if (m.created_at) byHour[new Date(m.created_at).getHours()]++; });
+
+    // 曜日別
+    const byDay = Array(7).fill(0);
+    msgs.forEach(m => { if (m.created_at) byDay[new Date(m.created_at).getDay()]++; });
+
+    res.json({ total, ranking, byHour, byDay });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== カスタム通知音設定 =====
+app.patch('/api/rooms/:roomId/notification', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { sound } = req.body; // 'default'|'bell'|'chime'|'pop'|'none'
+    await User.findOneAndUpdate(
+      { id: decoded.id },
+      { $set: { [`notification_sounds.${req.params.roomId}`]: sound } }
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/rooms/:roomId/notification', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { notification_sounds: 1 }).lean();
+    const sound = user?.notification_sounds?.[req.params.roomId] || 'default';
+    res.json({ sound });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== プロフィールテーマ =====
+app.patch('/api/users/me/theme', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { primaryColor, bgColor, fontFamily } = req.body;
+    await User.findOneAndUpdate(
+      { id: decoded.id },
+      { $set: { 'theme.primaryColor': primaryColor, 'theme.bgColor': bgColor, 'theme.fontFamily': fontFamily } }
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// ===== 消えるメッセージ（タイマーメッセージ）=====
+// メッセージ送信時にexpires_atが設定されてれば既存の仕組みで動作
+// 削除ジョブを追加
+setInterval(async () => {
+  try {
+    const now = new Date();
+    const expired = await Message.find({ expires_at: { $lte: now }, deleted: false }).lean();
+    for (const msg of expired) {
+      await Message.findOneAndUpdate({ id: msg.id }, { deleted: true, content: 'このメッセージは削除されました' });
+      // ルームに通知
+      if (msg.room_id) io.to(msg.room_id).emit('message:deleted', { messageId: msg.id, roomId: msg.room_id });
+    }
+  } catch(e) {}
+}, 10000); // 10秒ごとにチェック
+
+// ===== スパム報告 =====
+app.post('/api/report', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { targetId, targetType, reason } = req.body; // targetType: 'user'|'message'|'post'
+    if (!targetId || !targetType) return res.status(400).json({ error: '報告対象が不明やで' });
+    // 管理者に通知（ここではDBに記録するだけ）
+    await News.create({
+      id: 'report_' + uuidv4(),
+      type: 'report',
+      content: `🚨 報告: ${targetType} ID=${targetId} by ${decoded.id} | 理由: ${reason || '未記入'}`,
+      created_at: new Date()
+    });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== ログイン履歴 =====
+app.get('/api/users/me/login-history', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { login_history: 1 }).lean();
+    res.json(user?.login_history || []);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== メッセージ検索 =====
+app.get('/api/rooms/:roomId/search', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { q } = req.query;
+    if (!q || q.length < 1) return res.json([]);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }).lean();
+    if (!room) return res.status(403).json({ error: 'アクセス権なし' });
+    const msgs = await Message.find({
+      room_id: req.params.roomId,
+      content: { $regex: q, $options: 'i' },
+      deleted: false
+    }).sort({ created_at: -1 }).limit(30).lean();
+    res.json(msgs.map(m => ({ id: m.id, content: m.content, senderName: m.sender_name, createdAt: m.created_at })));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== ルーレット =====
+app.get('/api/rooms/:roomId/roulette', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }).lean();
+    if (!room || !room.members?.length) return res.status(403).json({ error: 'メンバーがおらん' });
+    const members = room.members.filter(id => id !== decoded.id);
+    const picked = members[Math.floor(Math.random() * members.length)] || decoded.id;
+    const user = await User.findOne({ id: picked }, { username: 1, display_name: 1, avatar: 1 }).lean();
+    res.json({ userId: picked, username: user?.display_name || user?.username || '不明' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== 誕生日 =====
+app.patch('/api/users/me/birthday', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { birthday } = req.body; // 'MM-DD'形式
+    await User.findOneAndUpdate({ id: decoded.id }, { birthday });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/friends/birthdays', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const friends = await Friend.find({ user_id: decoded.id }).lean();
+    const friendIds = friends.map(f => f.friend_id);
+    const today = new Date();
+    const todayStr = String(today.getMonth() + 1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+    const users = await User.find({ id: { $in: friendIds }, birthday: { $exists: true, $ne: null } },
+      { id:1, username:1, display_name:1, avatar:1, birthday:1 }).lean();
+    const todayBirthdays = users.filter(u => u.birthday === todayStr);
+    res.json({ today: todayBirthdays, all: users });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== AI占い =====
+app.get('/api/ai/fortune', async (req, res) => {
+  try {
+    auth(req);
+    const signs = ['牡羊座','牡牛座','双子座','蟹座','獅子座','乙女座','天秤座','蠍座','射手座','山羊座','水瓶座','魚座'];
+    const { sign } = req.query;
+    const today = new Date().toLocaleDateString('ja-JP');
+    const prompt = `あなたは占い師です。${sign || '全体'}の今日（${today}）の運勢を、ラッキーカラー・ラッキーナンバー・総合運・恋愛運・仕事運の5項目で、各1〜2文で楽しく占ってください。絵文字を使って読みやすくしてね。`;
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 400, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await response.json();
+    res.json({ result: data.content?.[0]?.text || '今日の運勢は不明やで', sign: sign || '全体', signs });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== AI TLDR（1行要約）=====
+app.post('/api/ai/tldr', async (req, res) => {
+  try {
+    auth(req);
+    const { text } = req.body;
+    if (!text?.trim()) return res.status(400).json({ error: 'テキストが空やで' });
+    const prompt = `次のメッセージを「要するに：」で始まる1行（30字以内）で要約してください。
+
+${text}`;
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 80, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await response.json();
+    res.json({ result: data.content?.[0]?.text || '' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== AI ToDo抽出 =====
+app.post('/api/ai/extract-todos', async (req, res) => {
+  try {
+    auth(req);
+    const { messages: msgs } = req.body;
+    if (!msgs?.length) return res.json({ todos: [] });
+    const text = msgs.map(m => `${m.senderName}: ${m.content}`).join('\n');
+    const prompt = `次の会話からタスク・やること・約束事を抽出して、JSON配列で返してください。形式: [{"task":"タスク内容","who":"担当者（不明なら空）","deadline":"期限（不明なら空）"}]
+
+${text}
+
+JSONのみ返してください。`;
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await response.json();
+    const raw = data.content?.[0]?.text || '[]';
+    try {
+      const todos = JSON.parse(raw.replace(/```json|```/g, '').trim());
+      res.json({ todos: Array.isArray(todos) ? todos : [] });
+    } catch { res.json({ todos: [] }); }
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== ハッシュタグ（VOOM）=====
+app.get('/api/voom/hashtag/:tag', async (req, res) => {
+  try {
+    auth(req);
+    const tag = decodeURIComponent(req.params.tag);
+    const posts = await Post.find({ type: 'voom', content: { $regex: '#' + tag, $options: 'i' } })
+      .sort({ created_at: -1 }).limit(30).lean();
+    res.json(posts);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/voom/trending', async (req, res) => {
+  try {
+    auth(req);
+    const since = new Date(Date.now() - 7 * 86400000);
+    const posts = await Post.find({ type: 'voom', created_at: { $gte: since } }, { content: 1 }).lean();
+    const tagCount = {};
+    posts.forEach(p => {
+      const tags = p.content?.match(/#[\w\u3000-\u9fff゠-ヿ぀-ゟ]+/g) || [];
+      tags.forEach(t => { tagCount[t] = (tagCount[t] || 0) + 1; });
+    });
+    const trending = Object.entries(tagCount).sort((a,b) => b[1]-a[1]).slice(0,10).map(([tag,count]) => ({ tag, count }));
+    res.json(trending);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== オープンコミュニティ =====
+app.post('/api/community/create', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { name, description, icon } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: '名前を入力してな' });
+    const id = 'community_' + uuidv4();
+    const room = await Room.create({
+      id, name: name.trim(), type: 'community',
+      members: [decoded.id], admin: decoded.id,
+      description: description || '', icon: icon || '🌍',
+      invite_code: Math.random().toString(36).substring(2,8).toUpperCase(),
+      is_public: true, created_at: new Date()
+    });
+    res.json(room);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/community/join/:code', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const room = await Room.findOneAndUpdate(
+      { invite_code: req.params.code.toUpperCase(), is_public: true },
+      { $addToSet: { members: decoded.id } },
+      { returnDocument: 'after' }
+    );
+    if (!room) return res.status(404).json({ error: '無効なコードやで' });
+    res.json({ ok: true, roomId: room.id, roomName: room.name });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/community/list', async (req, res) => {
+  try {
+    auth(req);
+    const communities = await Room.find({ is_public: true, type: 'community' },
+      { id:1, name:1, description:1, icon:1, invite_code:1, members:1 }).limit(50).lean();
+    res.json(communities.map(c => ({ ...c, memberCount: c.members?.length || 0, members: undefined })));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== デイリーログインボーナス =====
+app.post('/api/daily-bonus', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const user = await User.findOne({ id: decoded.id }).lean();
+    if (!user) return res.status(404).json({ error: 'ユーザーが見つからん' });
+
+    if (user.last_login_date === today) {
+      return res.json({ already: true, coins: user.coins, streak: user.login_streak || 0 });
+    }
+
+    // 連続ログイン判定
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const streak = user.last_login_date === yesterday ? (user.login_streak || 0) + 1 : 1;
+
+    // ボーナスコイン計算（連続日数に応じてアップ）
+    const baseCoins = 10;
+    const streakBonus = Math.min(streak * 2, 50); // 最大50ボーナス
+    const totalCoins = baseCoins + streakBonus;
+
+    const updated = await User.findOneAndUpdate(
+      { id: decoded.id },
+      { $inc: { coins: totalCoins }, last_login_date: today, login_streak: streak },
+      { returnDocument: 'after', projection: { coins: 1, login_streak: 1 } }
+    );
+
+    // バッジチェック
+    checkAndAwardBadges(decoded.id);
+
+    res.json({ ok: true, coinsEarned: totalCoins, coins: updated.coins, streak, baseCoins, streakBonus });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== ランキング =====
+app.get('/api/ranking', async (req, res) => {
+  try {
+    auth(req);
+    const { type = 'message' } = req.query;
+    let sortField = 'message_count';
+    if (type === 'coins') sortField = 'coins';
+    if (type === 'streak') sortField = 'login_streak';
+    if (type === 'badges') sortField = 'badges';
+
+    const users = await User.find({}, {
+      id:1, username:1, avatar:1, message_count:1, coins:1, login_streak:1, badges:1
+    }).sort({ [sortField]: -1 }).limit(20).lean();
+
+    res.json(users.map((u, i) => ({
+      rank: i + 1,
+      id: u.id, username: u.username, avatar: u.avatar || null,
+      message_count: u.message_count || 0,
+      coins: u.coins || 0,
+      login_streak: u.login_streak || 0,
+      badge_count: (u.badges || []).length
+    })));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== ファイル管理（送信済みファイル一覧） =====
+app.get('/api/rooms/:roomId/files', async (req, res) => {
+  try {
+    auth(req);
+    const files = await Message.find({
+      room_id: req.params.roomId,
+      type: { $in: ['image', 'file', 'video', 'audio'] },
+      deleted: false
+    }, {
+      id:1, type:1, content:1, sender_id:1, created_at:1, fileData:1
+    }).sort({ created_at: -1 }).limit(100).lean();
+    res.json(files);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== WakkaBOT（@WakkaBOTメンションで返答） =====
+app.post('/api/ai/wakkabot', async (req, res) => {
+  try {
+    auth(req);
+    const { message, history } = req.body;
+    if (!message?.trim()) return res.status(400).json({ error: 'メッセージが空やで' });
+    const historyText = (history || []).slice(-10).map(m => `${m.senderName}: ${m.content}`).join('\n');
+    const prompt = `あなたはWakkaChatのAIアシスタント「WakkaBOT」です。
+少しだけ関西弁を使い、フレンドリーで明るく返答します。
+長くなりすぎず、150字以内で返答してください。
+
+${historyText ? `会話の流れ:
+${historyText}
+
+` : ''}ユーザーのメッセージ: ${message}`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 300, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await response.json();
+    res.json({ result: data.content?.[0]?.text || 'うまく返答できんかったで…' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== 感情分析 =====
+app.post('/api/ai/emotion', async (req, res) => {
+  try {
+    auth(req);
+    const { text } = req.body;
+    if (!text?.trim()) return res.status(400).json({ emoji: '😐' });
+    const prompt = `次のメッセージの感情を分析して、最も当てはまる絵文字を1つだけ返してください。絵文字以外は何も返さないでください。
+選択肢: 😊 😂 😢 😡 😍 😮 😰 🤔 👍 ❤️ 😐
+メッセージ: ${text}`;
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 10, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await response.json();
+    const emoji = data.content?.[0]?.text?.trim() || '😐';
+    res.json({ emoji });
+  } catch(e) { res.status(500).json({ emoji: '😐' }); }
+});
+
 app.post('/api/ai/assist', async (req, res) => {
   try {
     auth(req);
