@@ -409,6 +409,24 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showBirthday, setShowBirthday] = useState(false);
   const [birthdayFriends, setBirthdayFriends] = useState([]);
   const [showSpamReport, setShowSpamReport] = useState(null); // { id, type, name }
+  const [showPractice, setShowPractice] = useState(false);
+  const [practiceMode, setPracticeMode] = useState('english');
+  const [practiceHistory, setPracticeHistory] = useState([]);
+  const [practiceInput, setPracticeInput] = useState('');
+  const [practiceLoading, setPracticeLoading] = useState(false);
+  const [showFolders, setShowFolders] = useState(false);
+  const [folderList, setFolderList] = useState([]);
+  const [showActivity, setShowActivity] = useState(false);
+  const [friendActivities, setFriendActivities] = useState([]);
+  const [fontSize, setFontSize] = useState(localStorage.getItem('fontSize') || 'medium');
+  const [showSocialLinks, setShowSocialLinks] = useState(false);
+
+  // フォントサイズをhtmlに適用
+  useEffect(() => {
+    const sizes = { small: '13px', medium: '15px', large: '17px' };
+    document.documentElement.style.setProperty('--base-font-size', sizes[fontSize] || '15px');
+    localStorage.setItem('fontSize', fontSize);
+  }, [fontSize]); // eslint-disable-line react-hooks/exhaustive-deps
   const [badgeList, setBadgeList] = useState([]);
   const [badgeToast, setBadgeToast] = useState(null); // 新バッジ獲得トースト
   const [threadMsg, setThreadMsg] = useState(null); // スレッド表示中の親メッセージ
@@ -519,6 +537,17 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, []);
 
   // ヘッダーメニュー・入力メニューを画面外タップで閉じる
+  // PCショートカット
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.ctrlKey && e.key === 'k') { e.preventDefault(); setSearchQuery(''); setSearchResults([]); setShowSearch(true); }
+      if (e.ctrlKey && e.key === 'b') { e.preventDefault(); setShowBadges(true); axios.get('/api/badges').then(r => setBadgeList(r.data)).catch(() => {}); }
+      if (e.key === 'Escape') { setShowSearch(false); setShowBadges(false); setShowRanking(false); setShowStats(false); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!showHeaderMenu && !showInputMenu) return;
     const close = (e) => {
@@ -1418,6 +1447,19 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   { icon:'🌍', label:'コミュニティ', action: () => {
                     axios.get('/api/community/list').then(r => { setCommunityList(r.data); setShowCommunity(true); }).catch(() => {});
                   }},
+                  { icon:'📁', label:'フォルダ整理', action: () => {
+                    axios.get('/api/folders').then(r => { setFolderList(r.data); setShowFolders(true); }).catch(() => {});
+                  }},
+                  { icon:'👀', label:'アクティビティ', action: () => {
+                    axios.get('/api/friends/activities').then(r => { setFriendActivities(r.data); setShowActivity(true); }).catch(() => {});
+                  }},
+                  { icon:'🗣️', label:'会話練習', action: () => { setPracticeHistory([]); setShowPractice(true); } },
+                  { icon:'🔤', label:'文字サイズ', action: () => {
+                    const sizes = ['small','medium','large'];
+                    const next = sizes[(sizes.indexOf(fontSize)+1) % sizes.length];
+                    setFontSize(next);
+                    axios.patch('/api/users/me', { font_size: next }).catch(() => {});
+                  }},
                   { icon:'🎂', label:'誕生日', action: () => {
                     axios.get('/api/friends/birthdays').then(r => { setBirthdayFriends(r.data); setShowBirthday(true); }).catch(() => {});
                   }},
@@ -1948,6 +1990,128 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           )}
 
 
+
+          {/* ===== 会話練習モード ===== */}
+          <Portal>{showPractice && (
+            <div style={{ position:'fixed', inset:0, background:'var(--bg)', zIndex:3000, display:'flex', flexDirection:'column' }}>
+              <div style={{ padding:'14px 16px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10 }}>
+                <button onClick={() => setShowPractice(false)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'var(--text2)' }}>✕</button>
+                <div style={{ fontWeight:700, fontSize:16 }}>🗣️ 会話練習モード</div>
+              </div>
+              <div style={{ display:'flex', gap:6, padding:'10px 16px', borderBottom:'1px solid var(--border)' }}>
+                {[['english','🇺🇸 英会話'],['keigo','🎩 敬語'],['casual','😄 タメ口']].map(([m,l]) => (
+                  <button key={m} onClick={() => { setPracticeMode(m); setPracticeHistory([]); }} style={{
+                    flex:1, padding:'8px 4px', borderRadius:10, fontSize:12, fontWeight:600,
+                    background: practiceMode===m ? 'var(--primary)' : 'var(--surface2)',
+                    color: practiceMode===m ? 'white' : 'var(--text)', border:'none', cursor:'pointer'
+                  }}>{l}</button>
+                ))}
+              </div>
+              <div style={{ flex:1, overflowY:'auto', padding:'12px 16px', display:'flex', flexDirection:'column', gap:10 }}>
+                {practiceHistory.length === 0 && (
+                  <div style={{ textAlign:'center', color:'var(--text2)', fontSize:14, marginTop:40 }}>
+                    {practiceMode==='english' ? '英語で話しかけてみよう！' : practiceMode==='keigo' ? '敬語で話しかけてみよう！' : 'タメ口で話しかけてみよう！'}
+                  </div>
+                )}
+                {practiceHistory.map((m, i) => (
+                  <div key={i} style={{ display:'flex', flexDirection:'column', alignItems: m.role==='user' ? 'flex-end' : 'flex-start' }}>
+                    <div style={{
+                      maxWidth:'80%', padding:'10px 14px', borderRadius: m.role==='user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                      background: m.role==='user' ? 'var(--primary)' : 'var(--surface2)',
+                      color: m.role==='user' ? 'white' : 'var(--text)', fontSize:14, lineHeight:1.6
+                    }}>{m.content}</div>
+                  </div>
+                ))}
+                {practiceLoading && <div style={{ color:'var(--text2)', fontSize:13 }}>AIが考え中...</div>}
+              </div>
+              <div style={{ padding:'12px 16px', borderTop:'1px solid var(--border)', display:'flex', gap:8, paddingBottom:'calc(12px + env(safe-area-inset-bottom))' }}>
+                <input value={practiceInput} onChange={e => setPracticeInput(e.target.value)}
+                  onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey && practiceInput.trim()) {
+                    e.preventDefault();
+                    const msg = practiceInput.trim();
+                    setPracticeInput('');
+                    const newHistory = [...practiceHistory, { role:'user', content: msg }];
+                    setPracticeHistory(newHistory);
+                    setPracticeLoading(true);
+                    axios.post('/api/ai/practice', { mode: practiceMode, message: msg, history: practiceHistory })
+                      .then(r => { setPracticeHistory(h => [...h, { role:'assistant', content: r.data.result }]); })
+                      .catch(() => {}).finally(() => setPracticeLoading(false));
+                  }}}
+                  placeholder={practiceMode==='english' ? 'Type in English...' : 'メッセージを入力...'}
+                  className="form-input" style={{ flex:1, fontSize:14 }} />
+                <button className="btn btn-primary" style={{ padding:'8px 16px' }} onClick={() => {
+                  const msg = practiceInput.trim();
+                  if (!msg) return;
+                  setPracticeInput('');
+                  const newHistory = [...practiceHistory, { role:'user', content: msg }];
+                  setPracticeHistory(newHistory);
+                  setPracticeLoading(true);
+                  axios.post('/api/ai/practice', { mode: practiceMode, message: msg, history: practiceHistory })
+                    .then(r => { setPracticeHistory(h => [...h, { role:'assistant', content: r.data.result }]); })
+                    .catch(() => {}).finally(() => setPracticeLoading(false));
+                }}>送信</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== フォルダ整理 ===== */}
+          <Portal>{showFolders && (
+            <div className="modal-overlay" onClick={() => setShowFolders(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:380 }}>
+                <div className="modal-title">📁 トークフォルダ</div>
+                <div style={{ maxHeight:300, overflowY:'auto', marginBottom:12 }}>
+                  {folderList.length === 0
+                    ? <p style={{ textAlign:'center', color:'var(--text2)', fontSize:13, margin:'20px 0' }}>フォルダがまだないで</p>
+                    : folderList.map(f => (
+                      <div key={f.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                        <span style={{ fontSize:24 }}>{f.icon}</span>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontWeight:600, fontSize:14 }}>{f.name}</div>
+                          <div style={{ fontSize:12, color:'var(--text2)' }}>{f.roomIds?.length || 0}件のトーク</div>
+                        </div>
+                        <button onClick={() => axios.delete('/api/folders/' + f.id).then(() => setFolderList(prev => prev.filter(x => x.id !== f.id))).catch(() => {})}
+                          style={{ background:'none', border:'none', color:'var(--danger,#e53e3e)', cursor:'pointer', fontSize:18 }}>🗑️</button>
+                      </div>
+                    ))
+                  }
+                </div>
+                <button className="btn btn-primary" style={{ width:'100%', marginBottom:8 }} onClick={() => {
+                  const name = prompt('フォルダ名を入力してな');
+                  if (!name) return;
+                  axios.post('/api/folders', { name, icon:'📁' }).then(r => setFolderList(prev => [...prev, r.data])).catch(() => {});
+                }}>＋ 新しいフォルダを作る</button>
+                <button className="btn btn-secondary" style={{ width:'100%' }} onClick={() => setShowFolders(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== アクティビティフィード ===== */}
+          <Portal>{showActivity && (
+            <div className="modal-overlay" onClick={() => setShowActivity(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:360 }}>
+                <div className="modal-title">👀 友達のアクティビティ</div>
+                <div style={{ maxHeight:360, overflowY:'auto' }}>
+                  {friendActivities.length === 0
+                    ? <p style={{ textAlign:'center', color:'var(--text2)', fontSize:13, margin:'24px 0' }}>アクティビティ中の友達がおらんで</p>
+                    : friendActivities.map(u => (
+                      <div key={u.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                        <div style={{ width:40, height:40, borderRadius:'50%', background:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, overflow:'hidden', flexShrink:0 }}>
+                          {u.avatar ? <img src={u.avatar} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : (u.display_name?.[0] || u.username?.[0])}
+                        </div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontWeight:600, fontSize:14 }}>{u.display_name || u.username}</div>
+                          <div style={{ fontSize:13, color:'var(--primary)' }}>{u.current_activity}</div>
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
+                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={() => setShowActivity(false)}>閉じる</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== PCショートカット一覧（?キーで表示） ===== */}
           {/* ===== メッセージ検索 ===== */}
           <Portal>{showSearch && (
             <div className="modal-overlay" onClick={() => setShowSearch(false)}>
@@ -3166,6 +3330,7 @@ export default function App() {
   const toastTimerRef = useRef(null);
   const activeTabRef = useRef('chat');
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -3507,12 +3672,6 @@ export default function App() {
           </Routes>
           <LocationAwareTabs tabsElement={tabsElement} />
         </main>
-        {/* LINE友達追加ボタン */}
-        <div style={{ position:'fixed', bottom:72, right:12, zIndex:900 }}>
-          <a href="https://lin.ee/vBfoiw4">
-            <img src="https://scdn.line-apps.com/n/line_add_friends/btn/ja.png" alt="友だち追加" height="36" border="0" style={{ display:'block' }} />
-          </a>
-        </div>
         <TabBar activeTab={activeTab} setActiveTab={setActiveTab} notifications={notifications} onClearNotif={handleClearNotif} />
         {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
         {groupCall && (

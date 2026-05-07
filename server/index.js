@@ -1654,7 +1654,11 @@ app.post('/api/official-accounts/:accountId/broadcast', upload.single('image'), 
 // DMルーム取得 or 作成（公式アカウント用ヘルパー）
 async function getOrCreateDMRoom(userId, officialId, officialName, officialAvatar) {
   const membersSorted = [userId, officialId].sort();
-  let room = await Room.findOne({ type: 'dm', members: { $all: membersSorted, $size: 2 } }).lean();
+  // 既存ルームを確実に検索（公式アカウントとのDMは1つだけ）
+  let room = await Room.findOne({
+    type: 'dm',
+    members: { $all: membersSorted, $size: 2 }
+  }).lean();
   if (!room) {
     room = await Room.create({
       id: uuidv4(),
@@ -1663,6 +1667,7 @@ async function getOrCreateDMRoom(userId, officialId, officialName, officialAvata
       members: membersSorted,
       avatar: officialAvatar,
       created_by: officialId,
+      official: true,
     });
   }
   return room;
@@ -1857,10 +1862,15 @@ app.post('/api/official/broadcast', upload.single('image'), async (req, res) => 
     let sentCount = 0;
     for (const f of friends) {
       try {
-        // DMルームを取得 or 作成
+        // 既存DMルームを正確に検索（公式→ユーザー間の既存ルームを再利用）
         const membersSorted = [decoded.id, f.friend_id].sort();
-        let room = await Room.findOne({ type: 'dm', members: { $all: membersSorted, $size: 2 } }).lean();
+        let room = await Room.findOne({
+          type: 'dm',
+          members: { $all: membersSorted, $size: 2 }
+        }).lean();
+
         if (!room) {
+          // 初回だけ新規作成
           const friendUser = await User.findOne({ id: f.friend_id }, { username: 1, display_name: 1 }).lean();
           room = await Room.create({
             id: uuidv4(),
@@ -1868,10 +1878,11 @@ app.post('/api/official/broadcast', upload.single('image'), async (req, res) => 
             type: 'dm',
             members: membersSorted,
             created_by: decoded.id,
+            official: true, // 公式アカウントのルームフラグ
           });
         }
 
-        // メッセージ作成
+        // メッセージ作成（同じルームに追記）
         const msgId = uuidv4();
         const msg = await Message.create({
           id: msgId,
@@ -1882,11 +1893,34 @@ app.post('/api/official/broadcast', upload.single('image'), async (req, res) => 
           content: content || '',
           image: req.file ? getFileUrl(req) : null,
           type: 'text',
+          edited: false, deleted: false,
+          readBy: [decoded.id], read_by: [decoded.id],
+          created_at: new Date(),
         });
 
         // リアルタイム送信
-        io.to(room.id).emit('message:new', msg);
-        io.to('user_' + f.friend_id).emit('message:new', msg);
+        io.to(room.id).emit('message:receive', {
+          id: msgId, roomId: room.id,
+          senderId: decoded.id,
+          senderName: sender.display_name || sender.username,
+          senderAvatar: sender.avatar || null,
+          content: content || '',
+          type: 'text',
+          edited: false, deleted: false,
+          readBy: [decoded.id], read_by: [decoded.id],
+          createdAt: msg.created_at,
+        });
+        io.to('user_' + f.friend_id).emit('message:receive', {
+          id: msgId, roomId: room.id,
+          senderId: decoded.id,
+          senderName: sender.display_name || sender.username,
+          senderAvatar: sender.avatar || null,
+          content: content || '',
+          type: 'text',
+          edited: false, deleted: false,
+          readBy: [decoded.id], read_by: [decoded.id],
+          createdAt: msg.created_at,
+        });
         sentCount++;
       } catch (_) {}
     }
@@ -3463,6 +3497,97 @@ app.get('/api/community/list', async (req, res) => {
     const communities = await Room.find({ is_public: true, type: 'community' },
       { id:1, name:1, description:1, icon:1, invite_code:1, members:1 }).limit(50).lean();
     res.json(communities.map(c => ({ ...c, memberCount: c.members?.length || 0, members: undefined })));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// ===== アクティビティフィード =====
+app.patch('/api/users/me/activity', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { activity } = req.body; // 'チャット中'|'通話中'|'ゲーム中'|'オンライン'|null
+    await User.findOneAndUpdate({ id: decoded.id }, { current_activity: activity || null });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/friends/activities', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const friends = await Friend.find({ user_id: decoded.id }).lean();
+    const ids = friends.map(f => f.friend_id);
+    const users = await User.find({ id: { $in: ids }, current_activity: { $ne: null } },
+      { id:1, username:1, display_name:1, avatar:1, current_activity:1 }).lean();
+    res.json(users);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== ログイン履歴 =====
+// ログイン時に履歴を追加（既存ログイン処理に追記）
+
+// ===== AIチャット練習モード =====
+app.post('/api/ai/practice', async (req, res) => {
+  try {
+    auth(req);
+    const { mode, message, history } = req.body;
+    // mode: 'english'|'keigo'|'casual'
+    const systemPrompts = {
+      english: "You are an English conversation partner. Respond only in English. Correct the user's grammar naturally. Keep responses short and conversational.",
+      keigo: 'あなたは敬語練習のパートナーです。ユーザーのメッセージを敬語に直してフィードバックし、自然な敬語で返答してください。',
+      casual: 'あなたはフレンドリーな会話パートナーです。タメ口で楽しく会話してください。'
+    };
+    const historyMsgs = (history || []).slice(-10).map(m => ({ role: m.role, content: m.content }));
+    const prompt = systemPrompts[mode] || systemPrompts.casual;
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5', max_tokens: 300,
+        system: prompt,
+        messages: [...historyMsgs, { role: 'user', content: message }]
+      })
+    });
+    const data = await response.json();
+    res.json({ result: data.content?.[0]?.text || '' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== トークフォルダ =====
+app.get('/api/folders', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const user = await User.findOne({ id: decoded.id }, { folders: 1 }).lean();
+    res.json(user?.folders || []);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/folders', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { name, icon, roomIds } = req.body;
+    const folder = { id: 'folder_' + Date.now(), name, icon: icon || '📁', roomIds: roomIds || [] };
+    await User.findOneAndUpdate({ id: decoded.id }, { $push: { folders: folder } });
+    res.json(folder);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/folders/:folderId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { name, icon, roomIds } = req.body;
+    await User.findOneAndUpdate(
+      { id: decoded.id, 'folders.id': req.params.folderId },
+      { $set: { 'folders.$.name': name, 'folders.$.icon': icon, 'folders.$.roomIds': roomIds } }
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/folders/:folderId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await User.findOneAndUpdate({ id: decoded.id }, { $pull: { folders: { id: req.params.folderId } } });
+    res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

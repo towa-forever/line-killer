@@ -60,6 +60,11 @@ const UserSchema = new mongoose.Schema({
   login_count: { type: Number, default: 0 }, // ログイン回数
   last_login_date: { type: String, default: null }, // YYYY-MM-DD形式
   login_streak: { type: Number, default: 0 }, // 連続ログイン日数
+  current_activity: { type: String, default: null }, // 'チャット中'|'通話中'|'ゲーム中'など
+  folders: { type: Array, default: [] }, // トークフォルダ
+  font_size: { type: String, default: 'medium' }, // 'small'|'medium'|'large'
+  social_links: { type: Map, of: String, default: {} }, // SNSリンク集
+  login_history: { type: [{ date: Date, device: String }], default: [] },
   theme: {
     primaryColor: { type: String, default: null },
     bgColor: { type: String, default: null },

@@ -530,6 +530,12 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
         <button className="btn btn-danger" style={{ width:'100%', padding:14, borderRadius:14, fontSize:15 }} onClick={() => setShowLogoutConfirm(true)}>
           ログアウト
         </button>
+        {/* LINE友だち追加ボタン */}
+        <div style={{ textAlign:'center', marginTop:16 }}>
+          <a href="https://lin.ee/vBfoiw4">
+            <img src="https://scdn.line-apps.com/n/line_add_friends/btn/ja.png" alt="友だち追加" height="36" border="0" />
+          </a>
+        </div>
       </div>
 
       <style>{`
