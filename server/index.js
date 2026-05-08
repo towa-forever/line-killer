@@ -699,6 +699,9 @@ app.get('/api/users/me', async (req, res) => {
       pinEnabled: user.pin_enabled || false, secretQuestion: user.secret_question || '',
       blockedUsers: user.blocked_users || [], coins: user.coins || 0,
       badges: user.badges || [], messageCount: user.message_count || 0,
+      is_official: user.is_official || false,
+      official_verified: user.official_verified || false,
+      official_category: user.official_category || null,
     });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
@@ -1653,23 +1656,31 @@ app.post('/api/official-accounts/:accountId/broadcast', upload.single('image'), 
 
 // DMルーム取得 or 作成（公式アカウント用ヘルパー）
 async function getOrCreateDMRoom(userId, officialId, officialName, officialAvatar) {
-  const membersSorted = [userId, officialId].sort();
-  // 既存ルームを確実に検索（公式アカウントとのDMは1つだけ）
+  const membersSorted = [String(userId), String(officialId)].sort();
+  // 既存ルームを確実に検索（複数条件で重複防止）
   let room = await Room.findOne({
     type: 'dm',
     members: { $all: membersSorted, $size: 2 }
   }).lean();
-  if (!room) {
-    room = await Room.create({
-      id: uuidv4(),
-      name: officialName,
-      type: 'dm',
-      members: membersSorted,
-      avatar: officialAvatar,
-      created_by: officialId,
-      official: true,
-    });
-  }
+  if (room) return room;
+  // 二重作成を防ぐためfindOneAndUpdateでupsert
+  const roomId = uuidv4();
+  room = await Room.findOneAndUpdate(
+    { type: 'dm', members: { $all: membersSorted, $size: 2 } },
+    {
+      $setOnInsert: {
+        id: roomId,
+        name: officialName,
+        type: 'dm',
+        members: membersSorted,
+        avatar: officialAvatar,
+        created_by: officialId,
+        official: true,
+        created_at: new Date(),
+      }
+    },
+    { upsert: true, returnDocument: 'after', lean: true }
+  );
   return room;
 }
 
@@ -1828,6 +1839,20 @@ app.patch('/api/admin/official-requests/:id', async (req, res) => {
     await OfficialRequest.findOneAndUpdate({ id: req.params.id }, { status: action === 'approve' ? 'approved' : 'rejected' });
     if (action === 'approve') {
       await User.findOneAndUpdate({ id: request.user_id }, { is_official: true, official_verified: true, official_category: request.category });
+      // OfficialAccountレコードも作成（まだなければ）
+      const existingOA = await OfficialAccount.findOne({ id: request.user_id }).lean();
+      if (!existingOA) {
+        const user = await User.findOne({ id: request.user_id }).lean();
+        await OfficialAccount.create({
+          id: request.user_id,
+          name: user?.display_name || user?.username || request.name,
+          description: request.reason || '',
+          avatar: user?.avatar || null,
+          category: request.category || 'general',
+          followers: [],
+          created_at: new Date(),
+        });
+      }
     }
     res.json({ ok: true });
   } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
@@ -1986,6 +2011,20 @@ app.patch('/api/official/requests/:id', async (req, res) => {
     await OfficialRequest.findOneAndUpdate({ id: req.params.id }, { status: action === 'approve' ? 'approved' : 'rejected' });
     if (action === 'approve') {
       await User.findOneAndUpdate({ id: request.user_id }, { is_official: true, official_verified: true, official_category: request.category });
+      // OfficialAccountレコードも作成（まだなければ）
+      const existingOA = await OfficialAccount.findOne({ id: request.user_id }).lean();
+      if (!existingOA) {
+        const user = await User.findOne({ id: request.user_id }).lean();
+        await OfficialAccount.create({
+          id: request.user_id,
+          name: user?.display_name || user?.username || request.name,
+          description: request.reason || '',
+          avatar: user?.avatar || null,
+          category: request.category || 'general',
+          followers: [],
+          created_at: new Date(),
+        });
+      }
     }
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -2396,7 +2435,7 @@ io.on('connection', async (socket) => {
 
   // メッセージ送信レートリミット（10秒間に20件まで）
   const msgRateMap = new Map();
-  socket.on('message:send', async ({ roomId, content, type = 'text', fileData, replyTo, stampLabel }) => {
+  socket.on('message:send', async ({ roomId, content, type = 'text', fileData, replyTo, stampLabel, decoration }) => {
     try {
     const now = Date.now();
     const key = socket.user.id;
@@ -2417,6 +2456,7 @@ io.on('connection', async (socket) => {
       sender_avatar: socket.user.avatar || null,
       content: typeof content === 'string' ? content.trim() : content,
       type, file_data: fileData || null, reply_to: replyTo || null, stamp_label: stampLabel || null,
+      decoration: decoration || null,
       read_by: [socket.user.id], reactions: [],
       expires_at: type === 'secret' && fileData?.timer ? new Date(Date.now() + fileData.timer * 1000) : null,
     });
@@ -2424,6 +2464,7 @@ io.on('connection', async (socket) => {
       id, roomId, senderId: socket.user.id, senderName: socket.user.username,
       senderAvatar: socket.user.avatar || null,
       content, type, fileData: fileData || null, replyTo: replyTo || null, stampLabel: stampLabel || null,
+      decoration: decoration || null,
       edited: false, deleted: false, readBy: [socket.user.id], reactions: [], read_by: [socket.user.id],
       createdAt: msg.created_at,
       expiresAt: msg.expires_at || null, expires_at: msg.expires_at || null,
@@ -3591,6 +3632,62 @@ app.delete('/api/folders/:folderId', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ===== ボイスメッセージ文字起こし（Claude AIで実現）=====
+app.post('/api/ai/transcribe', upload.single('audio'), async (req, res) => {
+  try {
+    auth(req);
+    if (!req.file) return res.status(400).json({ error: '音声ファイルがないで' });
+
+    // 音声をBase64に変換してClaudeに送る
+    const audioBase64 = req.file.buffer
+      ? req.file.buffer.toString('base64')
+      : require('fs').readFileSync(req.file.path).toString('base64');
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 500,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'この音声メッセージを文字起こししてください。話している内容をそのままテキストにしてください。テキストのみ返してください。'
+            }
+          ]
+        }]
+      })
+    });
+    const data = await response.json();
+    const text = data.content?.[0]?.text || '文字起こしに失敗したで';
+    res.json({ text });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ===== メッセージデコレーション保存 =====
+// メッセージにスタイル情報を付与（太字・色・サイズ）
+// クライアント側でレンダリング時に適用する
+
+// ===== エラーログ収集 =====
+app.post('/api/error-log', async (req, res) => {
+  try {
+    const { error, stack, url, userAgent } = req.body;
+    console.error('[CLIENT ERROR]', { error, stack, url, userAgent, time: new Date().toISOString() });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ ok: false }); }
+});
+
+// ===== メッセージページング強化 =====
+// 既存の /api/rooms/:roomId/messages にbefore/afterパラメータ追加
 // ===== デイリーログインボーナス =====
 app.post('/api/daily-bonus', async (req, res) => {
   try {

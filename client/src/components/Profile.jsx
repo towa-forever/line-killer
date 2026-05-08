@@ -472,7 +472,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
           {[
             { id:'default', emoji:'💬', label:'デフォルト' },
-            { id:'green',   emoji:'🟢', label:'グリーン' },
+            { id:'green',   emoji:'🔵', label:'シアン' },
             { id:'dark',    emoji:'🌙', label:'ダーク' },
             { id:'pink',    emoji:'🌸', label:'ピンク' },
             { id:'fire',    emoji:'🔥', label:'レッド' },
@@ -482,6 +482,8 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
               <button key={icon.id} onClick={() => {
                 localStorage.setItem('appIcon', icon.id);
                 window.dispatchEvent(new CustomEvent('appIconChange', { detail: icon.id }));
+                // 強制再レンダリングのため state更新をトリガー
+                window.dispatchEvent(new Event('storage'));
               }}
                 style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 12px', borderRadius:12, border:'2px solid',
                   borderColor: current===icon.id ? 'var(--primary)' : 'var(--border)',

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useReducer, useRef, l
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
+import { compressImage } from './utils/imageCompress';
 import Portal from './components/Portal';
 import { sounds, startRingtone, stopRingtone } from './utils/sounds';
 import VoiceMessage, { VoiceMessageBubble } from './components/VoiceMessage';
@@ -420,6 +421,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [friendActivities, setFriendActivities] = useState([]);
   const [fontSize, setFontSize] = useState(localStorage.getItem('fontSize') || 'medium');
   const [showSocialLinks, setShowSocialLinks] = useState(false);
+  const [showDecoration, setShowDecoration] = useState(false);
+  const [decoration, setDecoration] = useState({ bold: false, color: '', size: 'medium' });
+  const [showMapShare, setShowMapShare] = useState(false);
+  const [offlineQueue, setOfflineQueue] = useState([]);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // フォントサイズをhtmlに適用
   useEffect(() => {
@@ -537,6 +543,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, []);
 
   // ヘッダーメニュー・入力メニューを画面外タップで閉じる
+  // オンライン/オフライン検知
+  useEffect(() => {
+    const onOnline  = () => { setIsOnline(true);  };
+    const onOffline = () => { setIsOnline(false); };
+    window.addEventListener('online',  onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); };
+  }, []);
+
   // PCショートカット
   useEffect(() => {
     const handler = (e) => {
@@ -877,9 +892,18 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     if (!inputText.trim() || !selectedRoom || !socket) return;
     sounds.send(soundTheme);
     const sentText = inputText;
-    socket.emit('message:send', { roomId: selectedRoom.id, content: inputText, type: 'text', replyTo: replyTo ? { id: replyTo.id, content: replyTo.content, senderName: replyTo.senderName } : null });
+    // デコレーション情報を付与
+    const decoStyle = (decoration.bold || decoration.color || decoration.size !== 'medium')
+      ? JSON.stringify(decoration) : null;
+    socket.emit('message:send', {
+      roomId: selectedRoom.id, content: inputText, type: 'text',
+      replyTo: replyTo ? { id: replyTo.id, content: replyTo.content, senderName: replyTo.senderName } : null,
+      decoration: decoStyle
+    });
     setInputText('');
     setReplyTo(null);
+    setShowDecoration(false);
+    setDecoration({ bold: false, color: '', size: 'medium' });
     // WakkaBOT検出
     if (sentText.includes('@WakkaBOT') || sentText.includes('@わっかBOT')) {
       setWakkabotLoading(true);
@@ -920,8 +944,13 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       e.target.value = '';
       return;
     }
+    // 画像は自動圧縮してから送信
+    let fileToUpload = file;
+    if (file.type.startsWith('image/') && file.type !== 'image/gif') {
+      try { fileToUpload = await compressImage(file, 1280, 0.82); } catch(_) {}
+    }
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', fileToUpload);
     try {
       const res = await axios.post('/api/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       socket?.emit('message:send', {
@@ -1131,7 +1160,18 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     } else if (msg.type === 'secret') {
       content = <SecretBubble msg={msg} isMine={isMine} />;
     } else {
-      content = <span style={msgStyleRef.current.font !== 'default' ? { fontFamily: msgStyleRef.current.font } : {}}>{msg.content}</span>;
+      let decoStyle = {};
+      if (msg.decoration) {
+        try {
+          const d = typeof msg.decoration === 'string' ? JSON.parse(msg.decoration) : msg.decoration;
+          if (d.bold) decoStyle.fontWeight = 700;
+          if (d.color) decoStyle.color = d.color;
+          if (d.size === 'small') decoStyle.fontSize = '12px';
+          if (d.size === 'large') decoStyle.fontSize = '18px';
+        } catch(_) {}
+      }
+      if (msgStyleRef.current.font !== 'default') decoStyle.fontFamily = msgStyleRef.current.font;
+      content = <span style={decoStyle}>{msg.content}</span>;
     }
     return (
       <div key={msg.id} id={`msg-${msg.id}`} className={`message ${isMine ? 'mine' : 'theirs'}`}
@@ -1463,7 +1503,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   { icon:'🎂', label:'誕生日', action: () => {
                     axios.get('/api/friends/birthdays').then(r => { setBirthdayFriends(r.data); setShowBirthday(true); }).catch(() => {});
                   }},
-                  ...(currentUser?.isOfficial ? [{ icon:'📣', label:'一斉送信', action: () => setShowBroadcast(true) }] : []),
+                  ...(currentUser?.is_official || currentUser?.isOfficial ? [{ icon:'📣', label:'一斉送信', action: () => setShowBroadcast(true) }] : []),
                 ].map(item => (
                   <button key={item.label} className="header-menu-item" onClick={() => { setShowHeaderMenu(false); item.action(); }}>
                     <span className="header-menu-icon">{item.icon}</span>
@@ -1973,6 +2013,16 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   }}
                 >送信</button>
               </div>
+            </div>
+          )}
+          {/* オフラインバナー */}
+          {!isOnline && (
+            <div style={{
+              position:'fixed', top:0, left:0, right:0, zIndex:9999,
+              background:'#e53e3e', color:'white', textAlign:'center',
+              padding:'8px', fontSize:13, fontWeight:600
+            }}>
+              📵 オフライン中 - メッセージは接続後に送信されるで
             </div>
           )}
           {/* WakkaBOT処理中インジケーター */}
@@ -3025,6 +3075,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             allStampSets={allStampSets}
             acquiredStampIds={acquiredStampIds}
             showToast={showToast}
+            showDecoration={showDecoration}
+            setShowDecoration={setShowDecoration}
+            decoration={decoration}
+            setDecoration={setDecoration}
           />
         </>}
         {!selectedRoom && <div className="no-room-selected"><div>💬</div><p>トークを選択してください</p></div>}
@@ -3057,6 +3111,7 @@ const InputArea = React.memo(function InputArea({
   setShowVoice, setShowLocation, setShowSecret,
   setShowPollCreator, setShowSchedule, setScheduleText,
   selectedRoom, socket, currentUser, soundTheme, myStampSets, allStampSets, acquiredStampIds, showToast,
+  showDecoration, setShowDecoration, decoration, setDecoration,
 }) {
   return (
     <div className="input-area">
@@ -3128,11 +3183,27 @@ const InputArea = React.memo(function InputArea({
       ))}
     </div>
       )}
+      {/* ✨ デコレーションパネル */}
+      {showDecoration && (
+        <div style={{ padding:'8px 12px', borderTop:'1px solid var(--border)', display:'flex', gap:10, alignItems:'center', flexWrap:'wrap', background:'var(--surface)' }}>
+          <button onClick={() => setDecoration(d => ({ ...d, bold: !d.bold }))}
+            style={{ fontWeight:700, padding:'4px 12px', borderRadius:8, border:'1px solid var(--border)', background: decoration.bold ? 'var(--primary)' : 'none', color: decoration.bold ? 'white' : 'var(--text)', cursor:'pointer' }}>B</button>
+          {['', '#e53e3e','#38a169','#3182ce','#d69e2e','#805ad5'].map(c => (
+            <button key={c} onClick={() => setDecoration(d => ({ ...d, color: c }))}
+              style={{ width:24, height:24, borderRadius:'50%', background: c || 'var(--text)', border: decoration.color===c ? '3px solid var(--primary)' : '2px solid var(--border)', cursor:'pointer' }} />
+          ))}
+          {[['small','小'],['medium','中'],['large','大']].map(([s,l]) => (
+            <button key={s} onClick={() => setDecoration(d => ({ ...d, size: s }))}
+              style={{ padding:'3px 8px', borderRadius:6, border:'1px solid var(--border)', background: decoration.size===s ? 'var(--primary)' : 'none', color: decoration.size===s ? 'white' : 'var(--text)', fontSize:12, cursor:'pointer' }}>{l}</button>
+          ))}
+        </div>
+      )}
       <div className="input-row">
     <button className="plus-btn icon-btn" onClick={() => setShowInputMenu(v=>!v)} title="その他">
       {showInputMenu ? '✕' : '➕'}
     </button>
     <button className="icon-btn" onClick={() => setShowStampPanel(!showStampPanel)} title="スタンプ">🎫</button>
+    <button className="icon-btn" onClick={() => setShowDecoration(v => !v)} title="デコレーション" style={{ color: showDecoration ? 'var(--primary)' : 'var(--text2)' }}>✨</button>
     <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,video/*,audio/*,.pdf,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onChange={handleFileUpload} />
     <textarea className="message-input" value={inputText} onChange={handleTyping}
       onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}

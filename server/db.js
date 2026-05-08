@@ -99,6 +99,7 @@ const MessageSchema = new mongoose.Schema({
   reply_to: mongoose.Schema.Types.Mixed,
   edited: { type: Boolean, default: false },
   edit_history: { type: [{ content: String, edited_at: Date }], default: [] },
+  decoration: { type: String, default: null }, // JSON文字列 { bold, color, size }
   deleted: { type: Boolean, default: false },
   expires_at: { type: Date, default: null },
   read_by: [String],

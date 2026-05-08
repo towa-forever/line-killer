@@ -8,6 +8,8 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
   const [audioUrl, setAudioUrl] = useState(null);
   const [audioBlob, setAudioBlob] = useState(null);
   const [error, setError] = useState('');
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcribed, setTranscribed] = useState('');
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
@@ -127,9 +129,28 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
           <span style={{ fontSize:12, color:'var(--text2)', whiteSpace:'nowrap' }}>{fmt(duration)}</span>
           <button onClick={() => setState('idle')} style={{ padding:'6px 10px', borderRadius:10, border:'none', background:'var(--surface2)', color:'var(--text)', cursor:'pointer', fontSize:13 }}>🗑️</button>
           <button onClick={send} style={{ padding:'6px 14px', borderRadius:12, border:'none', background:'var(--primary)', color:'white', cursor:'pointer', fontSize:13, fontWeight:700 }}>送信</button>
+          <button onClick={async () => {
+            if (!audioBlob) return;
+            setTranscribing(true); setTranscribed('');
+            try {
+              const fd = new FormData();
+              fd.append('audio', audioBlob, 'voice.webm');
+              const res = await axios.post('/api/ai/transcribe', fd);
+              setTranscribed(res.data.text || '');
+            } catch { setTranscribed('文字起こし失敗したで'); }
+            setTranscribing(false);
+          }} style={{ padding:'6px 14px', borderRadius:12, border:'1px solid var(--border)', background:'none', color:'var(--text)', cursor:'pointer', fontSize:13 }}>
+            {transcribing ? '⏳' : '📝 文字起こし'}
+          </button>
         </div>
       )}
       {state === 'sending' && <div style={{ textAlign:'center', color:'var(--text2)', fontSize:13 }}>送信中...</div>}
+      {transcribed && (
+        <div style={{ marginTop:8, padding:'8px 12px', borderRadius:10, background:'var(--surface2)', fontSize:13, color:'var(--text)', lineHeight:1.6 }}>
+          <div style={{ fontSize:11, color:'var(--text2)', marginBottom:4 }}>📝 文字起こし結果</div>
+          {transcribed}
+        </div>
+      )}
     </div>
   );
 }
