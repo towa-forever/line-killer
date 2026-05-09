@@ -28,6 +28,7 @@ const SubAccounts = lazy(() => import('./components/SubAccounts'));
 const ContactForm     = lazy(() => import('./components/ContactForm'));
 // PasswordReset は AuthScreen 内で inline lazy import
 const GiftModal       = lazy(() => import('./components/GiftModal'));
+const SharedWhiteboard = lazy(() => import('./components/SharedWhiteboard'));
 const ReadLater       = lazy(() => import('./components/ReadLater'));
 const PinSetup        = lazy(() => import('./components/PinSetup').then(m => ({ default: m.PinSetup })));
 const PinVerify       = lazy(() => import('./components/PinSetup').then(m => ({ default: m.PinVerify })));
@@ -1704,62 +1705,151 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       {showMiniGame && <Portal><ErrorBoundary><Suspense fallback={null}><MiniGame onSendResult={text => { socket?.emit('message:send', { roomId: selectedRoom?.id, content: text, type: 'text' }); sounds.send(soundTheme); }} onClose={handleCloseMiniGame} /></Suspense></ErrorBoundary></Portal>}
           <Portal>{showFavorites && (
             <div className="modal-overlay" onClick={handleCloseFavorites}>
-              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', overflow:'auto' }}>
-                <div className="modal-title">⭐ お気に入り</div>
-                {favoritesList.length === 0
-                  ? <div style={{ textAlign:'center', color:'var(--text2)', padding:'20px 0' }}>お気に入りがまだないで！</div>
-                  : favoritesList.map((f, i) => (
-                    <div key={f.message_id || i} style={{ padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
-                      <div style={{ fontSize:12, color:'var(--text2)', marginBottom:4 }}>{f.sender_name}</div>
-                      <div style={{ fontSize:14 }}>{f.content}</div>
-                      <button style={{ fontSize:11, color:'var(--danger)', marginTop:4, background:'none', border:'none', cursor:'pointer', padding:0 }}
-                        onClick={() => { axios.post('/api/favorites', { messageId: f.message_id, roomId: f.room_id, content: f.content, senderName: f.sender_name }).catch(() => {}); setFavoritesList(prev => prev.filter(x => x.message_id !== f.message_id)); }}>
-                        削除
-                      </button>
-                    </div>
-                  ))
-                }
-                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={handleCloseFavorites}>閉じる</button>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'85vh', display:'flex', flexDirection:'column', padding:0, overflow:'hidden' }}>
+                <div style={{ padding:'16px 16px 12px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+                  <div style={{ fontWeight:700, fontSize:16 }}>⭐ 重要メッセージ</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <span style={{ fontSize:12, color:'var(--text2)', background:'var(--surface2)', borderRadius:20, padding:'2px 10px' }}>{favoritesList.length}件</span>
+                    <button onClick={handleCloseFavorites} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
+                  </div>
+                </div>
+                <div style={{ overflowY:'auto', flex:1, padding:'8px 0' }}>
+                  {favoritesList.length === 0
+                    ? <div style={{ textAlign:'center', color:'var(--text2)', padding:'40px 20px' }}>
+                        <div style={{ fontSize:36, marginBottom:12 }}>⭐</div>
+                        <div style={{ fontSize:14, fontWeight:600 }}>重要メッセージがまだないで</div>
+                        <div style={{ fontSize:12, marginTop:4 }}>メッセージを長押し→ブックマークで追加できるで！</div>
+                      </div>
+                    : favoritesList.map((f, i) => {
+                        const roomName = rooms.find(r => r.id === f.room_id)?.name || 'DM';
+                        return (
+                          <div key={f.message_id || i} style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)' }}>
+                            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                                <span style={{ fontSize:11, background:'var(--primary)20', color:'var(--primary)', borderRadius:6, padding:'2px 8px', fontWeight:600 }}>{roomName}</span>
+                                <span style={{ fontSize:11, color:'var(--text2)' }}>{f.sender_name}</span>
+                              </div>
+                              <div style={{ display:'flex', gap:8 }}>
+                                <button
+                                  onClick={() => {
+                                    handleCloseFavorites();
+                                    const room = rooms.find(r => r.id === f.room_id);
+                                    if (room) {
+                                      setSelectedRoom(room);
+                                      setTimeout(() => {
+                                        const el = document.getElementById('msg-' + f.message_id);
+                                        if (el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+                                      }, 500);
+                                    }
+                                  }}
+                                  style={{ fontSize:11, color:'var(--primary)', background:'none', border:'none', cursor:'pointer', padding:0, fontWeight:600 }}>
+                                  ジャンプ
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    axios.delete('/api/bookmarks/' + f.message_id).catch(() => {});
+                                    setFavoritesList(prev => prev.filter(x => x.message_id !== f.message_id));
+                                    setBookmarks(prev => { const n = new Set(prev); n.delete(f.message_id); return n; });
+                                  }}
+                                  style={{ fontSize:11, color:'var(--danger)', background:'none', border:'none', cursor:'pointer', padding:0 }}>
+                                  削除
+                                </button>
+                              </div>
+                            </div>
+                            <div style={{ fontSize:14, color:'var(--text)', lineHeight:1.5, wordBreak:'break-word',
+                              display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+                              {f.content || '[メディア]'}
+                            </div>
+                            {f.created_at && <div style={{ fontSize:11, color:'var(--text2)', marginTop:4 }}>{new Date(f.created_at).toLocaleDateString('ja-JP', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}</div>}
+                          </div>
+                        );
+                      })
+                  }
+                </div>
               </div>
             </div>
           )}</Portal>
           <Portal>{showGlobalSearch && (
             <div className="modal-overlay" onClick={handleCloseGlobalSearch}>
-              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'85vh', display:'flex', flexDirection:'column' }}>
-                <div className="modal-title">🔍 全トーク検索</div>
-                <div style={{ display:'flex', gap:8, marginBottom:12 }}>
-                  <input className="form-input" style={{ flex:1, marginBottom:0 }} value={globalQuery}
-                    onChange={e => setGlobalQuery(e.target.value)} placeholder="キーワードを入力..."
-                    onKeyDown={e => { if (e.key === 'Enter') handleGlobalSearch(); }} autoFocus />
-                  <button className="btn btn-primary" style={{ padding:'0 14px' }} onClick={handleGlobalSearch}>検索</button>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'88vh', display:'flex', flexDirection:'column', padding:0, overflow:'hidden' }}>
+                {/* ヘッダー */}
+                <div style={{ padding:'16px 16px 12px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+                    <div style={{ fontWeight:700, fontSize:16 }}>🔍 グローバル検索</div>
+                    <button onClick={handleCloseGlobalSearch} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
+                  </div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <input className="form-input" style={{ flex:1, marginBottom:0 }} value={globalQuery}
+                      onChange={e => setGlobalQuery(e.target.value)} placeholder="メッセージ・ユーザー名で検索..."
+                      onKeyDown={e => { if (e.key === 'Enter') handleGlobalSearch(); }} autoFocus />
+                    <button className="btn btn-primary" style={{ padding:'0 16px', flexShrink:0 }} onClick={handleGlobalSearch}>検索</button>
+                  </div>
+                  {globalResults.length > 0 && !globalSearching && (
+                    <div style={{ fontSize:12, color:'var(--text2)', marginTop:8 }}>{globalResults.length}件ヒット</div>
+                  )}
                 </div>
+                {/* 結果 */}
                 <div style={{ overflowY:'auto', flex:1 }}>
-                  {globalSearching && <div style={{ textAlign:'center', color:'var(--text2)', padding:20 }}>検索中...</div>}
-                  {!globalSearching && globalResults.length === 0 && globalQuery && <div style={{ textAlign:'center', color:'var(--text2)', padding:20 }}>見つからんかった</div>}
-                  {globalResults.map(msg => (
-                    <div key={msg.id} style={{ padding:'10px 0', borderBottom:'1px solid var(--border)', cursor:'pointer' }}
-                      onClick={() => {
-                        setShowGlobalSearch(false);
-                        const room = rooms.find(r => r.id === msg.roomId);
-                        if (room) {
-                          setSelectedRoom(room);
-                          // ルーム読み込み後にメッセージへスクロール
-                          setTimeout(() => {
-                            const el = document.getElementById(`msg-${msg.id}`);
-                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          }, 600);
-                        }
-                      }}>
-                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                        <span style={{ fontSize:12, color:'var(--primary)', fontWeight:600 }}>{msg.roomName}</span>
-                        <span style={{ fontSize:11, color:'var(--text2)' }}>{new Date(msg.createdAt).toLocaleDateString('ja-JP', { month:'numeric', day:'numeric' })}</span>
-                      </div>
-                      <div style={{ fontSize:12, color:'var(--text2)', marginBottom:2 }}>{msg.senderName}</div>
-                      <div style={{ fontSize:14, color:'var(--text)' }}>{msg.content?.slice(0, 60)}{msg.content?.length > 60 ? '…' : ''}</div>
+                  {globalSearching && (
+                    <div style={{ textAlign:'center', color:'var(--text2)', padding:40 }}>
+                      <div style={{ fontSize:24, marginBottom:8 }}>🔍</div>
+                      <div>検索中...</div>
                     </div>
-                  ))}
+                  )}
+                  {!globalSearching && globalResults.length === 0 && globalQuery && (
+                    <div style={{ textAlign:'center', color:'var(--text2)', padding:40 }}>
+                      <div style={{ fontSize:32, marginBottom:8 }}>😕</div>
+                      <div style={{ fontSize:14, fontWeight:600 }}>見つからんかった</div>
+                      <div style={{ fontSize:12, marginTop:4 }}>別のキーワードで試してみて</div>
+                    </div>
+                  )}
+                  {!globalSearching && globalResults.length === 0 && !globalQuery && (
+                    <div style={{ textAlign:'center', color:'var(--text2)', padding:40 }}>
+                      <div style={{ fontSize:36, marginBottom:8 }}>🔍</div>
+                      <div style={{ fontSize:14 }}>キーワードを入力して検索してな</div>
+                    </div>
+                  )}
+                  {globalResults.map(msg => {
+                    const roomName = msg.roomName || rooms.find(r => r.id === msg.roomId)?.name || 'DM';
+                    // キーワードハイライト
+                    const highlight = (text, q) => {
+                      if (!q || !text) return text;
+                      const idx = text.toLowerCase().indexOf(q.toLowerCase());
+                      if (idx === -1) return text?.slice(0, 80);
+                      const start = Math.max(0, idx - 20);
+                      const end = Math.min(text.length, idx + q.length + 40);
+                      return (start > 0 ? '...' : '') + text.slice(start, end) + (end < text.length ? '...' : '');
+                    };
+                    return (
+                      <div key={msg.id}
+                        onClick={() => {
+                          setShowGlobalSearch(false);
+                          const room = rooms.find(r => r.id === msg.roomId);
+                          if (room) {
+                            setSelectedRoom(room);
+                            setTimeout(() => {
+                              const el = document.getElementById(`msg-${msg.id}`);
+                              if (el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+                            }, 600);
+                          }
+                        }}
+                        style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', cursor:'pointer', transition:'background 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                            <span style={{ fontSize:11, background:'var(--primary)20', color:'var(--primary)', borderRadius:6, padding:'2px 8px', fontWeight:600, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{roomName}</span>
+                            <span style={{ fontSize:11, color:'var(--text2)' }}>{msg.senderName}</span>
+                          </div>
+                          <span style={{ fontSize:11, color:'var(--text2)', flexShrink:0 }}>{new Date(msg.createdAt).toLocaleDateString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
+                        </div>
+                        <div style={{ fontSize:14, color:'var(--text)', lineHeight:1.5 }}>
+                          {highlight(msg.content, globalQuery)}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <button className="btn btn-secondary" style={{ width:'100%', marginTop:12 }} onClick={handleCloseGlobalSearch}>閉じる</button>
               </div>
             </div>
           )}</Portal>
@@ -2822,25 +2912,71 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               </div>
             </div>
           )}</Portal>
-          <Portal>{showBgPicker && (
-            <div className="modal-overlay" onClick={() => setShowBgPicker(false)}>
-              <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-title">🎨 背景を変更</div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 }}>
-                  {[{id:"default",label:"デフォルト",color:"#efeff4"},{id:"#ffffff",label:"白",color:"#ffffff"},{id:"#1a1a2e",label:"深夜",color:"#1a1a2e"},{id:"#fef3e2",label:"温かみ",color:"#fef3e2"},{id:"#e8f5e9",label:"グリーン",color:"#e8f5e9"},{id:"#e3f2fd",label:"スカイ",color:"#e3f2fd"},{id:"#f3e5f5",label:"ラベンダー",color:"#f3e5f5"},{id:"#fff8e1",label:"サンシャイン",color:"#fff8e1"}].map(bg => (
-                    <div key={bg.id} onClick={() => handleSetChatBg(bg.id)}
-                      style={{
-                        height:64, borderRadius:12, background:bg.color, cursor:'pointer',
-                        border: chatBg === bg.id ? '3px solid var(--primary)' : '2px solid var(--border)',
-                        display:'flex', alignItems:'flex-end', justifyContent:'center', padding:4,
-                        fontSize:11, color:'#333', fontWeight:600, boxSizing:'border-box',
-                      }}>{bg.label}</div>
-                  ))}
+          <Portal>{showBgPicker && (() => {
+            const BG_PRESETS = [
+              {id:"default",label:"デフォルト",bg:"var(--bg)"},
+              {id:"#ffffff",label:"☁️ 白",bg:"#ffffff"},
+              {id:"#1a1a2e",label:"🌌 深夜",bg:"#1a1a2e"},
+              {id:"#fef3e2",label:"🌅 温かみ",bg:"#fef3e2"},
+              {id:"#e8f5e9",label:"🌿 グリーン",bg:"#e8f5e9"},
+              {id:"#e3f2fd",label:"☀️ スカイ",bg:"#e3f2fd"},
+              {id:"#f3e5f5",label:"💜 ラベンダー",bg:"#f3e5f5"},
+              {id:"#fff8e1",label:"🌻 サンシャイン",bg:"#fff8e1"},
+              {id:"linear-gradient(135deg,#667eea,#764ba2)",label:"🔮 パープル",bg:"linear-gradient(135deg,#667eea,#764ba2)"},
+              {id:"linear-gradient(135deg,#f093fb,#f5576c)",label:"🌸 ピンク",bg:"linear-gradient(135deg,#f093fb,#f5576c)"},
+              {id:"linear-gradient(135deg,#4facfe,#00f2fe)",label:"🌊 オーシャン",bg:"linear-gradient(135deg,#4facfe,#00f2fe)"},
+              {id:"linear-gradient(135deg,#43e97b,#38f9d7)",label:"🍃 ミント",bg:"linear-gradient(135deg,#43e97b,#38f9d7)"},
+              {id:"linear-gradient(135deg,#fa709a,#fee140)",label:"🌈 サンセット",bg:"linear-gradient(135deg,#fa709a,#fee140)"},
+              {id:"linear-gradient(135deg,#30cfd0,#330867)",label:"🌙 オーロラ",bg:"linear-gradient(135deg,#30cfd0,#330867)"},
+              {id:"linear-gradient(135deg,#a8edea,#fed6e3)",label:"🍬 キャンディ",bg:"linear-gradient(135deg,#a8edea,#fed6e3)"},
+              {id:"linear-gradient(135deg,#ffecd2,#fcb69f)",label:"🍊 ピーチ",bg:"linear-gradient(135deg,#ffecd2,#fcb69f)"},
+            ];
+            const [customUrl, setCustomUrl] = React.useState('');
+            return (
+              <div className="modal-overlay" onClick={() => setShowBgPicker(false)}>
+                <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'85vh', display:'flex', flexDirection:'column', padding:0, overflow:'hidden' }}>
+                  <div style={{ padding:'16px 16px 12px', borderBottom:'1px solid var(--border)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <div style={{ fontWeight:700, fontSize:16 }}>🎨 背景を変更</div>
+                    <button onClick={() => setShowBgPicker(false)} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
+                  </div>
+                  <div style={{ overflowY:'auto', flex:1, padding:16 }}>
+                    <div style={{ fontSize:12, color:'var(--text2)', marginBottom:8, fontWeight:600 }}>プリセット</div>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:16 }}>
+                      {BG_PRESETS.map(bg => (
+                        <div key={bg.id} onClick={() => { handleSetChatBg(bg.id); setShowBgPicker(false); }}
+                          style={{
+                            height:72, borderRadius:12, cursor:'pointer', position:'relative', overflow:'hidden',
+                            background: bg.bg,
+                            border: chatBg === bg.id ? '3px solid var(--primary)' : '2px solid var(--border)',
+                            boxSizing:'border-box',
+                          }}>
+                          <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'4px 4px', background:'rgba(0,0,0,0.35)', borderRadius:'0 0 10px 10px', fontSize:10, color:'#fff', fontWeight:600, textAlign:'center', lineHeight:1.3 }}>{bg.label}</div>
+                          {chatBg === bg.id && <div style={{ position:'absolute', top:4, right:4, fontSize:14 }}>✅</div>}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ fontSize:12, color:'var(--text2)', marginBottom:8, fontWeight:600 }}>カスタム画像URL</div>
+                    <div style={{ display:'flex', gap:8 }}>
+                      <input className="form-input" style={{ flex:1, marginBottom:0, fontSize:13 }}
+                        value={customUrl} onChange={e => setCustomUrl(e.target.value)}
+                        placeholder="https://... の画像URLを入力" />
+                      <button className="btn btn-primary" style={{ padding:'0 14px', flexShrink:0 }}
+                        onClick={() => { if (customUrl.trim()) { handleSetChatBg(customUrl.trim()); setShowBgPicker(false); } }}>
+                        適用
+                      </button>
+                    </div>
+                    <div style={{ fontSize:11, color:'var(--text2)', marginTop:6 }}>※ 背景は自分のみに反映されるで</div>
+                    {chatBg !== 'default' && (
+                      <button onClick={() => { handleSetChatBg('default'); setShowBgPicker(false); }}
+                        style={{ width:'100%', marginTop:12, padding:10, borderRadius:10, background:'var(--surface2)', border:'1px solid var(--border)', color:'var(--text2)', cursor:'pointer', fontSize:13, fontWeight:600 }}>
+                        🔄 デフォルトに戻す
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <button className="btn btn-secondary" style={{width:'100%'}} onClick={() => setShowBgPicker(false)}>閉じる</button>
               </div>
-            </div>
-          )}</Portal>
+            );
+          })()}</Portal>
           {editingMessage && (
             <div className="modal-overlay" onClick={() => setEditingMessage(null)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
@@ -3023,11 +3159,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               // 上端近くで過去メッセージ読み込み
               if (el.scrollTop < 60) loadMoreMessages();
             }}
-            style={chatBg !== 'default' ? {
-              backgroundImage: chatBg.startsWith('#') ? 'none' : `url(${chatBg})`,
-              backgroundColor: chatBg.startsWith('#') ? chatBg : undefined,
-              backgroundSize: 'cover', backgroundPosition: 'center',
-            } : {}}>
+            style={chatBg !== 'default' ? (() => {
+              if (chatBg.startsWith('#')) return { backgroundColor: chatBg };
+              if (chatBg.startsWith('linear-gradient') || chatBg.startsWith('radial-gradient')) return { backgroundImage: chatBg };
+              return { backgroundImage: `url(${chatBg})`, backgroundSize:'cover', backgroundPosition:'center' };
+            })() : {}}>
             {renderedMessages}
             {typingUsers.length > 0 && (
               <div className="typing-indicator">
@@ -3391,6 +3527,7 @@ export default function App() {
   });
   const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId, roomId }
   const [showGift, setShowGift] = useState(null);
+  const [showWhiteboard, setShowWhiteboard] = useState(false);
   const [showReadLater, setShowReadLater] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [pinVerified, setPinVerified] = useState(true);
@@ -3431,10 +3568,15 @@ export default function App() {
       setFriendsList(res.data);
       try { localStorage.setItem('friends_cache', JSON.stringify(res.data)); } catch {}
     }).catch(() => {});
-    // ミュート・ブックマーク初期化
+    // ミュート・ブックマーク・ピン留め初期化（サーバーが正）
     axios.get('/api/auth/me').then(res => {
-      if (res.data.user.mutedRooms) setMutedRooms(new Set(res.data.user.mutedRooms));
-      if (res.data.user.bookmarks) setBookmarks(new Set(res.data.user.bookmarks));
+      const u = res.data.user;
+      if (u.mutedRooms) setMutedRooms(new Set(u.mutedRooms));
+      if (u.bookmarks) setBookmarks(new Set(u.bookmarks));
+      if (u.pinnedRooms) {
+        setPinnedRooms(u.pinnedRooms);
+        try { localStorage.setItem('pinnedRooms', JSON.stringify(u.pinnedRooms)); } catch {}
+      }
     }).catch(() => {});
   }, [currentUser]);
 
@@ -3821,6 +3963,17 @@ export default function App() {
         {showReadLater && (
           <ErrorBoundary><Suspense fallback={null}>
             <ReadLater currentUser={currentUser} onClose={handleCloseReadLater} />
+          </Suspense></ErrorBoundary>
+        )}
+
+        {/* 共有ホワイトボード */}
+        {showWhiteboard && selectedRoom && (
+          <ErrorBoundary><Suspense fallback={null}>
+            <SharedWhiteboard
+              socket={socket}
+              roomId={selectedRoom.id}
+              onClose={() => setShowWhiteboard(false)}
+            />
           </Suspense></ErrorBoundary>
         )}
 

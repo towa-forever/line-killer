@@ -35,9 +35,13 @@ const app = express();
 app.set('trust proxy', 1);
 
 // VAPID設定
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BAwzRukb1C_xX8RFR2Luln0HcUEDsAgrimF1njzr2t4952nvpwfkrQ6yvSHE4z9wqXXpnp3tMhwzIBKuuvd5Xkk';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'NYWHWUJij3EUcOYPmq17yMihomww6SmBpvQe4ZTsDI0';
-webpush.setVapidDetails('mailto:admin@line-killer.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+  console.warn('[WARN] VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY が未設定やで。プッシュ通知は無効になるわ。');
+} else {
+  webpush.setVapidDetails('mailto:admin@line-killer.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
 
 // 管理者ユーザー名（お知らせ投稿・削除権限）
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'とわ';
@@ -131,7 +135,8 @@ const getFileUrl = (req) => {
   if (useCloudinary && req.file?.path) return req.file.path; // Cloudinaryは絶対URL
   return req.file ? `/uploads/${req.file.filename}` : null;
 };
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) { console.error('[ERROR] JWT_SECRET 環境変数が未設定やで！本番環境では必ず設定してな！'); process.exit(1); }
 
 const auth = (req) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -820,6 +825,7 @@ app.get('/api/users/me/coins', async (req, res) => {
 
 // Push通知API
 app.get('/api/push/vapid-key', (req, res) => {
+  if (!VAPID_PUBLIC_KEY) return res.json({ publicKey: null });
   res.json({ publicKey: VAPID_PUBLIC_KEY });
 });
 
@@ -1518,11 +1524,11 @@ app.get('/api/official-accounts', async (req, res) => {
 app.get('/api/official-accounts/me', async (req, res) => {
   try {
     const decoded = auth(req);
-    const accounts = await OfficialAccount.find().sort({ created_at: -1 }).lean();
+    // 自分が作成した公式アカウントだけ返す
+    const accounts = await OfficialAccount.find({ created_by: decoded.id }).sort({ created_at: -1 }).lean();
     const result = accounts.map(a => ({
       ...a,
       followerCount: a.followers.length,
-      isFollowing: a.followers.includes(decoded.id),
     }));
     res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1955,6 +1961,59 @@ app.post('/api/official/broadcast', upload.single('image'), async (req, res) => 
     const s = (e?.name?.includes('JsonWebToken') || e?.name?.includes('TokenExpired')) ? 401 : 500;
     res.status(s).json({ error: s === 401 ? '認証エラー' : e.message });
   }
+});
+
+
+// 自分が作成した公式アカウントから一斉DM送信（作成者専用）
+app.post('/api/official-accounts/:accountId/send', upload.single('image'), async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const account = await OfficialAccount.findOne({ id: req.params.accountId }).lean();
+    if (!account) return res.status(404).json({ error: 'アカウントが見つかりません' });
+    // 作成者か管理者のみ許可
+    const sender = await User.findOne({ id: decoded.id }, { username: 1 }).lean();
+    const isAdmin = sender.username.trim().toLowerCase() === ADMIN_USERNAME.trim().toLowerCase();
+    if (account.created_by !== decoded.id && !isAdmin) {
+      return res.status(403).json({ error: 'このアカウントの送信権限がありません' });
+    }
+    const { content } = req.body;
+    if (!content?.trim() && !req.file) return res.status(400).json({ error: 'メッセージを入力してください' });
+    if (account.followers.length === 0) return res.json({ sent: 0 });
+
+    let sentCount = 0;
+    for (const followerId of account.followers) {
+      try {
+        const room = await getOrCreateDMRoom(followerId, account.id, account.name, account.avatar);
+        if (!room) continue;
+        const msg = await Message.create({
+          id: uuidv4(),
+          room_id: room.id,
+          sender_id: account.id,
+          sender_name: account.name,
+          sender_avatar: account.avatar,
+          content: content?.trim() || '',
+          image: req.file ? getFileUrl(req) : null,
+          type: 'text',
+          readBy: [account.id], read_by: [account.id],
+          created_at: new Date(),
+        });
+        io.to(room.id).emit('message:new', msg);
+        io.to('user_' + followerId).emit('message:new', msg);
+        // Push通知
+        const sub = pushSubscriptions.get(followerId);
+        if (sub && VAPID_PUBLIC_KEY) {
+          webpush.sendNotification(sub, JSON.stringify({
+            title: account.name,
+            body: (content?.trim() || '[画像]').slice(0, 80),
+            tag: room.id,
+            url: '/',
+          })).catch(() => {});
+        }
+        sentCount++;
+      } catch (_) {}
+    }
+    res.json({ sent: sentCount });
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 
 // ===== 公式アカウント API =====
@@ -2650,6 +2709,50 @@ io.on('connection', async (socket) => {
     } catch(e) { console.error('room:leave error:', e); }
   });
 
+
+  // ===== 共有ホワイトボード =====
+  // ホワイトボードデータをメモリで管理（roomId -> { strokes: [], participants: Set }）
+  if (!global.whiteboards) global.whiteboards = {};
+
+  socket.on('whiteboard:join', ({ roomId }) => {
+    if (!roomId) return;
+    if (!global.whiteboards[roomId]) global.whiteboards[roomId] = { participants: new Set(), imageData: null };
+    const wb = global.whiteboards[roomId];
+    wb.participants.add(socket.id);
+    socket.join('wb_' + roomId);
+    // 既存の描画データがあれば同期
+    if (wb.imageData) {
+      socket.emit('whiteboard:sync', { imageData: wb.imageData });
+    }
+    // 参加人数を通知
+    io.to('wb_' + roomId).emit('whiteboard:participants', { count: wb.participants.size });
+  });
+
+  socket.on('whiteboard:leave', ({ roomId }) => {
+    if (!roomId || !global.whiteboards[roomId]) return;
+    const wb = global.whiteboards[roomId];
+    wb.participants.delete(socket.id);
+    socket.leave('wb_' + roomId);
+    io.to('wb_' + roomId).emit('whiteboard:participants', { count: wb.participants.size });
+    if (wb.participants.size === 0) delete global.whiteboards[roomId];
+  });
+
+  socket.on('whiteboard:draw', ({ roomId, x0, y0, x1, y1, color, lineWidth, eraser }) => {
+    if (!roomId) return;
+    socket.to('wb_' + roomId).emit('whiteboard:draw', { x0, y0, x1, y1, color, lineWidth, eraser });
+  });
+
+  socket.on('whiteboard:clear', ({ roomId }) => {
+    if (!roomId) return;
+    if (global.whiteboards[roomId]) global.whiteboards[roomId].imageData = null;
+    socket.to('wb_' + roomId).emit('whiteboard:clear');
+  });
+
+  socket.on('whiteboard:save', ({ roomId, imageData }) => {
+    if (!roomId || !imageData) return;
+    if (global.whiteboards[roomId]) global.whiteboards[roomId].imageData = imageData;
+  });
+
   socket.on('typing:start', ({ roomId }) => {
     socket.to(roomId).emit('typing:update', { username: socket.user.username, isTyping: true });
   });
@@ -2967,6 +3070,39 @@ app.patch('/api/events/:eventId/attend', async (req, res) => {
     if (!event) return res.status(404).json({ error: 'イベントが見つかりません' });
     io.to(event.room_id).emit('event:updated', event);
     res.json(event);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+
+// イベント編集
+app.put('/api/events/:eventId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { title, description, startAt, endAt } = req.body;
+    if (!title?.trim() || !startAt) return res.status(400).json({ error: 'タイトルと開始日時は必須やで' });
+    const event = await Event.findOne({ id: req.params.eventId });
+    if (!event) return res.status(404).json({ error: 'イベントが見つかりません' });
+    if (event.creator_id !== decoded.id) return res.status(403).json({ error: '編集権限がありません' });
+    const updated = await Event.findOneAndUpdate(
+      { id: req.params.eventId },
+      { title: title.trim(), description: description || '', start_at: new Date(startAt), end_at: endAt ? new Date(endAt) : null },
+      { returnDocument: 'after' }
+    );
+    io.to(updated.room_id).emit('event:updated', updated);
+    res.json(updated);
+  } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+// イベント削除
+app.delete('/api/events/:eventId', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const event = await Event.findOne({ id: req.params.eventId });
+    if (!event) return res.status(404).json({ error: 'イベントが見つかりません' });
+    if (event.creator_id !== decoded.id) return res.status(403).json({ error: '削除権限がありません' });
+    await Event.deleteOne({ id: req.params.eventId });
+    io.to(event.room_id).emit('event:deleted', { id: req.params.eventId });
+    res.json({ ok: true });
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 
@@ -3806,6 +3942,33 @@ app.post('/api/ai/emotion', async (req, res) => {
     const emoji = data.content?.[0]?.text?.trim() || '😐';
     res.json({ emoji });
   } catch(e) { res.status(500).json({ emoji: '😐' }); }
+});
+
+
+// AIアバター絵文字生成
+app.post('/api/ai/generate-avatar', async (req, res) => {
+  try {
+    auth(req);
+    const { prompt } = req.body;
+    if (!prompt?.trim()) return res.status(400).json({ error: 'プロンプトが必要やで' });
+    const systemPrompt = `あなたはアバター絵文字を選ぶアシスタントです。
+ユーザーのプロンプトに最もマッチする絵文字を1〜3個選んで返してください。
+絵文字だけを返し、他のテキストは一切含めないでください。
+例: 🧙‍♂️✨ または 🦁 または 🤖💜`;
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 20,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: `このスタイルのアバターに合う絵文字を選んで: ${prompt}` }]
+      })
+    });
+    const data = await response.json();
+    const emoji = data.content?.[0]?.text?.trim() || '🎨';
+    res.json({ emoji });
+  } catch(e) { res.status(500).json({ error: '生成に失敗したで', emoji: '🎨' }); }
 });
 
 app.post('/api/ai/assist', async (req, res) => {

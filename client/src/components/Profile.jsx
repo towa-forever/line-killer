@@ -58,7 +58,35 @@ function OfficialAccountPanel({ currentUser, saveSettings }) {
       </div>
       {msg && <div style={{ fontSize:12, color:'var(--primary)', marginBottom:8 }}>{msg}</div>}
       {isOfficial ? (
-        <div style={{ fontSize:13, color:'var(--text2)' }}>あなたは公式アカウントです 🎉</div>
+        <div>
+          <div style={{ fontSize:13, color:'#1DB874', fontWeight:600, marginBottom:10 }}>✅ 公式アカウントとして認証済みやで！</div>
+          <div style={{ background:'var(--surface2)', borderRadius:12, padding:12, marginBottom:8 }}>
+            <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>📢 フォロワーに一斉送信</div>
+            <textarea
+              value={broadcastContent}
+              onChange={e => setBroadcastContent(e.target.value)}
+              placeholder="全フォロワーに届くメッセージを入力..."
+              rows={3}
+              style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:13, resize:'none', boxSizing:'border-box', outline:'none', marginBottom:8 }}
+            />
+            {broadcastResult && <div style={{ fontSize:12, color: broadcastResult.startsWith('❌') ? 'var(--danger)' : 'var(--primary)', marginBottom:8 }}>{broadcastResult}</div>}
+            <button
+              onClick={async () => {
+                if (!broadcastContent.trim()) return;
+                setBroadcastSending(true); setBroadcastResult('');
+                try {
+                  const res = await axios.post('/api/official/broadcast', { content: broadcastContent.trim() });
+                  setBroadcastResult(`✅ ${res.data.sent}人に送信したで！`);
+                  setBroadcastContent('');
+                } catch { setBroadcastResult('❌ 送信に失敗したで...'); }
+                finally { setBroadcastSending(false); }
+              }}
+              disabled={broadcastSending || !broadcastContent.trim()}
+              style={{ width:'100%', padding:'8px 0', borderRadius:10, background:'var(--primary)', color:'white', border:'none', fontSize:13, fontWeight:700, cursor:'pointer', opacity: broadcastSending || !broadcastContent.trim() ? 0.5 : 1 }}>
+              {broadcastSending ? '送信中...' : '📢 一斉送信する（フォロワー全員）'}
+            </button>
+          </div>
+        </div>
       ) : !isAdmin && !showApply ? (
         <button onClick={() => setShowApply(true)}
           style={{ padding:'6px 16px', borderRadius:10, border:'1px dashed var(--border)', background:'none', color:'var(--text2)', cursor:'pointer', fontSize:12 }}>
@@ -82,6 +110,54 @@ function OfficialAccountPanel({ currentUser, saveSettings }) {
           </div>
         </div>
       )}
+      {/* 自分が作成した公式アカウントからの送信 */}
+      {myOfficialAccounts.length > 0 && (
+        <div style={{ background:'var(--surface2)', borderRadius:12, padding:12, marginTop:8, marginBottom:4 }}>
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>🤖 自分の公式アカウントから送信</div>
+          <select
+            value={selectedOfficialId || ''}
+            onChange={e => { setSelectedOfficialId(e.target.value); setBroadcastResult(''); setBroadcastContent(''); }}
+            style={{ width:'100%', padding:'7px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:13, marginBottom:8, outline:'none' }}>
+            <option value="">アカウントを選択...</option>
+            {myOfficialAccounts.map(a => (
+              <option key={a.id} value={a.id}>{a.name}（フォロワー {a.followerCount}人）</option>
+            ))}
+          </select>
+          {selectedOfficialId && (
+            <>
+              <textarea
+                value={broadcastContent}
+                onChange={e => setBroadcastContent(e.target.value)}
+                placeholder="フォロワー全員に届くメッセージを入力..."
+                rows={3}
+                style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:13, resize:'none', boxSizing:'border-box', outline:'none', marginBottom:8 }}
+              />
+              {broadcastResult && (
+                <div style={{ fontSize:12, color: broadcastResult.startsWith('❌') ? 'var(--danger)' : '#1DB874', marginBottom:8 }}>
+                  {broadcastResult}
+                </div>
+              )}
+              <button
+                onClick={async () => {
+                  if (!broadcastContent.trim() || !selectedOfficialId) return;
+                  setBroadcastSending(true); setBroadcastResult('');
+                  try {
+                    const res = await axios.post(`/api/official-accounts/${selectedOfficialId}/send`, { content: broadcastContent.trim() });
+                    setBroadcastResult(`✅ ${res.data.sent}人に送信したで！`);
+                    setBroadcastContent('');
+                  } catch (e) {
+                    setBroadcastResult('❌ ' + (e.response?.data?.error || '送信に失敗したで...'));
+                  } finally { setBroadcastSending(false); }
+                }}
+                disabled={broadcastSending || !broadcastContent.trim()}
+                style={{ width:'100%', padding:'8px 0', borderRadius:10, background:'#1DB874', color:'white', border:'none', fontSize:13, fontWeight:700, cursor:'pointer', opacity: broadcastSending || !broadcastContent.trim() ? 0.5 : 1 }}>
+                {broadcastSending ? '送信中...' : '📢 フォロワー全員に送信'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* 管理者用: 申請一覧 */}
       {isAdmin && requests.length > 0 && (
         <div style={{ marginTop:8 }}>
@@ -185,6 +261,11 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   const [bio, setBio] = useState(currentUser?.bio || '');
   const [saving, setSaving] = useState(false);
   const [selectedFrame, setSelectedFrame] = useState(currentUser?.avatarFrame || 'none');
+  const [showAIAvatar, setShowAIAvatar] = useState(false);
+  const [aiAvatarPrompt, setAiAvatarPrompt] = useState('');
+  const [aiAvatarResult, setAiAvatarResult] = useState(null);
+  const [aiAvatarLoading, setAiAvatarLoading] = useState(false);
+  const [aiAvatarError, setAiAvatarError] = useState('');
   const [selectedSound, setSelectedSound] = useState(currentUser?.soundTheme || 'default');
   const [statusText, setStatusText] = useState(currentUser?.status || '');
   const [message, setMessage] = useState('');
@@ -351,11 +432,18 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
               <div className="profile-avatar">{currentUser?.displayName?.[0] || currentUser?.username?.[0] || '?'}</div>
             )}
             {editing && (
-              <button onClick={() => fileInputRef.current?.click()} style={{
-                position:'absolute', bottom:0, right:0, width:26, height:26, borderRadius:'50%',
-                background:'var(--primary)', color:'white', fontSize:14, border:'2px solid var(--surface)', cursor:'pointer',
-                display:'flex', alignItems:'center', justifyContent:'center'
-              }}>📷</button>
+              <>
+                <button onClick={() => fileInputRef.current?.click()} style={{
+                  position:'absolute', bottom:0, right:0, width:26, height:26, borderRadius:'50%',
+                  background:'var(--primary)', color:'white', fontSize:14, border:'2px solid var(--surface)', cursor:'pointer',
+                  display:'flex', alignItems:'center', justifyContent:'center'
+                }}>📷</button>
+                <button onClick={() => setShowAIAvatar(true)} style={{
+                  position:'absolute', bottom:0, left:0, width:26, height:26, borderRadius:'50%',
+                  background:'#8b5cf6', color:'white', fontSize:12, border:'2px solid var(--surface)', cursor:'pointer',
+                  display:'flex', alignItems:'center', justifyContent:'center'
+                }} title="AIアバター生成">✨</button>
+              </>
             )}
             <input ref={fileInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleAvatarChange} />
           </div>
@@ -810,7 +898,7 @@ function SubAccountSection({ currentUser, onSwitchAccount }) {
     } catch (e) { console.error('親アカへの切替失敗', e); }
   }, [currentUser, onSwitchAccount]);
 
-  return (
+  const mainContent = (
     <div className="card" style={{ margin:10 }}>
       {/* サブアカ削除確認ダイアログ */}
       {deleteConfirm && ReactDOM.createPortal((
@@ -901,5 +989,104 @@ function SubAccountSection({ currentUser, onSwitchAccount }) {
         </button>
       )}
     </div>
+  );
+
+  // AIアバター生成モーダル
+  const AIAvatarModal = showAIAvatar ? ReactDOM.createPortal(
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={() => setShowAIAvatar(false)}>
+      <div style={{ background:'var(--surface)', borderRadius:20, padding:20, width:'100%', maxWidth:360, maxHeight:'85vh', overflowY:'auto' }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+          <div style={{ fontWeight:700, fontSize:17 }}>✨ AIアバター生成</div>
+          <button onClick={() => { setShowAIAvatar(false); setAiAvatarResult(null); setAiAvatarError(''); }}
+            style={{ fontSize:22, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
+        </div>
+
+        {/* プリセットスタイル */}
+        <div style={{ fontSize:12, color:'var(--text2)', marginBottom:8, fontWeight:600 }}>スタイルを選ぶ</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:12 }}>
+          {[
+            { label:'🧙 ファンタジー', prompt:'fantasy wizard character, magical, colorful, digital art' },
+            { label:'🤖 サイバー', prompt:'cyberpunk character, neon lights, futuristic, digital art' },
+            { label:'🌸 アニメ', prompt:'cute anime character, pastel colors, chibi style' },
+            { label:'🦁 動物', prompt:'cute animal character, cartoon style, friendly' },
+            { label:'🎨 アート', prompt:'abstract artistic portrait, colorful, modern art style' },
+            { label:'🌊 自然', prompt:'nature spirit character, forest, green, magical realism' },
+          ].map(s => (
+            <button key={s.label} onClick={() => setAiAvatarPrompt(s.prompt)}
+              style={{ padding:'8px 4px', borderRadius:10, border: aiAvatarPrompt === s.prompt ? '2px solid #8b5cf6' : '1.5px solid var(--border)',
+                background: aiAvatarPrompt === s.prompt ? '#8b5cf620' : 'var(--surface2)', cursor:'pointer', fontSize:12, fontWeight:600, color:'var(--text)' }}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ fontSize:12, color:'var(--text2)', marginBottom:6, fontWeight:600 }}>カスタムプロンプト（任意）</div>
+        <textarea
+          className="form-input"
+          value={aiAvatarPrompt}
+          onChange={e => setAiAvatarPrompt(e.target.value)}
+          placeholder="例: cute cat wizard with purple hat..."
+          style={{ minHeight:64, resize:'vertical', marginBottom:12, fontSize:13 }}
+        />
+
+        {aiAvatarError && <div style={{ color:'var(--danger)', fontSize:13, marginBottom:10, textAlign:'center' }}>{aiAvatarError}</div>}
+
+        {/* 生成結果 */}
+        {aiAvatarResult && (
+          <div style={{ marginBottom:12, textAlign:'center' }}>
+            <div style={{ fontSize:48, marginBottom:8, lineHeight:1 }}>{aiAvatarResult}</div>
+            <div style={{ fontSize:12, color:'var(--text2)', marginBottom:10 }}>このアバターを使う？</div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={() => { setAiAvatarResult(null); setAiAvatarError(''); }}
+                style={{ flex:1, padding:10, borderRadius:10, border:'1px solid var(--border)', background:'var(--surface2)', cursor:'pointer', fontSize:13, color:'var(--text)' }}>
+                やり直す
+              </button>
+              <button onClick={async () => {
+                // SVGのアバターとして保存（絵文字ベース）
+                const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">${aiAvatarResult}</text></svg>`;
+                const blob = new Blob([svg], { type:'image/svg+xml' });
+                const file = new File([blob], 'ai-avatar.svg', { type:'image/svg+xml' });
+                setAvatarFile(file);
+                setAvatarPreview(`data:image/svg+xml,${encodeURIComponent(svg)}`);
+                setShowAIAvatar(false);
+                setAiAvatarResult(null);
+              }}
+                style={{ flex:1, padding:10, borderRadius:10, background:'#8b5cf6', color:'white', border:'none', cursor:'pointer', fontSize:13, fontWeight:700 }}>
+                ✅ 使う
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!aiAvatarResult && (
+          <button
+            onClick={async () => {
+              if (!aiAvatarPrompt.trim()) { setAiAvatarError('スタイルかプロンプトを入力してな'); return; }
+              setAiAvatarLoading(true); setAiAvatarError('');
+              try {
+                const res = await axios.post('/api/ai/generate-avatar', { prompt: aiAvatarPrompt });
+                setAiAvatarResult(res.data.emoji);
+              } catch (e) {
+                setAiAvatarError('生成に失敗したで。もう一回試してな');
+              } finally { setAiAvatarLoading(false); }
+            }}
+            disabled={aiAvatarLoading}
+            style={{ width:'100%', padding:12, borderRadius:12, background: aiAvatarLoading ? 'var(--border)' : '#8b5cf6',
+              color:'white', border:'none', fontWeight:700, fontSize:15, cursor: aiAvatarLoading ? 'not-allowed' : 'pointer' }}>
+            {aiAvatarLoading ? '✨ 生成中...' : '✨ AIで生成する'}
+          </button>
+        )}
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
+  return (
+    <>
+      {mainContent}
+      {AIAvatarModal}
+    </>
   );
 }

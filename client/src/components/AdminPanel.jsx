@@ -338,7 +338,7 @@ export default function AdminPanel({ currentUser, onClose }) {
               <button onClick={async () => {
                 if (!broadcastText.trim()) return;
                 try {
-                  const res = await axios.post(`/api/official-accounts/${broadcastTarget.id}/broadcast`, { content: broadcastText });
+                  const res = await axios.post(`/api/official-accounts/${broadcastTarget.id}/send`, { content: broadcastText });
                   setMsg(`✅ ${res.data.sent}人に送信しました！`);
                   setBroadcastTarget(null);
                 } catch (e) { setMsg(e.response?.data?.error || '送信に失敗しました'); }

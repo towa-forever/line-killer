@@ -46,7 +46,7 @@ const UserSchema = new mongoose.Schema({
   // 2段階認証
   pin_code: { type: String, default: '' }, // bcryptハッシュ
   pin_enabled: { type: Boolean, default: false },
-  // ログイン履歴（最新10件）
+  // ログイン履歴（最新10件）ip・ua・日時を記録
   login_history: { type: [{ ip: String, ua: String, at: Date }], default: [] },
   // 下書き保存 { roomId: content }
   drafts: { type: mongoose.Schema.Types.Mixed, default: {} },
@@ -55,6 +55,7 @@ const UserSchema = new mongoose.Schema({
   // ギフト履歴
   gift_sent: { type: Number, default: 0 },
   gift_received: { type: Number, default: 0 },
+  coins: { type: Number, default: 100 }, // コイン残高（初期100枚）
   badges: { type: [String], default: [] }, // 獲得バッジID一覧
   message_count: { type: Number, default: 0 }, // 送信メッセージ数
   login_count: { type: Number, default: 0 }, // ログイン回数
@@ -64,7 +65,6 @@ const UserSchema = new mongoose.Schema({
   folders: { type: Array, default: [] }, // トークフォルダ
   font_size: { type: String, default: 'medium' }, // 'small'|'medium'|'large'
   social_links: { type: Map, of: String, default: {} }, // SNSリンク集
-  login_history: { type: [{ date: Date, device: String }], default: [] },
   theme: {
     primaryColor: { type: String, default: null },
     bgColor: { type: String, default: null },
