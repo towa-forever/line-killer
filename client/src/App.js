@@ -4035,17 +4035,6 @@ export default function App() {
           </Suspense></ErrorBoundary>
         )}
 
-        {/* 共有ホワイトボード */}
-        {showWhiteboard && selectedRoom && (
-          <ErrorBoundary><Suspense fallback={null}>
-            <SharedWhiteboard
-              socket={socket}
-              roomId={selectedRoom.id}
-              onClose={() => setShowWhiteboard(false)}
-            />
-          </Suspense></ErrorBoundary>
-        )}
-
         {/* ギフト送信 */}
         {showGift && (
           <ErrorBoundary><Suspense fallback={null}>

@@ -732,6 +732,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
         </Suspense>,
         document.body
       )}
+    {AIAvatarModal}
     </div>
   );
 }
@@ -925,7 +926,6 @@ function SecuritySection({ currentUser, onOpenPinSetup }) {
           </div>
         </div>
       ), document.body)}
-      {AIAvatarModal}
     </>
   );
 }
