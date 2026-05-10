@@ -3395,8 +3395,12 @@ function FriendInviteSection({ roomId, members = [], friendsList = [], showToast
   const [selected, setSelected] = useState([]);
   const [inviting, setInviting] = useState(false);
 
-  const memberIds = new Set(members.map(m => m.id || m._id || m));
-  const invitable = (friendsList || []).filter(f => !memberIds.has(f.id || f._id));
+  // membersは文字列IDの配列またはオブジェクトの配列どちらでも対応
+  const memberIds = new Set(members.map(m => (typeof m === 'string' ? m : (m.id || m._id || ''))).filter(Boolean));
+  const invitable = (friendsList || []).filter(f => {
+    const fid = f.id || f._id || '';
+    return fid && !memberIds.has(fid);
+  });
   const filtered = search.trim()
     ? invitable.filter(f => (f.display_name || f.username || '').toLowerCase().includes(search.toLowerCase()))
     : invitable;
@@ -3411,7 +3415,8 @@ function FriendInviteSection({ roomId, members = [], friendsList = [], showToast
       showToast?.(`✅ ${selected.length}人を招待したで！`, 'success');
       setSelected([]); setShow(false); setSearch('');
     } catch (e) {
-      showToast?.('❌ 招待に失敗したで', 'error');
+      const msg = e.response?.data?.error || e.message || '不明なエラー';
+      showToast?.(`❌ 招待に失敗したで: ${msg}`, 'error');
     } finally { setInviting(false); }
   };
 
