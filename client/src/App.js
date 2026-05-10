@@ -270,7 +270,7 @@ const EphemeralBubble = React.memo(function EphemeralBubble({ msg, isMine }) {
   );
 }); // React.memo
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate, onReadRoom, setShowBroadcast, pinnedRooms = [], setPinnedRooms }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate, onReadRoom, setShowBroadcast, pinnedRooms = [], setPinnedRooms, showWhiteboard = false, setShowWhiteboard }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -461,6 +461,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [pollFreeText, setPollFreeText] = useState(false);
   const [polls, setPolls] = useState({});
   const [chatBg, setChatBg] = useState(() => localStorage.getItem('chatBg') || 'default');
+  const [customBgUrl, setCustomBgUrl] = useState('');
   const [editText, setEditText] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
   const [mentionSuggestions, setMentionSuggestions] = useState([]); // @補完候補
@@ -1545,6 +1546,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 </div>
                 {/* グループ名変更 */}
                 <RoomNameEditor room={selectedRoom} onClose={handleCloseRoomSettings} />
+
+                {/* 友達招待 */}
+                {selectedRoom?.type === 'group' && <FriendInviteSection roomId={selectedRoom.id} members={selectedRoom.members} friendsList={friendsList} showToast={showToast} />}
+
                 <div className="modal-actions">
                   <button className="btn btn-secondary" onClick={handleCloseRoomSettings}>閉じる</button>
                 </div>
@@ -2931,7 +2936,6 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               {id:"linear-gradient(135deg,#a8edea,#fed6e3)",label:"🍬 キャンディ",bg:"linear-gradient(135deg,#a8edea,#fed6e3)"},
               {id:"linear-gradient(135deg,#ffecd2,#fcb69f)",label:"🍊 ピーチ",bg:"linear-gradient(135deg,#ffecd2,#fcb69f)"},
             ];
-            const [customUrl, setCustomUrl] = React.useState('');
             return (
               <div className="modal-overlay" onClick={() => setShowBgPicker(false)}>
                 <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'85vh', display:'flex', flexDirection:'column', padding:0, overflow:'hidden' }}>
@@ -2958,10 +2962,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     <div style={{ fontSize:12, color:'var(--text2)', marginBottom:8, fontWeight:600 }}>カスタム画像URL</div>
                     <div style={{ display:'flex', gap:8 }}>
                       <input className="form-input" style={{ flex:1, marginBottom:0, fontSize:13 }}
-                        value={customUrl} onChange={e => setCustomUrl(e.target.value)}
+                        value={customBgUrl} onChange={e => setCustomBgUrl(e.target.value)}
                         placeholder="https://... の画像URLを入力" />
                       <button className="btn btn-primary" style={{ padding:'0 14px', flexShrink:0 }}
-                        onClick={() => { if (customUrl.trim()) { handleSetChatBg(customUrl.trim()); setShowBgPicker(false); } }}>
+                        onClick={() => { if (customBgUrl.trim()) { handleSetChatBg(customBgUrl.trim()); setCustomBgUrl(''); setShowBgPicker(false); } }}>
                         適用
                       </button>
                     </div>
@@ -3383,6 +3387,89 @@ const InputArea = React.memo(function InputArea({
 
 
 // 公式アカウント 一斉送信モーダル
+
+// グループへの友達招待セクション（ルーム設定モーダル内で使用）
+function FriendInviteSection({ roomId, members = [], friendsList = [], showToast }) {
+  const [show, setShow] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState([]);
+  const [inviting, setInviting] = useState(false);
+
+  const memberIds = new Set(members.map(m => m.id || m._id || m));
+  const invitable = (friendsList || []).filter(f => !memberIds.has(f.id || f._id));
+  const filtered = search.trim()
+    ? invitable.filter(f => (f.display_name || f.username || '').toLowerCase().includes(search.toLowerCase()))
+    : invitable;
+
+  const toggle = (fid) => setSelected(prev => prev.includes(fid) ? prev.filter(id => id !== fid) : [...prev, fid]);
+
+  const handleInvite = async () => {
+    if (!selected.length) return;
+    setInviting(true);
+    try {
+      await axios.post(`/api/rooms/${roomId}/members`, { memberIds: selected });
+      showToast?.(`✅ ${selected.length}人を招待したで！`, 'success');
+      setSelected([]); setShow(false); setSearch('');
+    } catch (e) {
+      showToast?.('❌ 招待に失敗したで', 'error');
+    } finally { setInviting(false); }
+  };
+
+  if (!show) return (
+    <div style={{ marginBottom:12 }}>
+      <button onClick={() => setShow(true)}
+        style={{ width:'100%', padding:'10px 0', borderRadius:12, border:'1.5px dashed var(--primary)', background:'var(--primary)08', color:'var(--primary)', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+        👥 友達をグループに招待する
+        {invitable.length > 0 && <span style={{ fontSize:12, fontWeight:400, marginLeft:6 }}>（{invitable.length}人招待可能）</span>}
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={{ marginBottom:12, border:'1.5px solid var(--primary)', borderRadius:14, overflow:'hidden' }}>
+      <div style={{ padding:'10px 12px', background:'var(--primary)10', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <span style={{ fontWeight:700, fontSize:14, color:'var(--primary)' }}>👥 友達を招待</span>
+        <button onClick={() => { setShow(false); setSelected([]); setSearch(''); }}
+          style={{ fontSize:18, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
+      </div>
+      <div style={{ padding:'8px 12px' }}>
+        <input className="form-input" value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="名前で検索..." style={{ marginBottom:8 }} autoFocus />
+        <div style={{ maxHeight:200, overflowY:'auto', marginBottom:8 }}>
+          {filtered.length === 0
+            ? <div style={{ textAlign:'center', color:'var(--text2)', padding:'12px 0', fontSize:13 }}>
+                {invitable.length === 0 ? '招待できる友達がおらへん' : '見つからんかった'}
+              </div>
+            : filtered.map(f => {
+                const fid = f.id || f._id;
+                const sel = selected.includes(fid);
+                const name = f.display_name || f.username;
+                return (
+                  <div key={fid} onClick={() => toggle(fid)}
+                    style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 4px', borderBottom:'1px solid var(--border)', cursor:'pointer', borderRadius:8, background: sel ? 'var(--primary)08' : 'transparent' }}>
+                    <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0, overflow:'hidden' }}>
+                      {f.avatar ? <img src={f.avatar} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : name?.[0]?.toUpperCase()}
+                    </div>
+                    <div style={{ flex:1, fontSize:14, fontWeight:600 }}>{name}</div>
+                    <div style={{ width:22, height:22, borderRadius:'50%', border:'2px solid', flexShrink:0, borderColor: sel ? 'var(--primary)' : 'var(--border)', background: sel ? 'var(--primary)' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      {sel && <span style={{ color:'white', fontSize:13, fontWeight:700 }}>✓</span>}
+                    </div>
+                  </div>
+                );
+              })
+          }
+        </div>
+        <button onClick={handleInvite} disabled={!selected.length || inviting}
+          style={{ width:'100%', padding:'10px 0', borderRadius:10, border:'none', fontWeight:700, fontSize:14, cursor:'pointer',
+            background: selected.length ? 'var(--primary)' : 'var(--border)',
+            color: selected.length ? 'white' : 'var(--text2)', opacity: inviting ? 0.7 : 1 }}>
+          {inviting ? '招待中...' : selected.length ? `${selected.length}人を招待する` : '友達を選んでな'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BroadcastModal({ currentUser, onClose, showToast }) {
   const [text, setText] = React.useState('');
   const [image, setImage] = React.useState(null);
@@ -3824,7 +3911,7 @@ export default function App() {
     <>
       {/* 全タブ常時マウント（タブ切替でstateリセットされないように） */}
       <div style={tabVisible('chat')}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} onNavigate={setActiveTab} onReadRoom={handleReadRoom} setShowBroadcast={setShowBroadcast} pinnedRooms={pinnedRooms} setPinnedRooms={setPinnedRooms} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} onNavigate={setActiveTab} onReadRoom={handleReadRoom} setShowBroadcast={setShowBroadcast} pinnedRooms={pinnedRooms} setPinnedRooms={setPinnedRooms} showWhiteboard={showWhiteboard} setShowWhiteboard={setShowWhiteboard} />
       </div>
       <div style={tabVisible('friends')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
@@ -3948,6 +4035,17 @@ export default function App() {
           </Suspense></ErrorBoundary>
         )}
 
+        {/* 共有ホワイトボード */}
+        {showWhiteboard && selectedRoom && (
+          <ErrorBoundary><Suspense fallback={null}>
+            <SharedWhiteboard
+              socket={socket}
+              roomId={selectedRoom.id}
+              onClose={() => setShowWhiteboard(false)}
+            />
+          </Suspense></ErrorBoundary>
+        )}
+
         {/* ギフト送信 */}
         {showGift && (
           <ErrorBoundary><Suspense fallback={null}>
@@ -3963,17 +4061,6 @@ export default function App() {
         {showReadLater && (
           <ErrorBoundary><Suspense fallback={null}>
             <ReadLater currentUser={currentUser} onClose={handleCloseReadLater} />
-          </Suspense></ErrorBoundary>
-        )}
-
-        {/* 共有ホワイトボード */}
-        {showWhiteboard && selectedRoom && (
-          <ErrorBoundary><Suspense fallback={null}>
-            <SharedWhiteboard
-              socket={socket}
-              roomId={selectedRoom.id}
-              onClose={() => setShowWhiteboard(false)}
-            />
           </Suspense></ErrorBoundary>
         )}
 
