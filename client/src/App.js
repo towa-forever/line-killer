@@ -1548,7 +1548,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 <RoomNameEditor room={selectedRoom} onClose={handleCloseRoomSettings} />
 
                 {/* 友達招待 */}
-                {selectedRoom?.type === 'group' && <FriendInviteSection roomId={selectedRoom.id} members={selectedRoom.members} friendsList={friendsList} showToast={showToast} />}
+                {selectedRoom && selectedRoom.type !== 'dm' && <FriendInviteSection roomId={selectedRoom.id} members={selectedRoom.members} friendsList={friendsList} showToast={showToast} />}
 
                 <div className="modal-actions">
                   <button className="btn btn-secondary" onClick={handleCloseRoomSettings}>閉じる</button>

@@ -2188,7 +2188,7 @@ app.post('/api/rooms', async (req, res) => {
     // 自分を含めたメンバーリスト（フレンドチェックなし・誰でも招待可能）
     const members = [...new Set([decoded.id, ...safeIds])];
     const id = 'room_' + uuidv4();
-    const room = await Room.create({ id, name: name.trim(), members, creator_id: decoded.id });
+    const room = await Room.create({ id, name: name.trim(), members, creator_id: decoded.id, type: 'group' });
     const memberUsers = await User.find({ id: { $in: members } }, { id: 1, username: 1, display_name: 1, avatar: 1 }).lean();
     const memberDetails = memberUsers.map(u => ({ id: u.id, username: u.username, displayName: u.display_name || u.username, avatar: u.avatar }));
     const roomObj = { id: room.id, name: room.name, icon: room.icon, members: room.members, memberDetails, pinned_message_id: null, lastMessage: null };
