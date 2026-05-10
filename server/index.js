@@ -2127,6 +2127,7 @@ app.get('/api/rooms', async (req, res) => {
       const lastMsg = lastMsgMap[r.id];
       return {
         id: r.id, name: r.name, icon: r.icon, members: r.members,
+        type: r.type || (r.creator_id ? 'group' : 'dm'),
         memberDetails,
         pinned_message_id: r.pinned_message_id,
         announcement: r.announcement || null,

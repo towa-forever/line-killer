@@ -3395,8 +3395,10 @@ function FriendInviteSection({ roomId, members = [], friendsList = [], showToast
   const [selected, setSelected] = useState([]);
   const [inviting, setInviting] = useState(false);
 
-  // membersは文字列IDの配列またはオブジェクトの配列どちらでも対応
-  const memberIds = new Set(members.map(m => (typeof m === 'string' ? m : (m.id || m._id || ''))).filter(Boolean));
+  // membersは文字列IDの配列（memberDetailsは別フィールド）
+  const memberIds = new Set([
+    ...members.map(m => (typeof m === 'string' ? m : (m.id || m._id || ''))),
+  ].filter(Boolean));
   const invitable = (friendsList || []).filter(f => {
     const fid = f.id || f._id || '';
     return fid && !memberIds.has(fid);
