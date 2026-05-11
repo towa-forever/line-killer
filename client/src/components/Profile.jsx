@@ -264,7 +264,7 @@ function AutoStatusRules({ currentUser, saveSettings }) {
   );
 }
 
-export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccount, darkMode, onToggleDark, darkAutoMode, onToggleAuto, onContact, onOpenPinSetup, onNavigate, onOpenAdmin }) {
+export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccount, darkMode, onToggleDark, darkAutoMode, onToggleAuto, onContact, onOpenPinSetup, onNavigate, onOpenAdmin, onOpenShop }) {
   const [editing, setEditing] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser?.displayName || '');
@@ -683,6 +683,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
             {[
               { icon:'📢', label:'お知らせ', tab:'timeline' },
               { icon:'📊', label:'ダッシュボード', tab:'dashboard' },
+              { icon:'🎫', label:'スタンプショップ', tab:'stampshop' },
             ].map(item => (
               <button key={item.tab} onClick={() => onNavigate(item.tab)}
                 style={{ flex:1, padding:'10px 4px', borderRadius:14, background:'var(--surface)', border:'1px solid var(--border)', fontSize:13, fontWeight:600, cursor:'pointer', color:'var(--text)', display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>

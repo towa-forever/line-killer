@@ -270,7 +270,7 @@ const EphemeralBubble = React.memo(function EphemeralBubble({ msg, isMine }) {
   );
 }); // React.memo
 
-function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate, onReadRoom, setShowBroadcast, pinnedRooms = [], setPinnedRooms, showWhiteboard = false, setShowWhiteboard }) {
+function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate, onReadRoom, setShowBroadcast, pinnedRooms = [], setPinnedRooms, showWhiteboard = false, setShowWhiteboard, showQuickReply = false, setShowQuickReply, quickReplies = [], setQuickReplies }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -1425,93 +1425,116 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             }}>📞</button>
             <button className="icon-btn header-menu-btn" onClick={() => dispatchModal({ type: 'TOGGLE', key: 'showHeaderMenu' })} title="メニュー">⋯</button>
             {showHeaderMenu && (
-              <div className="header-menu-dropdown" onClick={() => setShowHeaderMenu(false)}>
-                {[
-                  { icon:'🔍', label:'全体検索', action: () => { setShowGlobalSearch(true); setShowHeaderMenu(false); } },
-                  { icon:'🏠', label:'ダッシュボード', action: () => { onNavigate?.('dashboard'); setShowHeaderMenu(false); } },
-                  { icon:'📷', label:'アルバム', action: () => { onNavigate?.('album'); setShowHeaderMenu(false); } },
-                  { icon:'⭐', label:'お気に入り', action: () => {
-                    axios.get('/api/favorites').then(r => { setFavoritesList(r.data); setShowFavorites(true); }).catch(() => {});
-                  }},
-                  { icon:'📊', label:'チャット統計', action: () => setShowStats(true) },
-                  { icon:'🔖', label:'ブックマーク', action: () => { axios.get('/api/bookmarks').then(r => { setBookmarkedMsgs(r.data); setShowBookmarks(true); }).catch(() => {}); } },
-                  { icon: mutedRooms.has(selectedRoom.id)?'🔕':'🔔', label: mutedRooms.has(selectedRoom.id)?'ミュート解除':'ミュート', action: () => {
-                    const isMuted = mutedRooms.has(selectedRoom.id);
-                    if (isMuted) { axios.delete('/api/rooms/'+selectedRoom.id+'/mute'); setMutedRooms(prev=>{const n=new Set(prev);n.delete(selectedRoom.id);return n;}); }
-                    else { axios.post('/api/rooms/'+selectedRoom.id+'/mute'); setMutedRooms(prev=>new Set([...prev,selectedRoom.id])); }
-                  }},
-                  { icon:'📝', label:'ノート', action: () => setShowNote(true) },
-                  { icon:'🔖', label:'後で読む一覧', action: () => setShowReadLater(true) },
-                  { icon:'🖼️', label:'画像・動画', action: () => setShowMediaList(true) },
-                  { icon:'📅', label:'カレンダー', action: () => setShowEventCal(true) },
-                  { icon:'✅', label:'タスク', action: () => setShowTaskPanel(true) },
-                  { icon:'🎮', label:'ゲーム', action: () => setShowMiniGame(true) },
-                  { icon:'🖼️', label:'スタンプ自作', action: () => setShowStickerMaker(true) },
-                  { icon:'📞', label:'音声通話', action: () => {
-                    if (selectedRoom?.members?.length > 2) { showToast?.('音声通話はDMのみ対応やで', 'error'); return; }
-                    const otherId = selectedRoom?.members?.find(m => m !== currentUser.id);
-                    const otherDetail = selectedRoom?.memberDetails?.find(m => m.id === otherId);
-                    setVoiceCall({ targetUser: otherId ? { id: otherId, displayName: otherDetail?.displayName || otherDetail?.username || selectedRoom.name, avatar: otherDetail?.avatar } : null, isIncoming: false, roomId: selectedRoom?.id, callId: null });
-                  } },
-                  { icon:'🤖', label:'AIアシスタント', action: () => setShowAI(true) },
-                  { icon:'🌈', label:'背景を変える', action: () => setShowBgPicker(true) },
-                  { icon:'📤', label:'チャットをエクスポート', action: () => setShowExport(true) },
-                  { icon:'⏰', label:'予約送信一覧', action: () => {
-                    axios.get('/api/rooms/' + selectedRoom.id + '/schedules').then(r => { setScheduleList(r.data || []); setShowScheduleList(true); }).catch(() => setShowScheduleList(true));
-                  }},
-                  { icon:'🔔', label:'通知設定', action: () => setShowNotifSettings(true) },
-                  { icon:'🏅', label:'バッジ', action: () => { axios.get('/api/badges').then(r => { setBadgeList(r.data); setShowBadges(true); }).catch(() => {}); } },
-                  { icon:'🎰', label:'デイリーボーナス', action: () => {
-                    axios.post('/api/daily-bonus').then(r => { setDailyBonusResult(r.data); setShowDailyBonus(true); }).catch(() => {});
-                  }},
-                  { icon:'🏆', label:'ランキング', action: () => {
-                    axios.get('/api/ranking?type=message').then(r => { setRankingData(r.data); setShowRanking(true); }).catch(() => {});
-                  }},
-                  { icon:'🎨', label:'テーマ', action: () => setShowTheme(true) },
-                  { icon:'📁', label:'ファイル管理', action: () => {
-                    axios.get('/api/rooms/' + selectedRoom.id + '/files').then(r => { setRoomFiles(r.data); setShowFileManager(true); }).catch(() => {});
-                  }},
-                  { icon:'📊', label:'グループ統計', action: () => {
-                    axios.get('/api/rooms/' + selectedRoom.id + '/stats').then(r => { setRoomStats(r.data); setShowStats(true); }).catch(() => {});
-                  }},
-                  { icon:'🔍', label:'メッセージ検索', action: () => { setSearchQuery(''); setSearchResults([]); setShowSearch(true); } },
-                  { icon:'🎰', label:'ルーレット', action: () => { setRouletteResult(null); setShowRoulette(true); } },
-                  { icon:'🔔', label:'通知音設定', action: () => {
-                    axios.get('/api/rooms/' + selectedRoom.id + '/notification').then(r => { setNotifSound(r.data.sound || 'default'); setShowNotifSound(true); }).catch(() => {});
-                  }},
-                  { icon:'🎵', label:'音楽シェア', action: () => setShowMusicShare(true) },
-                  { icon:'🔮', label:'AI占い', action: () => { setFortuneResult(null); setShowFortune(true); } },
-                  { icon:'✅', label:'AIタスク抽出', action: () => {
-                    axios.post('/api/ai/extract-todos', { messages: messages.slice(-30) })
-                      .then(r => { setExtractedTodos(r.data.todos || []); setShowTodo(true); })
-                      .catch(() => { setExtractedTodos([]); setShowTodo(true); });
-                  }},
-                  { icon:'🌍', label:'コミュニティ', action: () => {
-                    axios.get('/api/community/list').then(r => { setCommunityList(r.data); setShowCommunity(true); }).catch(() => {});
-                  }},
-                  { icon:'📁', label:'フォルダ整理', action: () => {
-                    axios.get('/api/folders').then(r => { setFolderList(r.data); setShowFolders(true); }).catch(() => {});
-                  }},
-                  { icon:'👀', label:'アクティビティ', action: () => {
-                    axios.get('/api/friends/activities').then(r => { setFriendActivities(r.data); setShowActivity(true); }).catch(() => {});
-                  }},
-                  { icon:'🗣️', label:'会話練習', action: () => { setPracticeHistory([]); setShowPractice(true); } },
-                  { icon:'🔤', label:'文字サイズ', action: () => {
-                    const sizes = ['small','medium','large'];
-                    const next = sizes[(sizes.indexOf(fontSize)+1) % sizes.length];
-                    setFontSize(next);
-                    axios.patch('/api/users/me', { font_size: next }).catch(() => {});
-                  }},
-                  { icon:'🎂', label:'誕生日', action: () => {
-                    axios.get('/api/friends/birthdays').then(r => { setBirthdayFriends(r.data); setShowBirthday(true); }).catch(() => {});
-                  }},
-                  ...(currentUser?.is_official || currentUser?.isOfficial ? [{ icon:'📣', label:'一斉送信', action: () => setShowBroadcast(true) }] : []),
-                ].map(item => (
-                  <button key={item.label} className="header-menu-item" onClick={() => { setShowHeaderMenu(false); item.action(); }}>
-                    <span className="header-menu-icon">{item.icon}</span>
-                    <span>{item.label}</span>
-                  </button>
-                ))}
+              <div style={{ position:'absolute', top:'100%', right:0, zIndex:3000, background:'var(--surface)', borderRadius:16, boxShadow:'0 8px 32px rgba(0,0,0,0.18)', width:320, maxHeight:'80dvh', overflowY:'auto', padding:'8px 0' }}
+                onClick={e => e.stopPropagation()}>
+                {/* このトーク */}
+                <div style={{ padding:'8px 16px 4px', fontSize:11, fontWeight:700, color:'var(--text2)', letterSpacing:1 }}>このトーク</div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:4, padding:'4px 12px 8px' }}>
+                  {[
+                    { icon:'🔍', label:'検索', action: () => { setSearchQuery(''); setSearchResults([]); setShowSearch(true); } },
+                    { icon:'📌', label:'ノート', action: () => setShowNote(true) },
+                    { icon:'🖼️', label:'画像/動画', action: () => setShowMediaList(true) },
+                    { icon:'📁', label:'ファイル', action: () => { axios.get('/api/rooms/' + selectedRoom.id + '/files').then(r => { setRoomFiles(r.data); setShowFileManager(true); }).catch(() => {}); } },
+                    { icon: mutedRooms.has(selectedRoom.id)?'🔕':'🔔', label: mutedRooms.has(selectedRoom.id)?'ミュート解除':'ミュート', action: () => {
+                      const isMuted = mutedRooms.has(selectedRoom.id);
+                      if (isMuted) { axios.delete('/api/rooms/'+selectedRoom.id+'/mute'); setMutedRooms(prev=>{const n=new Set(prev);n.delete(selectedRoom.id);return n;}); }
+                      else { axios.post('/api/rooms/'+selectedRoom.id+'/mute'); setMutedRooms(prev=>new Set([...prev,selectedRoom.id])); }
+                    }},
+                    { icon:'⭐', label:'重要', action: () => { axios.get('/api/favorites').then(r => { setFavoritesList(r.data); setShowFavorites(true); }).catch(() => {}); } },
+                    { icon:'🔖', label:'後で読む', action: () => setShowReadLater(true) },
+                    { icon:'📤', label:'エクスポート', action: () => setShowExport(true) },
+                  ].map(item => (
+                    <button key={item.label} onClick={() => { setShowHeaderMenu(false); item.action(); }}
+                      style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'10px 4px', borderRadius:12, border:'none', background:'var(--surface2)', cursor:'pointer', fontSize:11, color:'var(--text)', fontWeight:600 }}>
+                      <span style={{ fontSize:22 }}>{item.icon}</span>{item.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ツール */}
+                <div style={{ height:1, background:'var(--border)', margin:'4px 12px' }} />
+                <div style={{ padding:'8px 16px 4px', fontSize:11, fontWeight:700, color:'var(--text2)', letterSpacing:1 }}>ツール</div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:4, padding:'4px 12px 8px' }}>
+                  {[
+                    { icon:'📅', label:'カレンダー', action: () => setShowEventCal(true) },
+                    { icon:'✅', label:'タスク', action: () => setShowTaskPanel(true) },
+                    { icon:'⏰', label:'予約送信', action: () => { axios.get('/api/rooms/' + selectedRoom.id + '/schedules').then(r => { setScheduleList(r.data || []); setShowScheduleList(true); }).catch(() => setShowScheduleList(true)); } },
+                    { icon:'📊', label:'統計', action: () => { axios.get('/api/rooms/' + selectedRoom.id + '/stats').then(r => { setRoomStats(r.data); setShowStats(true); }).catch(() => {}); } },
+                    { icon:'💬', label:'クイック返信', action: () => setShowQuickReply(true) },
+                    { icon:'🔤', label:'文字サイズ', action: () => { const s=['small','medium','large']; const n=s[(s.indexOf(fontSize)+1)%s.length]; setFontSize(n); axios.patch('/api/users/me',{font_size:n}).catch(()=>{}); showToast?.('文字サイズ変更: '+n,'success'); } },
+                    { icon:'🌈', label:'背景', action: () => setShowBgPicker(true) },
+                    { icon:'📞', label:'音声通話', action: () => {
+                      if (selectedRoom?.members?.length > 2) { showToast?.('音声通話はDMのみやで','error'); return; }
+                      const otherId = selectedRoom?.members?.find(m => m !== currentUser.id);
+                      const otherDetail = selectedRoom?.memberDetails?.find(m => m.id === otherId);
+                      setVoiceCall({ targetUser: otherId ? { id: otherId, displayName: otherDetail?.displayName || selectedRoom.name, avatar: otherDetail?.avatar } : null, isIncoming: false, roomId: selectedRoom?.id, callId: null });
+                    } },
+                  ].map(item => (
+                    <button key={item.label} onClick={() => { setShowHeaderMenu(false); item.action(); }}
+                      style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'10px 4px', borderRadius:12, border:'none', background:'var(--surface2)', cursor:'pointer', fontSize:11, color:'var(--text)', fontWeight:600 }}>
+                      <span style={{ fontSize:22 }}>{item.icon}</span>{item.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* AI */}
+                <div style={{ height:1, background:'var(--border)', margin:'4px 12px' }} />
+                <div style={{ padding:'8px 16px 4px', fontSize:11, fontWeight:700, color:'var(--text2)', letterSpacing:1 }}>AI</div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:4, padding:'4px 12px 8px' }}>
+                  {[
+                    { icon:'🤖', label:'アシスタント', action: () => setShowAI(true) },
+                    { icon:'🔮', label:'AI占い', action: () => { setFortuneResult(null); setShowFortune(true); } },
+                    { icon:'✅', label:'タスク抽出', action: () => { axios.post('/api/ai/extract-todos',{messages:messages.slice(-30)}).then(r=>{setExtractedTodos(r.data.todos||[]);setShowTodo(true);}).catch(()=>{setExtractedTodos([]);setShowTodo(true);}); } },
+                    { icon:'🗣️', label:'会話練習', action: () => { setPracticeHistory([]); setShowPractice(true); } },
+                  ].map(item => (
+                    <button key={item.label} onClick={() => { setShowHeaderMenu(false); item.action(); }}
+                      style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'10px 4px', borderRadius:12, border:'none', background:'var(--surface2)', cursor:'pointer', fontSize:11, color:'var(--text)', fontWeight:600 }}>
+                      <span style={{ fontSize:22 }}>{item.icon}</span>{item.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* エンタメ */}
+                <div style={{ height:1, background:'var(--border)', margin:'4px 12px' }} />
+                <div style={{ padding:'8px 16px 4px', fontSize:11, fontWeight:700, color:'var(--text2)', letterSpacing:1 }}>エンタメ</div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:4, padding:'4px 12px 8px' }}>
+                  {[
+                    { icon:'🎮', label:'ゲーム', action: () => setShowMiniGame(true) },
+                    { icon:'🎰', label:'ルーレット', action: () => { setRouletteResult(null); setShowRoulette(true); } },
+                    { icon:'🎰', label:'ボーナス', action: () => { axios.post('/api/daily-bonus').then(r=>{setDailyBonusResult(r.data);setShowDailyBonus(true);}).catch(()=>{}); } },
+                    { icon:'🏆', label:'ランキング', action: () => { axios.get('/api/ranking?type=message').then(r=>{setRankingData(r.data);setShowRanking(true);}).catch(()=>{}); } },
+                    { icon:'🖼️', label:'スタンプ作成', action: () => setShowStickerMaker(true) },
+                    { icon:'🎵', label:'音楽シェア', action: () => setShowMusicShare(true) },
+                    { icon:'🌍', label:'コミュニティ', action: () => { axios.get('/api/community/list').then(r=>{setCommunityList(r.data);setShowCommunity(true);}).catch(()=>{}); } },
+                    ...(currentUser?.is_official||currentUser?.isOfficial ? [{ icon:'📣', label:'一斉送信', action: () => setShowBroadcast(true) }] : []),
+                  ].map(item => (
+                    <button key={item.label} onClick={() => { setShowHeaderMenu(false); item.action(); }}
+                      style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'10px 4px', borderRadius:12, border:'none', background:'var(--surface2)', cursor:'pointer', fontSize:11, color:'var(--text)', fontWeight:600 }}>
+                      <span style={{ fontSize:22 }}>{item.icon}</span>{item.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 全体 */}
+                <div style={{ height:1, background:'var(--border)', margin:'4px 12px' }} />
+                <div style={{ padding:'8px 16px 4px', fontSize:11, fontWeight:700, color:'var(--text2)', letterSpacing:1 }}>全体</div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:4, padding:'4px 12px 12px' }}>
+                  {[
+                    { icon:'🔍', label:'全体検索', action: () => { setShowGlobalSearch(true); } },
+                    { icon:'🏠', label:'ダッシュボード', action: () => onNavigate?.('dashboard') },
+                    { icon:'📷', label:'アルバム', action: () => onNavigate?.('album') },
+                    { icon:'👀', label:'アクティビティ', action: () => { axios.get('/api/friends/activities').then(r=>{setFriendActivities(r.data);setShowActivity(true);}).catch(()=>{}); } },
+                    { icon:'🎂', label:'誕生日', action: () => { axios.get('/api/friends/birthdays').then(r=>{setBirthdayFriends(r.data);setShowBirthday(true);}).catch(()=>{}); } },
+                    { icon:'📁', label:'フォルダ', action: () => { axios.get('/api/folders').then(r=>{setFolderList(r.data);setShowFolders(true);}).catch(()=>{}); } },
+                    { icon:'🏅', label:'バッジ', action: () => { axios.get('/api/badges').then(r=>{setBadgeList(r.data);setShowBadges(true);}).catch(()=>{}); } },
+                    { icon:'🎨', label:'テーマ', action: () => setShowTheme(true) },
+                  ].map(item => (
+                    <button key={item.label} onClick={() => { setShowHeaderMenu(false); item.action(); }}
+                      style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'10px 4px', borderRadius:12, border:'none', background:'var(--surface2)', cursor:'pointer', fontSize:11, color:'var(--text)', fontWeight:600 }}>
+                      <span style={{ fontSize:22 }}>{item.icon}</span>{item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -3546,12 +3569,11 @@ function BroadcastModal({ currentUser, onClose, showToast }) {
 
 const TabBar = React.memo(function TabBar({ activeTab, setActiveTab, notifications, onClearNotif }) {
   const tabs = [
-    { id: 'chat',      label: 'トーク',       icon: '💬' },
-    { id: 'friends',   label: '友達',         icon: '👥' },
-    { id: 'timeline',  label: 'お知らせ',      icon: '📢' },
-    { id: 'voom',       label: 'VOOM',          icon: '🎬' },
-    { id: 'stampshop', label: 'ショップ',      icon: '🎫' },
-    { id: 'profile',   label: 'プロフィール',  icon: '👤' },
+    { id: 'chat',     label: 'トーク',       icon: '💬' },
+    { id: 'friends',  label: '友達',         icon: '👥' },
+    { id: 'timeline', label: 'お知らせ',     icon: '📢' },
+    { id: 'voom',     label: 'VOOM',         icon: '🎬' },
+    { id: 'profile',  label: 'マイページ',   icon: '👤' },
   ];
   return (
     <nav className="tab-bar">
@@ -3622,6 +3644,11 @@ export default function App() {
   const [voiceCall, setVoiceCall] = useState(null); // { targetUser, isIncoming, callId, roomId }
   const [showGift, setShowGift] = useState(null);
   const [showWhiteboard, setShowWhiteboard] = useState(false);
+  const [showQuickReply, setShowQuickReply] = useState(false);
+  const [quickReplies, setQuickReplies] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('quickReplies') || '[]'); } catch { return []; }
+  });
+  const [newQuickReply, setNewQuickReply] = useState('');
   const [showReadLater, setShowReadLater] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [pinVerified, setPinVerified] = useState(true);
@@ -3918,7 +3945,7 @@ export default function App() {
     <>
       {/* 全タブ常時マウント（タブ切替でstateリセットされないように） */}
       <div style={tabVisible('chat')}>
-        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} onNavigate={setActiveTab} onReadRoom={handleReadRoom} setShowBroadcast={setShowBroadcast} pinnedRooms={pinnedRooms} setPinnedRooms={setPinnedRooms} showWhiteboard={showWhiteboard} setShowWhiteboard={setShowWhiteboard} />
+        <ChatScreen socket={socket} currentUser={currentUser} allStampSets={allStampSets} acquiredStampIds={acquiredStampIds} friendsList={friendsList} onCall={setActiveCall} setGroupCall={setGroupCall} onlineUsers={onlineUsers} bookmarks={bookmarks} setBookmarks={setBookmarks} mutedRooms={mutedRooms} setMutedRooms={setMutedRooms} soundTheme={currentUser?.soundTheme || 'default'} setShowSubAccounts={setShowSubAccounts} setVoiceCall={setVoiceCall} showToast={showToast} setShowGift={setShowGift} setShowReadLater={setShowReadLater} onNavigate={setActiveTab} onReadRoom={handleReadRoom} setShowBroadcast={setShowBroadcast} pinnedRooms={pinnedRooms} setPinnedRooms={setPinnedRooms} showWhiteboard={showWhiteboard} setShowWhiteboard={setShowWhiteboard} showQuickReply={showQuickReply} setShowQuickReply={setShowQuickReply} quickReplies={quickReplies} setQuickReplies={setQuickReplies} />
       </div>
       <div style={tabVisible('friends')}>
         <ErrorBoundary><Suspense fallback={<div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,fontSize:32,color:'var(--text2)'}}>⏳</div>}>
@@ -3962,7 +3989,8 @@ export default function App() {
             darkAutoMode={darkAutoMode} onToggleAuto={handleToggleAuto}
             onOpenPinSetup={handleOpenPinSetup}
             onNavigate={setActiveTab}
-            onSwitchAccount={handleSwitchAccount} />
+            onSwitchAccount={handleSwitchAccount}
+            onOpenShop={() => setActiveTab('stampshop')} />
         </Suspense></ErrorBoundary>
       </div>
     </>
@@ -4040,6 +4068,71 @@ export default function App() {
           <ErrorBoundary><Suspense fallback={null}>
             <PinSetup enabled={!!currentUser?.pinEnabled} onClose={handleClosePinSetup} />
           </Suspense></ErrorBoundary>
+        )}
+
+        {/* 共有ホワイトボード */}
+        {showWhiteboard && selectedRoom && (
+          <ErrorBoundary><Suspense fallback={null}>
+            <SharedWhiteboard socket={socket} roomId={selectedRoom.id} onClose={() => setShowWhiteboard(false)} />
+          </Suspense></ErrorBoundary>
+        )}
+
+        {/* クイック返信 */}
+        {showQuickReply && (
+          <Portal>
+            <div className="modal-overlay" onClick={() => setShowQuickReply(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', display:'flex', flexDirection:'column', padding:0, overflow:'hidden' }}>
+                <div style={{ padding:'16px 16px 12px', borderBottom:'1px solid var(--border)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div style={{ fontWeight:700, fontSize:16 }}>💬 クイック返信</div>
+                  <button onClick={() => setShowQuickReply(false)} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
+                </div>
+                <div style={{ overflowY:'auto', flex:1, padding:'8px 16px' }}>
+                  {quickReplies.length === 0 && (
+                    <div style={{ textAlign:'center', color:'var(--text2)', padding:'24px 0', fontSize:13 }}>
+                      よく使うフレーズを登録してな！<br/>ワンタップで送信できるで
+                    </div>
+                  )}
+                  {quickReplies.map((qr, i) => (
+                    <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                      <button onClick={() => {
+                        setInput(prev => prev + qr);
+                        setShowQuickReply(false);
+                      }} style={{ flex:1, textAlign:'left', padding:'8px 12px', borderRadius:10, background:'var(--surface2)', border:'none', cursor:'pointer', fontSize:14, color:'var(--text)' }}>
+                        {qr}
+                      </button>
+                      <button onClick={() => {
+                        const next = quickReplies.filter((_, j) => j !== i);
+                        setQuickReplies(next);
+                        localStorage.setItem('quickReplies', JSON.stringify(next));
+                      }} style={{ fontSize:14, color:'var(--danger)', background:'none', border:'none', cursor:'pointer', padding:'4px 8px' }}>🗑️</button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ padding:'12px 16px', borderTop:'1px solid var(--border)', flexShrink:0 }}>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <input className="form-input" style={{ flex:1, marginBottom:0, fontSize:14 }}
+                      value={newQuickReply} onChange={e => setNewQuickReply(e.target.value)}
+                      placeholder="フレーズを入力..."
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && newQuickReply.trim()) {
+                          const next = [...quickReplies, newQuickReply.trim()];
+                          setQuickReplies(next);
+                          localStorage.setItem('quickReplies', JSON.stringify(next));
+                          setNewQuickReply('');
+                        }
+                      }} />
+                    <button className="btn btn-primary" onClick={() => {
+                      if (!newQuickReply.trim()) return;
+                      const next = [...quickReplies, newQuickReply.trim()];
+                      setQuickReplies(next);
+                      localStorage.setItem('quickReplies', JSON.stringify(next));
+                      setNewQuickReply('');
+                    }}>追加</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Portal>
         )}
 
         {/* ギフト送信 */}
