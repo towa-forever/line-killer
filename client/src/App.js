@@ -272,6 +272,7 @@ const EphemeralBubble = React.memo(function EphemeralBubble({ msg, isMine }) {
 
 function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate, onReadRoom, setShowBroadcast, pinnedRooms = [], setPinnedRooms, showWhiteboard = false, setShowWhiteboard, showQuickReply = false, setShowQuickReply, quickReplies = [], setQuickReplies }) {
   const [rooms, setRooms] = useState([]);
+  const [newQuickReply, setNewQuickReply] = useState('');
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const messagesCache = useRef({});
@@ -3711,11 +3712,9 @@ export default function App() {
   const [showGift, setShowGift] = useState(null);
   const [showWhiteboard, setShowWhiteboard] = useState(false);
   const [showQuickReply, setShowQuickReply] = useState(false);
-  const [newQuickReply, setNewQuickReply] = useState('');
   const [quickReplies, setQuickReplies] = useState(() => {
     try { return JSON.parse(localStorage.getItem('quickReplies') || '[]'); } catch { return []; }
   });
-  const [newQuickReply, setNewQuickReply] = useState('');
   const [showReadLater, setShowReadLater] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [pinVerified, setPinVerified] = useState(true);
