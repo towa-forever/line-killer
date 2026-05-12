@@ -3261,6 +3261,72 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           onCreated={handleRoomCreated}
         /></Suspense></ErrorBoundary>
       )}</Portal>
+
+      {/* 共有ホワイトボード */}
+      {showWhiteboard && selectedRoom && (
+        <ErrorBoundary><Suspense fallback={null}>
+          <SharedWhiteboard socket={socket} roomId={selectedRoom.id} onClose={() => setShowWhiteboard(false)} />
+        </Suspense></ErrorBoundary>
+      )}
+
+      {/* クイック返信 */}
+      {showQuickReply && (
+        <Portal>
+          <div className="modal-overlay" onClick={() => setShowQuickReply(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', display:'flex', flexDirection:'column', padding:0, overflow:'hidden' }}>
+              <div style={{ padding:'16px 16px 12px', borderBottom:'1px solid var(--border)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ fontWeight:700, fontSize:16 }}>💬 クイック返信</div>
+                <button onClick={() => setShowQuickReply(false)} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
+              </div>
+              <div style={{ overflowY:'auto', flex:1, padding:'8px 16px' }}>
+                {quickReplies.length === 0 && (
+                  <div style={{ textAlign:'center', color:'var(--text2)', padding:'24px 0', fontSize:13 }}>
+                    よく使うフレーズを登録してな！<br/>ワンタップで送信できるで
+                  </div>
+                )}
+                {quickReplies.map((qr, i) => (
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                    <button onClick={() => {
+                      setInputText(prev => prev + qr);
+                      setShowQuickReply(false);
+                    }} style={{ flex:1, textAlign:'left', padding:'8px 12px', borderRadius:10, background:'var(--surface2)', border:'none', cursor:'pointer', fontSize:14, color:'var(--text)' }}>
+                      {qr}
+                    </button>
+                    <button onClick={() => {
+                      const next = quickReplies.filter((_, j) => j !== i);
+                      setQuickReplies(next);
+                      localStorage.setItem('quickReplies', JSON.stringify(next));
+                    }} style={{ fontSize:14, color:'var(--danger)', background:'none', border:'none', cursor:'pointer', padding:'4px 8px' }}>🗑️</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding:'12px 16px', borderTop:'1px solid var(--border)', flexShrink:0 }}>
+                <div style={{ display:'flex', gap:8 }}>
+                  <input className="form-input" style={{ flex:1, marginBottom:0, fontSize:14 }}
+                    value={newQuickReply} onChange={e => setNewQuickReply(e.target.value)}
+                    placeholder="フレーズを入力..."
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && newQuickReply.trim()) {
+                        const next = [...quickReplies, newQuickReply.trim()];
+                        setQuickReplies(next);
+                        localStorage.setItem('quickReplies', JSON.stringify(next));
+                        setNewQuickReply('');
+                      }
+                    }} />
+                  <button className="btn btn-primary" onClick={() => {
+                    if (!newQuickReply.trim()) return;
+                    const next = [...quickReplies, newQuickReply.trim()];
+                    setQuickReplies(next);
+                    localStorage.setItem('quickReplies', JSON.stringify(next));
+                    setNewQuickReply('');
+                  }}>追加</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
+
     </div>
   );
 }
@@ -4069,72 +4135,6 @@ export default function App() {
             <PinSetup enabled={!!currentUser?.pinEnabled} onClose={handleClosePinSetup} />
           </Suspense></ErrorBoundary>
         )}
-
-        {/* 共有ホワイトボード */}
-        {showWhiteboard && selectedRoom && (
-          <ErrorBoundary><Suspense fallback={null}>
-            <SharedWhiteboard socket={socket} roomId={selectedRoom.id} onClose={() => setShowWhiteboard(false)} />
-          </Suspense></ErrorBoundary>
-        )}
-
-        {/* クイック返信 */}
-        {showQuickReply && (
-          <Portal>
-            <div className="modal-overlay" onClick={() => setShowQuickReply(false)}>
-              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight:'80vh', display:'flex', flexDirection:'column', padding:0, overflow:'hidden' }}>
-                <div style={{ padding:'16px 16px 12px', borderBottom:'1px solid var(--border)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                  <div style={{ fontWeight:700, fontSize:16 }}>💬 クイック返信</div>
-                  <button onClick={() => setShowQuickReply(false)} style={{ fontSize:20, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
-                </div>
-                <div style={{ overflowY:'auto', flex:1, padding:'8px 16px' }}>
-                  {quickReplies.length === 0 && (
-                    <div style={{ textAlign:'center', color:'var(--text2)', padding:'24px 0', fontSize:13 }}>
-                      よく使うフレーズを登録してな！<br/>ワンタップで送信できるで
-                    </div>
-                  )}
-                  {quickReplies.map((qr, i) => (
-                    <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
-                      <button onClick={() => {
-                        setInput(prev => prev + qr);
-                        setShowQuickReply(false);
-                      }} style={{ flex:1, textAlign:'left', padding:'8px 12px', borderRadius:10, background:'var(--surface2)', border:'none', cursor:'pointer', fontSize:14, color:'var(--text)' }}>
-                        {qr}
-                      </button>
-                      <button onClick={() => {
-                        const next = quickReplies.filter((_, j) => j !== i);
-                        setQuickReplies(next);
-                        localStorage.setItem('quickReplies', JSON.stringify(next));
-                      }} style={{ fontSize:14, color:'var(--danger)', background:'none', border:'none', cursor:'pointer', padding:'4px 8px' }}>🗑️</button>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ padding:'12px 16px', borderTop:'1px solid var(--border)', flexShrink:0 }}>
-                  <div style={{ display:'flex', gap:8 }}>
-                    <input className="form-input" style={{ flex:1, marginBottom:0, fontSize:14 }}
-                      value={newQuickReply} onChange={e => setNewQuickReply(e.target.value)}
-                      placeholder="フレーズを入力..."
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && newQuickReply.trim()) {
-                          const next = [...quickReplies, newQuickReply.trim()];
-                          setQuickReplies(next);
-                          localStorage.setItem('quickReplies', JSON.stringify(next));
-                          setNewQuickReply('');
-                        }
-                      }} />
-                    <button className="btn btn-primary" onClick={() => {
-                      if (!newQuickReply.trim()) return;
-                      const next = [...quickReplies, newQuickReply.trim()];
-                      setQuickReplies(next);
-                      localStorage.setItem('quickReplies', JSON.stringify(next));
-                      setNewQuickReply('');
-                    }}>追加</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Portal>
-        )}
-
         {/* ギフト送信 */}
         {showGift && (
           <ErrorBoundary><Suspense fallback={null}>
