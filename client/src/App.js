@@ -3711,6 +3711,7 @@ export default function App() {
   const [showGift, setShowGift] = useState(null);
   const [showWhiteboard, setShowWhiteboard] = useState(false);
   const [showQuickReply, setShowQuickReply] = useState(false);
+  const [newQuickReply, setNewQuickReply] = useState('');
   const [quickReplies, setQuickReplies] = useState(() => {
     try { return JSON.parse(localStorage.getItem('quickReplies') || '[]'); } catch { return []; }
   });
