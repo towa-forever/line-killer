@@ -489,6 +489,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const msgStyleRef = useRef(msgStyle);
   useEffect(() => { msgStyleRef.current = msgStyle; }, [msgStyle]);
   const messagesEndRef = useRef(null);
+  const readObserverRef = useRef(null); // 既読用IntersectionObserver
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -811,11 +812,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
           if (socket) {
             socket.emit('room:join', currentRoomId);
-            (messagesCache.current[currentRoomId] || []).forEach(msg => {
-              if ((msg.senderId || msg.sender_id) !== currentUser?.id && !msg.read_by?.includes(currentUser?.id)) {
-                socket.emit('message:read', { messageId: msg.id, roomId: currentRoomId });
-              }
-            });
+            // 既読はIntersectionObserverで画面に表示された時のみ送信
           }
           return;
         }
@@ -841,11 +838,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
         if (socket) {
           socket.emit('room:join', selectedRoom.id);
-          res.data.forEach(msg => {
-            if (msg.senderId !== currentUser.id && !msg.read_by?.includes(currentUser.id)) {
-              socket.emit('message:read', { messageId: msg.id, roomId: selectedRoom.id });
-            }
-          });
+          // 既読はIntersectionObserverで画面に表示された時のみ送信
         }
       } catch (err) { console.error(err); }
     })();
@@ -857,6 +850,37 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }); // 'smooth'より速い
     }
   }, [messages]);
+
+  // IntersectionObserver で画面に入ったメッセージを既読にする
+  useEffect(() => {
+    if (!socket || !selectedRoom || !currentUser) return;
+    const roomId = selectedRoom.id;
+
+    // 前のObserverを解除
+    if (readObserverRef.current) readObserverRef.current.disconnect();
+
+    readObserverRef.current = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const msgId = entry.target.dataset.msgid;
+        const senderId = entry.target.dataset.senderid;
+        if (!msgId || senderId === currentUser.id) return;
+        // まだ既読でなければ送信
+        const msg = messages.find(m => m.id === msgId);
+        if (msg && !msg.read_by?.includes(currentUser.id)) {
+          socket.emit('message:read', { messageId: msgId, roomId });
+        }
+        readObserverRef.current?.unobserve(entry.target);
+      });
+    }, { threshold: 0.5 }); // 50%表示で既読
+
+    // 全メッセージ要素を監視
+    document.querySelectorAll('[data-msgid]').forEach(el => {
+      readObserverRef.current?.observe(el);
+    });
+
+    return () => readObserverRef.current?.disconnect();
+  }, [messages, socket, selectedRoom, currentUser]); // eslint-disable-line
 
   // 過去メッセージを追加読み込み
   const loadMoreMessages = useCallback(async () => {
@@ -1177,7 +1201,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       content = <span style={decoStyle}>{msg.content}</span>;
     }
     return (
-      <div key={msg.id} id={`msg-${msg.id}`} className={`message ${isMine ? 'mine' : 'theirs'}`}
+      <div key={msg.id} id={`msg-${msg.id}`} data-msgid={msg.id} data-senderid={msg.senderId || msg.sender_id} className={`message ${isMine ? 'mine' : 'theirs'}`}
         onContextMenu={(e) => { e.preventDefault(); setMsgMenu({ msg, x: e.clientX, y: e.clientY }); }}
         onTouchStart={(e) => {
           const touch = e.touches[0];

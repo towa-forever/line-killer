@@ -35,7 +35,16 @@ export default function AIAssistant({ messages, currentRoom, onInsert, onClose }
         }
       }
     } catch(e) {
-      setResult('AIへの接続に失敗したで。ANTHROPIC_API_KEYが設定されてるか確認してな。');
+      const msg = e.response?.data?.error || e.message || '';
+      if (e.response?.status === 401) {
+        setResult('❌ 認証エラーやで。ログインし直してみてな。');
+      } else if (e.response?.status === 500 && msg.includes('API')) {
+        setResult('❌ AI APIエラーやで。しばらく待ってから試してみてな。');
+      } else if (e.response?.status === 400) {
+        setResult('❌ ' + (msg || 'メッセージが足りへんで。もう少しトークしてから試してな。'));
+      } else {
+        setResult('❌ AIへの接続に失敗したで。しばらく待ってから試してな。');
+      }
     }
     setLoading(false);
   }, [mode, messages, translateText, translateTarget, wakkabotMsg, emotionText]);

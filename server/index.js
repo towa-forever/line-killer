@@ -3553,6 +3553,7 @@ app.get('/api/friends/birthdays', async (req, res) => {
 app.get('/api/ai/fortune', async (req, res) => {
   try {
     auth(req);
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const signs = ['牡羊座','牡牛座','双子座','蟹座','獅子座','乙女座','天秤座','蠍座','射手座','山羊座','水瓶座','魚座'];
     const { sign } = req.query;
     const today = new Date().toLocaleDateString('ja-JP');
@@ -3571,6 +3572,7 @@ app.get('/api/ai/fortune', async (req, res) => {
 app.post('/api/ai/tldr', async (req, res) => {
   try {
     auth(req);
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const { text } = req.body;
     if (!text?.trim()) return res.status(400).json({ error: 'テキストが空やで' });
     const prompt = `次のメッセージを「要するに：」で始まる1行（30字以内）で要約してください。
@@ -3590,6 +3592,7 @@ ${text}`;
 app.post('/api/ai/extract-todos', async (req, res) => {
   try {
     auth(req);
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const { messages: msgs } = req.body;
     if (!msgs?.length) return res.json({ todos: [] });
     const text = msgs.map(m => `${m.senderName}: ${m.content}`).join('\n');
@@ -3707,6 +3710,7 @@ app.get('/api/friends/activities', async (req, res) => {
 app.post('/api/ai/practice', async (req, res) => {
   try {
     auth(req);
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const { mode, message, history } = req.body;
     // mode: 'english'|'keigo'|'casual'
     const systemPrompts = {
@@ -3903,6 +3907,7 @@ app.get('/api/rooms/:roomId/files', async (req, res) => {
 app.post('/api/ai/wakkabot', async (req, res) => {
   try {
     auth(req);
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const { message, history } = req.body;
     if (!message?.trim()) return res.status(400).json({ error: 'メッセージが空やで' });
     const historyText = (history || []).slice(-10).map(m => `${m.senderName}: ${m.content}`).join('\n');
@@ -3929,6 +3934,7 @@ ${historyText}
 app.post('/api/ai/emotion', async (req, res) => {
   try {
     auth(req);
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const { text } = req.body;
     if (!text?.trim()) return res.status(400).json({ emoji: '😐' });
     const prompt = `次のメッセージの感情を分析して、最も当てはまる絵文字を1つだけ返してください。絵文字以外は何も返さないでください。
@@ -3950,6 +3956,7 @@ app.post('/api/ai/emotion', async (req, res) => {
 app.post('/api/ai/generate-avatar', async (req, res) => {
   try {
     auth(req);
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const { prompt } = req.body;
     if (!prompt?.trim()) return res.status(400).json({ error: 'プロンプトが必要やで' });
     const systemPrompt = `あなたはアバター絵文字を選ぶアシスタントです。
@@ -3975,6 +3982,7 @@ app.post('/api/ai/generate-avatar', async (req, res) => {
 app.post('/api/ai/assist', async (req, res) => {
   try {
     auth(req);
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が設定されてへんで。管理者に連絡してな。' });
     const { type, messages: msgs, text, targetLang } = req.body;
     let prompt = '';
     if (type === 'summary') {
