@@ -3561,7 +3561,7 @@ app.get('/api/ai/fortune', async (req, res) => {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 400, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await response.json();
     res.json({ result: data.content?.[0]?.text || '今日の運勢は不明やで', sign: sign || '全体', signs });
@@ -3581,7 +3581,7 @@ ${text}`;
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 80, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 80, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await response.json();
     res.json({ result: data.content?.[0]?.text || '' });
@@ -3604,7 +3604,7 @@ JSONのみ返してください。`;
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await response.json();
     const raw = data.content?.[0]?.text || '[]';
@@ -3724,7 +3724,7 @@ app.post('/api/ai/practice', async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5', max_tokens: 300,
+        model: 'claude-haiku-4-5-20251001', max_tokens: 300,
         system: prompt,
         messages: [...historyMsgs, { role: 'user', content: message }]
       })
@@ -3793,7 +3793,7 @@ app.post('/api/ai/transcribe', upload.single('audio'), async (req, res) => {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 500,
         messages: [{
           role: 'user',
@@ -3923,7 +3923,7 @@ ${historyText}
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 300, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 300, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await response.json();
     res.json({ result: data.content?.[0]?.text || 'うまく返答できんかったで…' });
@@ -3943,7 +3943,7 @@ app.post('/api/ai/emotion', async (req, res) => {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 10, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 10, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await response.json();
     const emoji = data.content?.[0]?.text?.trim() || '😐';
@@ -3967,7 +3967,7 @@ app.post('/api/ai/generate-avatar', async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 20,
         system: systemPrompt,
         messages: [{ role: 'user', content: `このスタイルのアバターに合う絵文字を選んで: ${prompt}` }]
@@ -4002,15 +4002,22 @@ app.post('/api/ai/assist', async (req, res) => {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      return res.status(500).json({ error: `AI APIエラー: ${err?.error?.message || response.status}` });
+      const errMsg = err?.error?.message || response.status;
+      console.error('[AI assist error]', errMsg);
+      return res.status(500).json({ error: `AI APIエラー: ${errMsg}` });
     }
     const data = await response.json();
-    res.json({ result: data.content?.[0]?.text || 'AIからの返答が空やったで' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+    const result = data.content?.[0]?.text;
+    if (!result) return res.status(500).json({ error: 'AIからの返答が空やったで' });
+    res.json({ result });
+  } catch(e) {
+    console.error('[AI assist exception]', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ===== メッセージ翻訳 =====
@@ -4021,7 +4028,7 @@ app.post('/api/translate', async (req, res) => {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 300,
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 300,
         messages: [{ role: 'user', content: `次のテキストを${targetLang || '日本語'}に翻訳してください。翻訳結果だけ返してください。\n\n${text}` }] })
     });
     const data = await response.json();
