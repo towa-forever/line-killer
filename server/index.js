@@ -3386,37 +3386,6 @@ app.get('/api/users/online', (req, res) => {
 
 
 // ===== グループ統計 =====
-app.get('/api/rooms/:roomId/stats', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }).lean();
-    if (!room) return res.status(403).json({ error: 'アクセス権なし' });
-
-    const msgs = await Message.find({ room_id: req.params.roomId, deleted: false }).lean();
-    const total = msgs.length;
-
-    // 送信者別カウント
-    const byUser = {};
-    msgs.forEach(m => {
-      if (!m.sender_id) return;
-      byUser[m.sender_id] = byUser[m.sender_id] || { name: m.sender_name, count: 0 };
-      byUser[m.sender_id].count++;
-    });
-    const ranking = Object.entries(byUser)
-      .map(([id, v]) => ({ id, name: v.name, count: v.count }))
-      .sort((a, b) => b.count - a.count).slice(0, 10);
-
-    // 時間帯別
-    const byHour = Array(24).fill(0);
-    msgs.forEach(m => { if (m.created_at) byHour[new Date(m.created_at).getHours()]++; });
-
-    // 曜日別
-    const byDay = Array(7).fill(0);
-    msgs.forEach(m => { if (m.created_at) byDay[new Date(m.created_at).getDay()]++; });
-
-    res.json({ total, ranking, byHour, byDay });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
 
 // ===== カスタム通知音設定 =====
 app.patch('/api/rooms/:roomId/notification', async (req, res) => {
@@ -3496,22 +3465,6 @@ app.get('/api/users/me/login-history', async (req, res) => {
 });
 
 // ===== メッセージ検索 =====
-app.get('/api/rooms/:roomId/search', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const { q } = req.query;
-    if (!q || q.length < 1) return res.json([]);
-    const room = await Room.findOne({ id: req.params.roomId, members: decoded.id }).lean();
-    if (!room) return res.status(403).json({ error: 'アクセス権なし' });
-    const msgs = await Message.find({
-      room_id: req.params.roomId,
-      content: { $regex: q, $options: 'i' },
-      deleted: false
-    }).sort({ created_at: -1 }).limit(30).lean();
-    res.json(msgs.map(m => ({ id: m.id, content: m.content, senderName: m.sender_name, createdAt: m.created_at })));
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
 // ===== ルーレット =====
 app.get('/api/rooms/:roomId/roulette', async (req, res) => {
   try {

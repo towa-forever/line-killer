@@ -273,6 +273,10 @@ const EphemeralBubble = React.memo(function EphemeralBubble({ msg, isMine }) {
 function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, friendsList, onCall, setGroupCall, onlineUsers = new Set(), bookmarks = new Set(), setBookmarks, mutedRooms = new Set(), setMutedRooms, soundTheme = 'default', setShowSubAccounts, setVoiceCall, showToast, setShowGift, setShowReadLater, onNavigate, onReadRoom, setShowBroadcast, pinnedRooms = [], setPinnedRooms, showWhiteboard = false, setShowWhiteboard, showQuickReply = false, setShowQuickReply, quickReplies = [], setQuickReplies }) {
   const [rooms, setRooms] = useState([]);
   const [newQuickReply, setNewQuickReply] = useState('');
+  const [aiSuggestions, setAiSuggestions] = useState([]); // AI返信サジェスト
+  const [newMsgCount, setNewMsgCount] = useState(0); // 最下部にいない時の新着数
+  const [suggLoading, setSuggLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const messagesCache = useRef({});
@@ -641,6 +645,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
           const next = [...prev, normalizedMsg];
           return next.length > 500 ? next.slice(-500) : next;
         });
+        // 最下部にいない時は新着カウントを増やす
+        if (!isAtBottomRef.current && senderId !== currentUser?.id) {
+          setNewMsgCount(c => c + 1);
+        }
         // message:receiveと同様に既読を送信
         if (senderId !== currentUser.id) {
           socket.emit('message:read', { messageId: msg.id, roomId });
@@ -789,6 +797,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
     setShowLocation(false);
     setShowSecret(false);
     setMentionSuggestions([]);
+    setNewMsgCount(0);
     if (!selectedRoom) return;
     messagesCache.current._current = selectedRoom.id; // 現在のルームを記録
     hasMoreMessages.current[selectedRoom.id] = true; // 過去メッセージがある可能性あり
@@ -874,10 +883,10 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       });
     }, { threshold: 0.5 }); // 50%表示で既読
 
-    // 全メッセージ要素を監視
-    document.querySelectorAll('[data-msgid]').forEach(el => {
-      readObserverRef.current?.observe(el);
-    });
+    // コンテナ内のメッセージ要素を監視
+    const container = messagesContainerRef.current;
+    const targets = (container || document).querySelectorAll('[data-msgid]');
+    targets.forEach(el => readObserverRef.current?.observe(el));
 
     return () => readObserverRef.current?.disconnect();
   }, [messages, socket, selectedRoom, currentUser]); // eslint-disable-line
@@ -1440,6 +1449,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               {selectedRoom.name} <span style={{ fontSize:12, color:'var(--text2)' }}>⚙️</span>
             </div>
             <button className="icon-btn" onClick={handleSearchToggle}>🔍</button>
+            <button className="icon-btn" onClick={() => setShowSuggestions(s => !s)} title="AI返信サジェスト" style={{ color: showSuggestions ? 'var(--primary)' : undefined }}>✨</button>
             <button className="call-icon-btn" onClick={() => {
               if (selectedRoom.members?.length > 2) {
                 setGroupCall && setGroupCall({ roomId: selectedRoom.id, members: selectedRoom.members, roomName: selectedRoom.name });
@@ -3207,7 +3217,9 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             ref={messagesContainerRef}
             onScroll={(e) => {
               const el = e.currentTarget;
-              isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+              const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+              isAtBottomRef.current = atBottom;
+              if (atBottom) setNewMsgCount(0);
               // 上端近くで過去メッセージ読み込み
               if (el.scrollTop < 60) loadMoreMessages();
             }}
@@ -3225,6 +3237,45 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             )}
             <div ref={messagesEndRef} />
           </div>
+          {/* 新着メッセージジャンプボタン */}
+          {newMsgCount > 0 && (
+            <div style={{ position:'absolute', bottom:70, left:0, right:0, display:'flex', justifyContent:'center', zIndex:10, pointerEvents:'none' }}>
+              <button
+                onClick={() => {
+                  messagesEndRef.current?.scrollIntoView({ behavior:'smooth' });
+                  setNewMsgCount(0);
+                }}
+                style={{ pointerEvents:'auto', padding:'8px 20px', borderRadius:20, background:'var(--primary)', color:'white', border:'none', cursor:'pointer', fontWeight:700, fontSize:13, boxShadow:'0 4px 16px rgba(0,0,0,0.25)', display:'flex', alignItems:'center', gap:6 }}>
+                ⬇ 新着{newMsgCount}件
+              </button>
+            </div>
+          )}
+          {/* AI返信サジェスト */}
+          {showSuggestions && (
+            <div style={{ padding:'8px 12px', borderTop:'1px solid var(--border)', background:'var(--surface)', display:'flex', gap:6, overflowX:'auto', flexShrink:0 }}>
+              <button onClick={async () => {
+                if (suggLoading) return;
+                setSuggLoading(true);
+                try {
+                  const res = await axios.post('/api/ai/assist', { type: 'suggest', messages: messages.slice(-15) });
+                  const lines = (res.data.result || '').split('
+').filter(l => /^\d+\./.test(l.trim()));
+                  setAiSuggestions(lines.map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean).slice(0,3));
+                } catch { setAiSuggestions([]); }
+                setSuggLoading(false);
+              }} style={{ flexShrink:0, padding:'6px 12px', borderRadius:20, background:'var(--primary)20', color:'var(--primary)', border:'1px solid var(--primary)40', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                {suggLoading ? '⏳' : '✨ AI提案'}
+              </button>
+              {aiSuggestions.map((s, i) => (
+                <button key={i} onClick={() => { setInputText(s); setShowSuggestions(false); setAiSuggestions([]); }}
+                  style={{ flexShrink:0, padding:'6px 12px', borderRadius:20, background:'var(--surface2)', color:'var(--text)', border:'1px solid var(--border)', fontSize:12, cursor:'pointer', whiteSpace:'nowrap', maxWidth:200, overflow:'hidden', textOverflow:'ellipsis' }}>
+                  {s}
+                </button>
+              ))}
+              <button onClick={() => { setShowSuggestions(false); setAiSuggestions([]); }}
+                style={{ flexShrink:0, marginLeft:'auto', padding:'6px 10px', borderRadius:20, background:'none', color:'var(--text2)', border:'none', fontSize:14, cursor:'pointer' }}>✕</button>
+            </div>
+          )}
           <InputArea
             inputText={inputText}
             handleTyping={handleTyping}
