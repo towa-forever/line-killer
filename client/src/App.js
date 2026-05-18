@@ -1789,7 +1789,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                           <div key={f.message_id || i} style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)' }}>
                             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
                               <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                                <span style={{ fontSize:11, background:'var(--primary)20', color:'var(--primary)', borderRadius:6, padding:'2px 8px', fontWeight:600 }}>{roomName}</span>
+                                <span style={{ fontSize:11, background:'rgba(59,130,246,0.12)', color:'var(--primary)', borderRadius:6, padding:'2px 8px', fontWeight:600 }}>{roomName}</span>
                                 <span style={{ fontSize:11, color:'var(--text2)' }}>{f.sender_name}</span>
                               </div>
                               <div style={{ display:'flex', gap:8 }}>
@@ -1901,7 +1901,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
                           <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                            <span style={{ fontSize:11, background:'var(--primary)20', color:'var(--primary)', borderRadius:6, padding:'2px 8px', fontWeight:600, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{roomName}</span>
+                            <span style={{ fontSize:11, background:'rgba(59,130,246,0.12)', color:'var(--primary)', borderRadius:6, padding:'2px 8px', fontWeight:600, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{roomName}</span>
                             <span style={{ fontSize:11, color:'var(--text2)' }}>{msg.senderName}</span>
                           </div>
                           <span style={{ fontSize:11, color:'var(--text2)', flexShrink:0 }}>{new Date(msg.createdAt).toLocaleDateString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
@@ -3263,7 +3263,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   setAiSuggestions(lines.map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean).slice(0,3));
                 } catch { setAiSuggestions([]); }
                 setSuggLoading(false);
-              }} style={{ flexShrink:0, padding:'6px 12px', borderRadius:20, background:'var(--primary)20', color:'var(--primary)', border:'1px solid var(--primary)40', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+              }} style={{ flexShrink:0, padding:'6px 12px', borderRadius:20, background:'rgba(59,130,246,0.12)', color:'var(--primary)', border:'1px solid rgba(59,130,246,0.25)', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
                 {suggLoading ? '⏳' : '✨ AI提案'}
               </button>
               {aiSuggestions.map((s, i) => (
@@ -3590,7 +3590,7 @@ function FriendInviteSection({ roomId, members = [], friendsList = [], showToast
   if (!show) return (
     <div style={{ marginBottom:12 }}>
       <button onClick={() => setShow(true)}
-        style={{ width:'100%', padding:'10px 0', borderRadius:12, border:'1.5px dashed var(--primary)', background:'var(--primary)08', color:'var(--primary)', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+        style={{ width:'100%', padding:'10px 0', borderRadius:12, border:'1.5px dashed var(--primary)', background:'rgba(59,130,246,0.05)', color:'var(--primary)', fontWeight:700, fontSize:14, cursor:'pointer' }}>
         👥 友達をグループに招待する
         {invitable.length > 0 && <span style={{ fontSize:12, fontWeight:400, marginLeft:6 }}>（{invitable.length}人招待可能）</span>}
       </button>
@@ -3599,7 +3599,7 @@ function FriendInviteSection({ roomId, members = [], friendsList = [], showToast
 
   return (
     <div style={{ marginBottom:12, border:'1.5px solid var(--primary)', borderRadius:14, overflow:'hidden' }}>
-      <div style={{ padding:'10px 12px', background:'var(--primary)10', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+      <div style={{ padding:'10px 12px', background:'rgba(59,130,246,0.06)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <span style={{ fontWeight:700, fontSize:14, color:'var(--primary)' }}>👥 友達を招待</span>
         <button onClick={() => { setShow(false); setSelected([]); setSearch(''); }}
           style={{ fontSize:18, color:'var(--text2)', background:'none', border:'none', cursor:'pointer' }}>✕</button>
@@ -3618,7 +3618,7 @@ function FriendInviteSection({ roomId, members = [], friendsList = [], showToast
                 const name = f.display_name || f.username;
                 return (
                   <div key={fid} onClick={() => toggle(fid)}
-                    style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 4px', borderBottom:'1px solid var(--border)', cursor:'pointer', borderRadius:8, background: sel ? 'var(--primary)08' : 'transparent' }}>
+                    style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 4px', borderBottom:'1px solid var(--border)', cursor:'pointer', borderRadius:8, background: sel ? 'rgba(59,130,246,0.05)' : 'transparent' }}>
                     <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0, overflow:'hidden' }}>
                       {f.avatar ? <img src={f.avatar} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : name?.[0]?.toUpperCase()}
                     </div>

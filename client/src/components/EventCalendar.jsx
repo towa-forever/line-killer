@@ -221,7 +221,7 @@ export default function EventCalendar({ room, currentUser, socket, onClose }) {
                     return (
                       <div key={d} onClick={() => setSelectedDay(isSel ? null : d)} style={{
                         padding:'6px 2px', borderRadius:10, cursor:'pointer',
-                        background: isSel ? 'var(--primary)' : isToday ? 'var(--primary)20' : 'transparent',
+                        background: isSel ? 'var(--primary)' : isToday ? 'rgba(59,130,246,0.12)' : 'transparent',
                         border: isSel ? '2px solid var(--primary)' : isToday ? '1.5px solid var(--primary)' : '1.5px solid transparent',
                       }}>
                         <span style={{ fontSize:13, color: isSel ? 'white' : isToday ? 'var(--primary)' : 'var(--text)', fontWeight: isToday ? 700 : 400 }}>{d}</span>

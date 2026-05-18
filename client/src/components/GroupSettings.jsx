@@ -147,7 +147,7 @@ export default function GroupSettings({ room, currentUser, friendsList = [], onC
                     style={{
                       display:'flex', alignItems:'center', gap:12, padding:'12px 16px',
                       borderBottom:'1px solid var(--border)', cursor:'pointer',
-                      background: selected ? 'var(--primary)10' : 'transparent',
+                      background: selected ? 'rgba(59,130,246,0.06)' : 'transparent',
                       transition:'background 0.15s',
                     }}>
                     {/* アバター */}
@@ -223,7 +223,7 @@ export default function GroupSettings({ room, currentUser, friendsList = [], onC
             <div style={{ marginBottom:16 }}>
               <div style={{ fontSize:12, color:'var(--text2)', marginBottom:6, fontWeight:600 }}>メンバーを追加</div>
               <button onClick={() => setShowInvite(true)}
-                style={{ width:'100%', padding:'11px 0', borderRadius:12, border:'1.5px dashed var(--primary)', background:'var(--primary)08', color:'var(--primary)', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                style={{ width:'100%', padding:'11px 0', borderRadius:12, border:'1.5px dashed var(--primary)', background:'rgba(59,130,246,0.05)', color:'var(--primary)', fontWeight:700, fontSize:14, cursor:'pointer' }}>
                 👥 友達をグループに招待する
               </button>
             </div>
