@@ -3258,8 +3258,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 setSuggLoading(true);
                 try {
                   const res = await axios.post('/api/ai/assist', { type: 'suggest', messages: messages.slice(-15) });
-                  const lines = (res.data.result || '').split('
-').filter(l => /^\d+\./.test(l.trim()));
+                  const lines = (res.data.result || '').split('\n').filter(l => /^\d+\./.test(l.trim()));
                   setAiSuggestions(lines.map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean).slice(0,3));
                 } catch { setAiSuggestions([]); }
                 setSuggLoading(false);

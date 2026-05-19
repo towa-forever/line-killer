@@ -1,8 +1,4 @@
 User-agent: *
 Allow: /
 
-# サイトマップ
 Sitemap: https://line-killer-server.onrender.com/sitemap.xml
-
-# クローラーに優しく
-Crawl-delay: 1

@@ -3,63 +3,95 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <!-- スマホ対応 -->
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#06c755" />
-    <meta name="description" content="WakkaChatは無料で使えるチャットアプリです。友達と繋がって、グループトーク・ビデオ通話・スタンプなど豊富な機能を楽しもう！登録無料。" />
-    <meta name="keywords" content="チャット,無料,グループトーク,ビデオ通話,メッセージアプリ,LINE代替,WakkaChat" />
+
+    <!-- Google Search Console 所有権確認 -->
+    <meta name="google-site-verification" content="iSiowb1SLHwDe_9lxOf-M_DCx02QawU5zixLQZNxibg" />
+
+    <!-- SEO基本 -->
+    <title>WakkaChat - 次世代チャットアプリ</title>
+    <meta name="description" content="WakkaChatは、AIアシスタント・リアルタイムチャット・通話・VOOM・ゲームなど豊富な機能を持つ次世代チャットアプリです。LINEを超えるコミュニケーション体験をどうぞ。" />
+    <meta name="keywords" content="WakkaChat, チャットアプリ, AIチャット, リアルタイムメッセージ, 無料通話, ビデオ通話, グループチャット, スタンプ, VOOM" />
     <meta name="author" content="WakkaChat" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://line-killer-server.onrender.com" />
 
     <!-- OGP (SNSシェア用) -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="WakkaChat - 無料チャットアプリ" />
-    <meta property="og:description" content="グループトーク・ビデオ通話・AI機能搭載の無料チャットアプリ。登録無料でスマホ・PCどちらでも使えます。" />
     <meta property="og:url" content="https://line-killer-server.onrender.com" />
-    <meta property="og:image" content="https://line-killer-server.onrender.com/logo512.png" />
-    <meta property="og:site_name" content="WakkaChat" />
+    <meta property="og:title" content="WakkaChat - 次世代チャットアプリ" />
+    <meta property="og:description" content="AIアシスタント・リアルタイムチャット・通話・VOOM・ミニゲームなど豊富な機能。無料で使える次世代チャットアプリ。" />
+    <meta property="og:image" content="%PUBLIC_URL%/logo512.png" />
     <meta property="og:locale" content="ja_JP" />
+    <meta property="og:site_name" content="WakkaChat" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="WakkaChat - 無料チャットアプリ" />
-    <meta name="twitter:description" content="グループトーク・ビデオ通話・AI機能搭載の無料チャットアプリ" />
-    <meta name="twitter:image" content="https://line-killer-server.onrender.com/logo512.png" />
+    <meta name="twitter:title" content="WakkaChat - 次世代チャットアプリ" />
+    <meta name="twitter:description" content="AIアシスタント・リアルタイムチャット・通話・VOOM・ミニゲームなど豊富な機能の次世代チャットアプリ。" />
+    <meta name="twitter:image" content="%PUBLIC_URL%/logo512.png" />
 
-    <!-- 構造化データ (JSON-LD) -->
+    <!-- PWA -->
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- 構造化データ (Google検索結果リッチ表示) -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
       "name": "WakkaChat",
-      "description": "グループトーク・ビデオ通話・AI機能搭載の無料チャットアプリ",
+      "description": "AIアシスタント・リアルタイムチャット・通話・VOOM・ミニゲームなど豊富な機能を持つ次世代チャットアプリ",
       "url": "https://line-killer-server.onrender.com",
       "applicationCategory": "CommunicationApplication",
-      "operatingSystem": "Web, Android, iOS",
-      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "JPY" },
-      "featureList": ["グループチャット", "ビデオ通話", "AIアシスタント", "スタンプ", "投票機能", "タスク管理"]
+      "operatingSystem": "Web, iOS, Android",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "JPY"
+      },
+      "featureList": [
+        "リアルタイムチャット",
+        "AIアシスタント",
+        "音声・ビデオ通話",
+        "グループチャット",
+        "VOOM(タイムライン)",
+        "スタンプ・カスタムスタンプ",
+        "ミニゲーム",
+        "翻訳機能",
+        "既読通知"
+      ]
     }
     </script>
-    <!-- iOS PWA対応 -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="WakkaChat" />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!-- Android PWA対応 -->
-    <meta name="mobile-web-app-capable" content="yes" />
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <title>WakkaChat</title>
+
     <style>
-      /* iOSのバウンススクロール防止 */
-      html, body {
-        overscroll-behavior: none;
-        -webkit-overflow-scrolling: touch;
+      /* 初期ローディング画面 */
+      #root-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100dvh;
+        background: #06c755;
+        color: white;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       }
+      #root-loading .logo { font-size: 64px; margin-bottom: 16px; animation: pulse 1.5s infinite; }
+      #root-loading .name { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+      #root-loading .sub { font-size: 14px; opacity: 0.85; }
+      @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
     </style>
   </head>
   <body>
-    <noscript>JavaScriptを有効にしてください。</noscript>
-    <div id="root"></div>
+    <noscript>WakkaChatを使用するにはJavaScriptを有効にしてください。</noscript>
+    <div id="root">
+      <!-- JavaScriptが読み込まれるまでのローディング画面 -->
+      <div id="root-loading">
+        <div class="logo">💬</div>
+        <div class="name">WakkaChat</div>
+        <div class="sub">次世代チャットアプリ</div>
+      </div>
+    </div>
   </body>
 </html>
