@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import axios from 'axios';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com';
 
 export default function Friends({ currentUser, socket, onClearNotif, onStartChat }) {
   const [tab, setTab]                 = useState('list');
@@ -115,7 +115,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
         if (window.jsQR) {
           const code = window.jsQR(imageData.data, imageData.width, imageData.height);
           if (code?.data) {
-            const match = code.data.match(/linekiller:\/\/add\/(.+)/);
+            const match = code.data.match(/wakkachat:\/\/add\/(.+)/);
             const username = match ? match[1] : code.data;
             try {
               const res = await axios.post('/api/friends/by-qr', { username: username.trim() });
@@ -416,7 +416,7 @@ export default function Friends({ currentUser, socket, onClearNotif, onStartChat
             <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>マイQRコード</div>
             <div style={{ fontSize:12, color:'var(--text2)', marginBottom:16 }}>このQRコードを読み取ってもらうと友達追加できます</div>
             <div style={{ display:'inline-block', padding:16, background:'white', borderRadius:16, boxShadow:'0 2px 12px rgba(0,0,0,0.1)', marginBottom:16 }}>
-              <QRCode value={`linekiller://add/${currentUser?.username}`} size={190} level="H"
+              <QRCode value={`wakkachat://add/${currentUser?.username}`} size={190} level="H"
                 imageSettings={{ src:'', x:undefined, y:undefined, height:0, width:0, excavate:false }} />
             </div>
             <div style={{ fontSize:18, fontWeight:800, marginBottom:2 }}>{currentUser?.displayName || currentUser?.username}</div>

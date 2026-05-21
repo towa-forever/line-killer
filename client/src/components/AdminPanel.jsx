@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com';
 const ADMIN_USERNAME = 'とわ';
 const CATEGORIES = ['管理者', 'ビジネス', 'クリエイター', 'ニュース', 'エンタメ', 'ゲーム', 'その他'];
 

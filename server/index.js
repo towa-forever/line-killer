@@ -36,11 +36,12 @@ app.set('trust proxy', 1);
 
 // VAPID設定
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const CLIENT_URL = CLIENT_URL; // RenderのEnvironment Variablesで設定可能
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
 if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
   console.warn('[WARN] VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY が未設定やで。プッシュ通知は無効になるわ。');
 } else {
-  webpush.setVapidDetails('mailto:admin@line-killer.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  webpush.setVapidDetails('mailto:admin@wakkachat.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 }
 
 // 管理者ユーザー名（お知らせ投稿・削除権限）
@@ -115,7 +116,7 @@ const diskStorage = multer.diskStorage({
 });
 const cloudStorage = useCloudinary ? new CloudinaryStorage({
   cloudinary,
-  params: { folder: 'line-killer', allowed_formats: ['jpg','jpeg','png','gif','webp','mp4','pdf'] },
+  params: { folder: 'wakkachat', allowed_formats: ['jpg','jpeg','png','gif','webp','mp4','pdf'] },
 }) : null;
 
 const ALLOWED_EXTENSIONS = new Set([
@@ -910,7 +911,7 @@ app.post('/api/rooms/:roomId/invite', async (req, res) => {
       await Room.updateOne({ id: req.params.roomId }, { $set: { invite_code: code } });
       room = { ...room, invite_code: code };
     }
-    res.json({ inviteCode: room.invite_code, inviteUrl: `${process.env.CLIENT_URL || 'https://line-killer.onrender.com'}/invite/${room.invite_code}` });
+    res.json({ inviteCode: room.invite_code, inviteUrl: `${CLIENT_URL}/invite/${room.invite_code}` });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
@@ -2467,25 +2468,6 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 });
 
 
-// SEO: sitemap.xml
-app.get('/sitemap.xml', (req, res) => {
-  res.header('Content-Type', 'application/xml');
-  res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://line-killer-server.onrender.com/</loc>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-  </url>
-</urlset>`);
-});
-
-// SEO: robots.txt (publicフォルダから配信するが念のため)
-app.get('/robots.txt', (req, res) => {
-  res.type('text/plain');
-  res.send('User-agent: *\nAllow: /\nSitemap: https://line-killer-server.onrender.com/sitemap.xml');
-});
-
 // Socket.io
 io.use(async (socket, next) => {
   try {
@@ -3363,26 +3345,44 @@ app.get('/health', (req, res) => {
 
 // ===== SEO用エンドポイント =====
 app.get('/sitemap.xml', (req, res) => {
+  const now = new Date().toISOString().split('T')[0];
   res.header('Content-Type', 'application/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:mobile="http://www.google.com/schemas/sitemap-mobile/1.0">
   <url>
-    <loc>${process.env.CLIENT_URL || "https://line-killer-server.onrender.com"}/</loc>
-    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
-    <changefreq>weekly</changefreq>
+    <loc>${CLIENT_URL}/</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>daily</changefreq>
     <priority>1.0</priority>
+    <mobile:mobile/>
+  </url>
+  <url>
+    <loc>${CLIENT_URL}/?tab=friends</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${CLIENT_URL}/?tab=voom</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
   </url>
 </urlset>`);
 });
 
 app.get('/robots.txt', (req, res) => {
   res.header('Content-Type', 'text/plain');
-  res.send('User-agent: *\nAllow: /\nSitemap: ${process.env.CLIENT_URL || "https://line-killer-server.onrender.com"}/sitemap.xml');
+  res.send(\`User-agent: *
+Allow: /
+Sitemap: \${CLIENT_URL}/sitemap.xml
+\`);
 });
 
 // ===== TWA用 assetlinks.json =====
 app.get('/.well-known/assetlinks.json', (req, res) => {
-  const packageName = process.env.TWA_PACKAGE_NAME || 'com.example.linekiller';
+  const packageName = process.env.TWA_PACKAGE_NAME || 'com.wakkachat.app';
   const sha256 = process.env.TWA_SHA256 || '';
   if (!sha256) return res.json([]); // 未設定の場合は空配列
   res.json([{

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import axios from 'axios';
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com';
 const ADMIN_USERNAME = 'とわ';
 
 export default function Timeline({ currentUser, socket }) {

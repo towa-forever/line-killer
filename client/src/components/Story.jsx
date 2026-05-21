@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
-const SERVER = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+const SERVER = process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com';
 
 // ストーリー一覧（上部リスト）
 export function StoryBar({ currentUser, friendsList, socket }) { // eslint-disable-line no-unused-vars
@@ -94,7 +94,7 @@ function StoryViewer({ data, onClose, currentUserId, onDeleted }) {
   }, [idx, data.items.length, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!story) return null;
-  const url = story.url?.startsWith('http') ? story.url : (process.env.REACT_APP_SERVER_URL||'https://line-killer-server.onrender.com') + story.url;
+  const url = story.url?.startsWith('http') ? story.url : (process.env.REACT_APP_SERVER_URL||'https://wakkachat.onrender.com') + story.url;
 
   return (
     <div style={{ position:'fixed', inset:0, background:'#000', zIndex:9000, display:'flex', flexDirection:'column' }} onClick={onClose}>

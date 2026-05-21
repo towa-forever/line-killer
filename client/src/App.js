@@ -45,7 +45,7 @@ const CreateRoom = lazy(() => import('./components/CreateRoom'));
 const Note = lazy(() => import('./components/Note'));
 const UserProfile = lazy(() => import('./components/UserProfile'));
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com';
 axios.defaults.baseURL = SERVER_URL;
 // アプリ起動時に即座にトークンをセット
 const _token = localStorage.getItem('token');
@@ -2839,7 +2839,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   : showReadDetail.readers.filter(r => r.id !== currentUser.id).map(r => (
                     <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
                       <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:700, overflow:'hidden', flexShrink:0 }}>
-                        {r.avatar ? <img src={r.avatar.startsWith('http') ? r.avatar : `${process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com'}${r.avatar}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : r.name?.[0]}
+                        {r.avatar ? <img src={r.avatar.startsWith('http') ? r.avatar : `${process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com'}${r.avatar}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : r.name?.[0]}
                       </div>
                       <span style={{ fontSize:14 }}>{r.name}</span>
                     </div>
@@ -3977,7 +3977,7 @@ export default function App() {
 
   // Renderのコールドスタート防止 - 2分ごとにpingを送る（ログイン前後両方）
   useEffect(() => {
-    const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+    const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com';
     const ping = () => axios.get(currentUser ? '/api/auth/me' : `${SERVER_URL}/health`).catch(() => {});
     ping(); // 即時実行
     const timer = setInterval(ping, 2 * 60 * 1000);

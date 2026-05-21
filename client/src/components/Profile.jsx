@@ -5,7 +5,7 @@ import { QRCodeSVG as QRCode } from 'qrcode.react';
 
 const ContactForm = lazy(() => import('./ContactForm'));
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com';
 
 // 公式アカウント申請・管理コンポーネント
 function OfficialAccountPanel({ currentUser, saveSettings }) {
@@ -366,8 +366,8 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
   }, []);
 
   const handleQrValue = useCallback(async (text) => {
-    // linekiller://add/USERNAME or just USERNAME
-    const match = text.match(/linekiller:\/\/add\/(.+)/) || text.match(/^([a-zA-Z0-9_]+)$/);
+    // wakkachat://add/USERNAME or just USERNAME
+    const match = text.match(/wakkachat:\/\/add\/(.+)/) || text.match(/^([a-zA-Z0-9_]+)$/);
     const username = match?.[1]?.trim();
     if (!username) { setMessage('有効なQRコードではありません'); return; }
     setQrResult(username);
@@ -558,7 +558,7 @@ export default function Profile({ currentUser, onUpdate, onLogout, onSwitchAccou
       <div className="card" style={{ margin:10, textAlign:'center' }}>
         <div className="profile-section-title">マイQRコード</div>
         <div style={{ display:'inline-block', padding:12, background:'white', borderRadius:8, marginTop:8 }}>
-          <QRCode value={`linekiller://add/${currentUser?.username}`} size={150} level="H" />
+          <QRCode value={`wakkachat://add/${currentUser?.username}`} size={150} level="H" />
         </div>
         <p style={{ marginTop:8, fontSize:12, color:'var(--text2)' }}>QRを読み取って友達追加</p>
         <div style={{ display:'flex', gap:8, justifyContent:'center', marginTop:8 }}>

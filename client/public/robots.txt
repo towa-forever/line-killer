@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://line-killer-server.onrender.com/sitemap.xml
+Sitemap: https://wakkachat.onrender.com/sitemap.xml

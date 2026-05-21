@@ -159,7 +159,7 @@ export default function VoiceMessage({ roomId, currentUser, socket, onSent, onCa
 export function VoiceMessageBubble({ msg, isMine }) {
   const url = msg.fileData?.url || msg.file_data?.url;
   const dur = msg.fileData?.duration || msg.file_data?.duration || 0;
-  const SERVER = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+  const SERVER = process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com';
   const src = url?.startsWith('http') ? url : SERVER + url;
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
   return (

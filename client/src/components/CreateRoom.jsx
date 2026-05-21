@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com';
 
 export default function CreateRoom({ currentUser, friendsList: initialFriends = [], onClose, onCreated, onOpen }) {
   const [tab, setTab] = useState('dm');
