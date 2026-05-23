@@ -409,6 +409,7 @@ function initGoogle(clientId, onLogin, resolve, reject) {
 // ===== AuthScreen（全フローのコントローラー）=====
 function AuthScreen({ onLogin }) {
   // 初回起動か確認
+  const { t } = useTranslation();
   const [phase, setPhase] = useState(() =>
     localStorage.getItem('wc_welcomed') ? 'top' : 'splash'
   );
