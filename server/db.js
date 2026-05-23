@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
-const MONGO_URI = process.env.MONGO_URI;
-if (!MONGO_URI) { console.error('MONGO_URI環境変数が設定されてへん！'); process.exit(1); }
+const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI;
+if (!MONGO_URI) { console.error('MONGO_URI または MONGODB_URI 環境変数が設定されてへん！'); process.exit(1); }
 
 mongoose.connect(MONGO_URI, {
   serverSelectionTimeoutMS: 10000,
@@ -16,7 +16,7 @@ mongoose.connection.on('error', err => console.error('MongoDB接続エラー:', 
 const UserSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   username: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  password: { type: String, default: null }, // OAuth登録ユーザーはnull
   avatar: String,
   cover_image: { type: String, default: '' }, // プロフィール背景画像
   display_name: { type: String, default: '' },
@@ -71,6 +71,12 @@ const UserSchema = new mongoose.Schema({
     fontFamily: { type: String, default: null }
   },
   notification_sounds: { type: Map, of: String, default: {} },
+  // OAuth連携
+  google_id: { type: String, default: null, sparse: true },
+  // E2E暗号化公開鍵（JWK形式）
+  e2e_public_key: { type: mongoose.Schema.Types.Mixed, default: null },
+  apple_id:  { type: String, default: null, sparse: true },
+  oauth_email: { type: String, default: null },
 });
 
 const RoomSchema = new mongoose.Schema({
@@ -314,6 +320,57 @@ FavoriteSchema.index({ user_id: 1 });                  // お気に入り一覧�
 // PollSchema id index は unique:true で定義済みのため省略
 // username は UserSchema で unique:true 指定済みのため個別index不要
 
+
+// ===== スタンプマーケットプレイス =====
+const StampPackSchema = new mongoose.Schema({
+  id:          { type: String, required: true, unique: true },
+  creator_id:  { type: String, required: true },
+  creator_name:{ type: String, required: true },
+  title:       { type: String, required: true },
+  description: { type: String, default: '' },
+  price:       { type: Number, required: true, min: 0 }, // コイン
+  stamps:      [{ emoji: String, label: String, image_url: String }], // 最大40個
+  preview_url: { type: String, default: null }, // サムネ
+  tags:        [String],
+  status:      { type: String, default: 'pending', enum: ['pending','approved','rejected'] },
+  sales_count: { type: Number, default: 0 },
+  rating_sum:  { type: Number, default: 0 },
+  rating_count:{ type: Number, default: 0 },
+  created_at:  { type: Date, default: Date.now },
+});
+StampPackSchema.index({ status: 1, sales_count: -1 });
+StampPackSchema.index({ creator_id: 1 });
+
+// ユーザーが購入済みのスタンプパック
+const StampPurchaseSchema = new mongoose.Schema({
+  user_id:     { type: String, required: true },
+  pack_id:     { type: String, required: true },
+  price_paid:  { type: Number, required: true },
+  purchased_at:{ type: Date, default: Date.now },
+});
+StampPurchaseSchema.index({ user_id: 1 });
+StampPurchaseSchema.index({ user_id: 1, pack_id: 1 }, { unique: true });
+
+// コイン取引履歴
+const CoinTransactionSchema = new mongoose.Schema({
+  user_id:     { type: String, required: true },
+  type:        { type: String, enum: ['earn','spend','transfer_in','transfer_out'] },
+  amount:      { type: Number, required: true },
+  reason:      { type: String }, // 'stamp_purchase' | 'daily_bonus' | 'creator_revenue' etc
+  ref_id:      { type: String }, // 関連ID（スタンプパックIDなど）
+  created_at:  { type: Date, default: Date.now },
+});
+CoinTransactionSchema.index({ user_id: 1, created_at: -1 });
+
+// ゲーマーステータス
+const GamerStatusSchema = new mongoose.Schema({
+  user_id:     { type: String, required: true, unique: true },
+  is_gaming:   { type: Boolean, default: false },
+  game_name:   { type: String, default: '' },
+  game_emoji:  { type: String, default: '🎮' },
+  updated_at:  { type: Date, default: Date.now },
+});
+
 const PushSubscriptionSchema = new mongoose.Schema({
   user_id: { type: String, required: true, unique: true },
   subscription: { type: mongoose.Schema.Types.Mixed, required: true },
@@ -321,6 +378,10 @@ const PushSubscriptionSchema = new mongoose.Schema({
 });
 
 module.exports = {
+  StampPack: mongoose.model('StampPack', StampPackSchema),
+  StampPurchase: mongoose.model('StampPurchase', StampPurchaseSchema),
+  CoinTransaction: mongoose.model('CoinTransaction', CoinTransactionSchema),
+  GamerStatus: mongoose.model('GamerStatus', GamerStatusSchema),
   User: mongoose.model('User', UserSchema),
   PushSubscription: mongoose.model('PushSubscription', PushSubscriptionSchema),
   Note: mongoose.model('Note', NoteSchema),

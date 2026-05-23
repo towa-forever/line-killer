@@ -11,6 +11,9 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const https = require('https');
+const { promisify } = require('util');
+const crypto = require('crypto');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
@@ -28,7 +31,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 
-const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription, News, OfficialRequest, OfficialAccount, ThreadMessage } = require('./db');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription, News, OfficialRequest, OfficialAccount, ThreadMessage, StampPack, StampPurchase, CoinTransaction, GamerStatus } = require('./db');
 
 const app = express();
 // Render等のリバースプロキシ対応（express-rate-limitのX-Forwarded-Forエラー解消）
@@ -36,7 +39,7 @@ app.set('trust proxy', 1);
 
 // VAPID設定
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
-const CLIENT_URL = CLIENT_URL; // RenderのEnvironment Variablesで設定可能
+const CLIENT_URL = process.env.CLIENT_URL || 'https://wakkachat.onrender.com'; // RenderのEnvironment Variablesで設定可能
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
 if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
   console.warn('[WARN] VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY が未設定やで。プッシュ通知は無効になるわ。');
@@ -93,6 +96,8 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/google', authLimiter);
+app.use('/api/auth/apple', authLimiter);
 // 一般APIのレートリミットは無効化（Socket.ioと競合するため）
 // 管理エンドポイント（ADMIN_KEY必須）
 app.get('/admin/reset-requests', async (req, res) => {
@@ -114,26 +119,82 @@ const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, uuidv4() + path.extname(file.originalname))
 });
-const cloudStorage = useCloudinary ? new CloudinaryStorage({
-  cloudinary,
-  params: { folder: 'wakkachat', allowed_formats: ['jpg','jpeg','png','gif','webp','mp4','pdf'] },
-}) : null;
+
+// ===== Cloudinary Storage（用途別・自動圧縮つき）=====
+function makeCloudStorage(opts = {}) {
+  if (!useCloudinary) return null;
+  return new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => {
+      const isVideo = file.mimetype.startsWith('video/');
+      const isAudio = file.mimetype.startsWith('audio/');
+      const isImage = file.mimetype.startsWith('image/');
+      const base = {
+        folder: opts.folder || 'wakkachat/files',
+        resource_type: isVideo ? 'video' : isAudio ? 'video' : 'image',
+        use_filename: false,
+        unique_filename: true,
+      };
+      if (isImage && opts.imageTransform !== false) {
+        // 画像は自動圧縮・最大幅制限でCloudinaryの帯域節約
+        base.transformation = [
+          { width: opts.maxWidth || 1920, height: opts.maxHeight || 1920,
+            crop: 'limit', quality: opts.quality || 'auto:good', fetch_format: 'auto' }
+        ];
+      }
+      return base;
+    }
+  });
+}
+
+// アバター・アイコン用（小さく圧縮）
+const avatarCloudStorage = makeCloudStorage({ folder: 'wakkachat/avatars', maxWidth: 400, maxHeight: 400, quality: 'auto:eco' });
+// チャット画像用
+const imageCloudStorage  = makeCloudStorage({ folder: 'wakkachat/images', maxWidth: 1920, quality: 'auto:good' });
+// 動画・音声・汎用ファイル用（圧縮なし）
+const fileCloudStorage   = makeCloudStorage({ folder: 'wakkachat/files', imageTransform: false });
 
 const ALLOWED_EXTENSIONS = new Set([
   '.jpg','.jpeg','.png','.gif','.webp','.mp4','.mov','.avi','.webm',
   '.pdf','.zip','.doc','.docx','.xls','.xlsx','.ppt','.pptx','.txt',
   '.mp3','.wav','.ogg','.m4a','.aac',
 ]);
-const fileFilter = (req, file, cb) => {
+const ALLOWED_IMAGE_EXT  = new Set(['.jpg','.jpeg','.png','.gif','.webp']);
+const ALLOWED_VIDEO_EXT  = new Set(['.mp4','.mov','.avi','.webm']);
+const ALLOWED_AUDIO_EXT  = new Set(['.mp3','.wav','.ogg','.m4a','.aac']);
+
+const makeFileFilter = (allowed) => (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
-  if (ALLOWED_EXTENSIONS.has(ext)) { cb(null, true); }
-  else { cb(new Error('このファイル形式はアップロードできません'), false); }
+  if (allowed.has(ext)) cb(null, true);
+  else cb(new Error('このファイル形式はアップロードできません'), false);
 };
 
-const storage = cloudStorage || diskStorage;
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter });
+const MB = 1024 * 1024;
+
+// 用途別アップロードミドルウェア
+const upload = multer({  // 汎用（後方互換・20MB）
+  storage: fileCloudStorage || diskStorage,
+  limits: { fileSize: 20 * MB },
+  fileFilter: makeFileFilter(ALLOWED_EXTENSIONS),
+});
+const uploadAvatar = multer({  // アバター・アイコン（画像5MB）
+  storage: avatarCloudStorage || diskStorage,
+  limits: { fileSize: 5 * MB },
+  fileFilter: makeFileFilter(ALLOWED_IMAGE_EXT),
+});
+const uploadImage = multer({   // チャット画像（8MB）
+  storage: imageCloudStorage || diskStorage,
+  limits: { fileSize: 8 * MB },
+  fileFilter: makeFileFilter(new Set([...ALLOWED_IMAGE_EXT, ...ALLOWED_VIDEO_EXT])),
+});
+const uploadAudio = multer({   // 音声（15MB）
+  storage: fileCloudStorage || diskStorage,
+  limits: { fileSize: 15 * MB },
+  fileFilter: makeFileFilter(ALLOWED_AUDIO_EXT),
+});
+
 const getFileUrl = (req) => {
-  if (useCloudinary && req.file?.path) return req.file.path; // Cloudinaryは絶対URL
+  if (useCloudinary && req.file?.path) return req.file.path;
   return req.file ? `/uploads/${req.file.filename}` : null;
 };
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -575,6 +636,180 @@ app.get('/api/auth/login-history', async (req, res) => {
     res.json(user?.login_history?.slice(-10).reverse() || []);
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
+
+// ===== OAuth共通ヘルパー =====
+// JWTトークン生成 & ユーザーレスポンス整形
+function makeAuthResponse(user) {
+  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+  return {
+    token,
+    user: {
+      id: user.id,
+      username: user.username,
+      avatar: user.avatar || null,
+      displayName: user.display_name || user.username,
+      coverImage: user.cover_image || '',
+      bio: user.bio || '',
+      status: user.status || '',
+      avatarFrame: user.avatar_frame || 'none',
+      soundTheme: user.sound_theme || 'default',
+      pinEnabled: user.pin_enabled || false,
+      secretQuestion: user.secret_question || '',
+      blockedUsers: user.blocked_users || [],
+      mutedRooms: user.muted_rooms || [],
+      bookmarks: user.bookmarked_messages || [],
+      coins: user.coins ?? 100,
+      parentAccountId: user.parent_account_id || null,
+    }
+  };
+}
+
+// Googleの公開鍵を取得してIDトークンを検証する
+async function verifyGoogleToken(idToken) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'oauth2.googleapis.com',
+      path: `/tokeninfo?id_token=${idToken}`,
+      method: 'GET',
+    };
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error) return reject(new Error(parsed.error));
+          // audienceチェック（GOOGLE_CLIENT_IDと一致するか）
+          const clientId = process.env.GOOGLE_CLIENT_ID;
+          if (clientId && parsed.aud !== clientId) return reject(new Error('invalid audience'));
+          resolve(parsed);
+        } catch(e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+// Apple IDトークン検証（JWTのdecodeのみ、署名検証はAppleの公開鍵で）
+async function verifyAppleToken(idToken) {
+  // Apple JWTはRS256署名。本番では apple-signin-auth ライブラリ推奨。
+  // ここではdeocodeして sub(ユーザーID)とemail取得（Renderでは環境変数APPLE_CLIENT_IDで検証）
+  try {
+    const parts = idToken.split('.');
+    if (parts.length !== 3) throw new Error('invalid token');
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+    if (!payload.sub) throw new Error('no sub');
+    // issチェック
+    if (payload.iss !== 'https://appleid.apple.com') throw new Error('invalid iss');
+    // 有効期限チェック
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) throw new Error('token expired');
+    return payload;
+  } catch(e) {
+    throw new Error('Appleトークン検証に失敗: ' + e.message);
+  }
+}
+
+// ===== Googleログイン =====
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { idToken } = req.body;
+    if (!idToken) return res.status(400).json({ error: 'idTokenが必要です' });
+
+    // Googleトークン検証
+    let payload;
+    try { payload = await verifyGoogleToken(idToken); }
+    catch(e) { return res.status(401).json({ error: 'Googleトークンが無効です: ' + e.message }); }
+
+    const googleId = payload.sub;
+    const email    = payload.email || null;
+    const name     = payload.name || payload.given_name || 'WakkaUser';
+    const picture  = payload.picture || null;
+
+    // 既存ユーザー検索（google_id または メール）
+    let user = await User.findOne({ google_id: googleId }).lean();
+    if (!user && email) user = await User.findOne({ oauth_email: email }).lean();
+
+    if (!user) {
+      // 新規登録
+      const id = uuidv4();
+      // ユーザー名: メールのローカル部 or nameをベースに重複回避
+      let baseUsername = (email ? email.split('@')[0] : name)
+        .replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 24);
+      let username = baseUsername;
+      let suffix = 1;
+      while (await User.findOne({ username }, { id: 1 }).lean()) {
+        username = `${baseUsername}_${suffix++}`;
+      }
+      await User.create({
+        id, username,
+        display_name: name,
+        avatar: picture,
+        google_id: googleId,
+        oauth_email: email,
+        password: null,
+        coins: 100,
+      });
+      user = await User.findOne({ id }).lean();
+    } else if (!user.google_id) {
+      // メール一致で既存ユーザーにgoogle_idを紐付け
+      await User.findOneAndUpdate({ id: user.id }, { google_id: googleId });
+      user = await User.findOne({ id: user.id }).lean();
+    }
+
+    res.json(makeAuthResponse(user));
+  } catch(e) {
+    console.error('Google auth error:', e);
+    res.status(500).json({ error: 'サーバーエラー' });
+  }
+});
+
+// ===== Appleログイン =====
+app.post('/api/auth/apple', async (req, res) => {
+  try {
+    const { idToken, fullName } = req.body;
+    if (!idToken) return res.status(400).json({ error: 'idTokenが必要です' });
+
+    let payload;
+    try { payload = await verifyAppleToken(idToken); }
+    catch(e) { return res.status(401).json({ error: 'Appleトークンが無効です: ' + e.message }); }
+
+    const appleId = payload.sub;
+    const email   = payload.email || null;
+    const name    = fullName || (email ? email.split('@')[0] : 'WakkaUser');
+
+    let user = await User.findOne({ apple_id: appleId }).lean();
+    if (!user && email) user = await User.findOne({ oauth_email: email }).lean();
+
+    if (!user) {
+      const id = uuidv4();
+      let baseUsername = name.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 24);
+      let username = baseUsername;
+      let suffix = 1;
+      while (await User.findOne({ username }, { id: 1 }).lean()) {
+        username = `${baseUsername}_${suffix++}`;
+      }
+      await User.create({
+        id, username,
+        display_name: name,
+        apple_id: appleId,
+        oauth_email: email,
+        password: null,
+        coins: 100,
+      });
+      user = await User.findOne({ id }).lean();
+    } else if (!user.apple_id) {
+      await User.findOneAndUpdate({ id: user.id }, { apple_id: appleId });
+      user = await User.findOne({ id: user.id }).lean();
+    }
+
+    res.json(makeAuthResponse(user));
+  } catch(e) {
+    console.error('Apple auth error:', e);
+    res.status(500).json({ error: 'サーバーエラー' });
+  }
+});
+
 
 // ===== 認証 =====
 app.post('/api/auth/register', async (req, res) => {
@@ -1147,7 +1382,7 @@ app.get('/api/users', async (req, res) => {
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
-app.patch('/api/users/me', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
+app.patch('/api/users/me', uploadAvatar.fields([{ name: 'avatar', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
   try {
     const decoded = auth(req);
     const { status, displayName, bio, avatarFrame, soundTheme, secretQuestion, secretAnswer, showOnline } = req.body;
@@ -1405,7 +1640,7 @@ app.get('/api/posts', async (req, res) => {
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
-app.post('/api/posts', upload.single('image'), async (req, res) => {
+app.post('/api/posts', uploadImage.single('image'), async (req, res) => {
   try {
     const decoded = auth(req);
     // JWTにusernameがない古いトークン対策：DBから必ず取得
@@ -1536,7 +1771,7 @@ app.get('/api/official-accounts/me', async (req, res) => {
 });
 
 // 公式アカウント作成（管理者のみ）
-app.post('/api/official-accounts', upload.single('avatar'), async (req, res) => {
+app.post('/api/official-accounts', uploadAvatar.single('avatar'), async (req, res) => {
   try {
     const decoded = await adminAuth(req);
     const { name, description, category } = req.body;
@@ -1554,7 +1789,7 @@ app.post('/api/official-accounts', upload.single('avatar'), async (req, res) => 
 });
 
 // 公式アカウント更新（管理者のみ）
-app.patch('/api/official-accounts/:accountId', upload.single('avatar'), async (req, res) => {
+app.patch('/api/official-accounts/:accountId', uploadAvatar.single('avatar'), async (req, res) => {
   try {
     await adminAuth(req);
     const { name, description, category } = req.body;
@@ -1620,7 +1855,7 @@ app.post('/api/official-accounts/:accountId/follow', async (req, res) => {
 });
 
 // 公式アカウントから一斉DM送信（管理者のみ）
-app.post('/api/official-accounts/:accountId/broadcast', upload.single('image'), async (req, res) => {
+app.post('/api/official-accounts/:accountId/broadcast', uploadImage.single('image'), async (req, res) => {
   try {
     await adminAuth(req);
     const account = await OfficialAccount.findOne({ id: req.params.accountId }).lean();
@@ -1703,7 +1938,7 @@ app.get('/api/voom', async (req, res) => {
 });
 
 // VOOM投稿（誰でも可）
-app.post('/api/voom', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'video', maxCount: 1 }]), async (req, res) => {
+app.post('/api/voom', uploadImage.fields([{ name: 'image', maxCount: 1 }, { name: 'video', maxCount: 1 }]), async (req, res) => {
   try {
     const decoded = auth(req);
     const user = await User.findOne({ id: decoded.id }, { username: 1, display_name: 1, avatar: 1 }).lean();
@@ -1878,7 +2113,7 @@ app.post('/api/admin/self-official', async (req, res) => {
 
 // ===== 公式アカウント 一斉送信API =====
 // 公式アカウントから友達全員にDMを一斉送信
-app.post('/api/official/broadcast', upload.single('image'), async (req, res) => {
+app.post('/api/official/broadcast', uploadImage.single('image'), async (req, res) => {
   try {
     const decoded = auth(req);
     const sender = await User.findOne({ id: decoded.id }, { username: 1, display_name: 1, avatar: 1, is_official: 1 }).lean();
@@ -1966,7 +2201,7 @@ app.post('/api/official/broadcast', upload.single('image'), async (req, res) => 
 
 
 // 自分が作成した公式アカウントから一斉DM送信（作成者専用）
-app.post('/api/official-accounts/:accountId/send', upload.single('image'), async (req, res) => {
+app.post('/api/official-accounts/:accountId/send', uploadImage.single('image'), async (req, res) => {
   try {
     const decoded = auth(req);
     const account = await OfficialAccount.findOne({ id: req.params.accountId }).lean();
@@ -2214,7 +2449,7 @@ app.patch('/api/rooms/:roomId/name', async (req, res) => {
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
-app.post('/api/rooms/:roomId/icon', upload.single('icon'), async (req, res) => {
+app.post('/api/rooms/:roomId/icon', uploadAvatar.single('icon'), async (req, res) => {
   try {
     const decoded = auth(req);
     const icon = getFileUrl(req);
@@ -3748,7 +3983,7 @@ app.delete('/api/folders/:folderId', async (req, res) => {
 
 
 // ===== ボイスメッセージ文字起こし（Claude AIで実現）=====
-app.post('/api/ai/transcribe', upload.single('audio'), async (req, res) => {
+app.post('/api/ai/transcribe', uploadAudio.single('audio'), async (req, res) => {
   try {
     auth(req);
     if (!req.file) return res.status(400).json({ error: '音声ファイルがないで' });
@@ -4294,6 +4529,206 @@ app.get('/{*path}', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(join(clientBuild, 'index.html'));
 });
+
+// ===================================================
+// ===== Phase 4: スタンプマーケットプレイス API =====
+// ===================================================
+
+// ヘルパー: コイン増減 + 取引履歴記録
+async function updateCoins(userId, delta, type, reason, refId = null) {
+  const user = await User.findOneAndUpdate(
+    { id: userId },
+    { $inc: { coins: delta } },
+    { new: true }
+  );
+  await CoinTransaction.create({
+    user_id: userId, type, amount: Math.abs(delta),
+    reason, ref_id: refId,
+  });
+  return user?.coins ?? 0;
+}
+
+// スタンプパック一覧（マーケット）
+app.get('/api/stamp-market', async (req, res) => {
+  try {
+    const { sort = 'popular', tag, search } = req.query;
+    const query = { status: 'approved' };
+    if (tag) query.tags = tag;
+    if (search) query.title = { $regex: search, $options: 'i' };
+    const sortObj = sort === 'new' ? { created_at: -1 } : { sales_count: -1 };
+    const packs = await StampPack.find(query).sort(sortObj).limit(50).lean();
+    // 購入済みチェック
+    const token = req.headers.authorization?.split(' ')[1];
+    let purchasedIds = [];
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const purchases = await StampPurchase.find({ user_id: decoded.id }, { pack_id: 1 }).lean();
+        purchasedIds = purchases.map(p => p.pack_id);
+      } catch(_) {}
+    }
+    res.json(packs.map(p => ({
+      ...p,
+      avg_rating: p.rating_count > 0 ? (p.rating_sum / p.rating_count).toFixed(1) : null,
+      purchased: purchasedIds.includes(p.id),
+    })));
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+// スタンプパック詳細
+app.get('/api/stamp-market/:packId', async (req, res) => {
+  try {
+    const pack = await StampPack.findOne({ id: req.params.packId }).lean();
+    if (!pack) return res.status(404).json({ error: '見つかりません' });
+    res.json(pack);
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+// スタンプパック購入
+app.post('/api/stamp-market/:packId/buy', async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
+    const pack = await StampPack.findOne({ id: req.params.packId, status: 'approved' }).lean();
+    if (!pack) return res.status(404).json({ error: 'スタンプが見つかりません' });
+
+    // 購入済みチェック
+    const already = await StampPurchase.findOne({ user_id: decoded.id, pack_id: pack.id });
+    if (already) return res.status(400).json({ error: 'すでに購入済みです' });
+
+    // コイン残高チェック
+    const user = await User.findOne({ id: decoded.id }, { coins: 1 }).lean();
+    if ((user?.coins ?? 0) < pack.price) return res.status(400).json({ error: 'コインが足りません' });
+
+    // 購入処理
+    await StampPurchase.create({ user_id: decoded.id, pack_id: pack.id, price_paid: pack.price });
+    const newCoins = await updateCoins(decoded.id, -pack.price, 'spend', 'stamp_purchase', pack.id);
+
+    // クリエイターに収益付与（80%）
+    const creatorShare = Math.floor(pack.price * 0.8);
+    if (creatorShare > 0) {
+      await updateCoins(pack.creator_id, creatorShare, 'transfer_in', 'creator_revenue', pack.id);
+    }
+    await StampPack.findOneAndUpdate({ id: pack.id }, { $inc: { sales_count: 1 } });
+
+    res.json({ success: true, coins: newCoins, message: `${pack.title} を購入しました！` });
+  } catch(e) {
+    console.error(e);
+    res.status(500).json({ error: 'サーバーエラー' });
+  }
+});
+
+// 自分が購入したスタンプ一覧
+app.get('/api/stamp-market/my/purchases', async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
+    const purchases = await StampPurchase.find({ user_id: decoded.id }).lean();
+    const packIds = purchases.map(p => p.pack_id);
+    const packs = await StampPack.find({ id: { $in: packIds } }).lean();
+    res.json(packs);
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+// クリエイター: スタンプパック出品
+app.post('/api/stamp-market/publish', uploadAvatar.single('preview'), async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
+    const user = await User.findOne({ id: decoded.id }, { username: 1, display_name: 1 }).lean();
+    const { title, description, price, stamps, tags } = req.body;
+    if (!title || !stamps) return res.status(400).json({ error: 'タイトルとスタンプは必須です' });
+
+    let parsedStamps;
+    try { parsedStamps = JSON.parse(stamps); } catch { return res.status(400).json({ error: 'スタンプデータが無効です' }); }
+    if (!Array.isArray(parsedStamps) || parsedStamps.length < 1 || parsedStamps.length > 40) {
+      return res.status(400).json({ error: 'スタンプは1〜40個にしてください' });
+    }
+
+    const id = 'sp_' + uuidv4();
+    const pack = await StampPack.create({
+      id, creator_id: decoded.id,
+      creator_name: user.display_name || user.username,
+      title: title.trim(),
+      description: (description || '').trim(),
+      price: Math.max(0, parseInt(price) || 0),
+      stamps: parsedStamps,
+      preview_url: req.file?.path || null,
+      tags: tags ? JSON.parse(tags) : [],
+      status: 'approved', // 本番では'pending'にして審査フローを入れる
+    });
+    res.json({ success: true, pack });
+  } catch(e) {
+    console.error(e);
+    res.status(500).json({ error: 'サーバーエラー' });
+  }
+});
+
+// コイン取引履歴
+app.get('/api/coins/history', async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
+    const history = await CoinTransaction.find({ user_id: decoded.id })
+      .sort({ created_at: -1 }).limit(50).lean();
+    res.json(history);
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+// ===== Phase 4: ゲーマーステータス API =====
+
+// ゲーミングステータス更新
+app.post('/api/gamer-status', async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
+    const { is_gaming, game_name, game_emoji } = req.body;
+    await GamerStatus.findOneAndUpdate(
+      { user_id: decoded.id },
+      { is_gaming: !!is_gaming, game_name: game_name || '', game_emoji: game_emoji || '🎮', updated_at: new Date() },
+      { upsert: true, new: true }
+    );
+    // ソケットで友達にリアルタイム通知
+    io.emit('gamer_status_update', { userId: decoded.id, is_gaming, game_name, game_emoji });
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+// 友達のゲーミングステータス取得
+app.get('/api/gamer-status/friends', async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
+    const friends = await Friend.find({ user_id: decoded.id }, { friend_id: 1 }).lean();
+    const friendIds = friends.map(f => f.friend_id);
+    const statuses = await GamerStatus.find({
+      user_id: { $in: friendIds }, is_gaming: true
+    }).lean();
+    // ユーザー情報と合わせる
+    const users = await User.find({ id: { $in: statuses.map(s => s.user_id) } },
+      { id: 1, username: 1, display_name: 1, avatar: 1 }).lean();
+    const userMap = Object.fromEntries(users.map(u => [u.id, u]));
+    res.json(statuses.map(s => ({ ...s, user: userMap[s.user_id] || null })));
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+// ===== Phase 4: E2E暗号化キー登録 =====
+// ※ 実際の暗号化はクライアント側のWeb Crypto APIで行う
+// サーバーはユーザーの公開鍵を保存・配布するだけ（暗号化メッセージを復号できない）
+
+app.post('/api/e2e/register-key', async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
+    const { publicKey } = req.body; // JWK形式の公開鍵
+    if (!publicKey) return res.status(400).json({ error: '公開鍵が必要です' });
+    await User.findOneAndUpdate({ id: decoded.id }, { e2e_public_key: publicKey });
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+app.get('/api/e2e/public-key/:userId', async (req, res) => {
+  try {
+    jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
+    const user = await User.findOne({ id: req.params.userId }, { e2e_public_key: 1 }).lean();
+    if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    res.json({ publicKey: user.e2e_public_key || null });
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
 
 const PORT = process.env.PORT || 4000;
 // 起動時: 壊れたFriendレコードをクリーンアップ

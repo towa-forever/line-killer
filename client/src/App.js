@@ -10,6 +10,9 @@ import LocationShare, { LocationBubble } from './components/LocationShare';
 import { SecretBubble } from './components/SecretMessage';
 import { StoryBar } from './components/Story';
 import './App.css';
+import './i18n/i18n';
+import { useTranslation, I18nextProvider } from 'react-i18next';
+import i18n, { SUPPORTED_LANGS } from './i18n/i18n';
 
 // 遅延読み込み（初回ロード高速化）
 import ErrorBoundary from './components/ErrorBoundary';
@@ -51,8 +54,243 @@ axios.defaults.baseURL = SERVER_URL;
 const _token = localStorage.getItem('token');
 if (_token) axios.defaults.headers.common['Authorization'] = `Bearer ${_token}`;
 
-function AuthScreen({ onLogin }) {
-  const [isLogin, setIsLogin] = useState(true);
+// ===== オンボーディング用 WakkaLogo SVG =====
+function WakkaLogo({ size = 56 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 80 80" style={{ borderRadius: 16, display:'block' }}>
+      <rect width="80" height="80" rx="20" fill="#06c755"/>
+      <circle cx="40" cy="38" r="22" fill="none" stroke="white" strokeWidth="6" opacity="0.3"/>
+      <rect x="22" y="26" width="36" height="22" rx="10" fill="white"/>
+      <path d="M28 48 L24 56 L36 50" fill="white"/>
+      <circle cx="32" cy="37" r="2.5" fill="#06c755"/>
+      <circle cx="40" cy="37" r="2.5" fill="#06c755"/>
+      <circle cx="48" cy="37" r="2.5" fill="#06c755"/>
+    </svg>
+  );
+}
+
+// ===== スプラッシュ画面 =====
+function SplashScreen({ onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 2000);
+    return () => clearTimeout(t);
+  }, [onDone]);
+  return (
+    <div className="splash-screen">
+      <div className="splash-logo">
+        <WakkaLogo size={88} />
+        <h1 className="splash-title">WakkaChat</h1>
+        <p className="splash-sub">世界をつなぐチャットアプリ</p>
+      </div>
+      <div className="splash-dots">
+        <span /><span /><span />
+      </div>
+    </div>
+  );
+}
+
+// ===== ウェルカムスライド =====
+function WelcomeSlides({ onDone }) {
+  const { t } = useTranslation();
+  const WELCOME_SLIDES = [
+    { emoji: '💬', title: t('slides.slide1_title'), desc: t('slides.slide1_desc'), color: '#06c755' },
+    { emoji: '🤖', title: t('slides.slide2_title'), desc: t('slides.slide2_desc'), color: '#5856d6' },
+    { emoji: '🌍', title: t('slides.slide3_title'), desc: t('slides.slide3_desc'), color: '#ff9500' },
+  ];
+  const [slide, setSlide] = useState(0);
+  const [exiting, setExiting] = useState(false);
+
+  const goNext = () => {
+    if (slide < WELCOME_SLIDES.length - 1) {
+      setExiting(true);
+      setTimeout(() => { setSlide(s => s + 1); setExiting(false); }, 220);
+    } else {
+      onDone();
+    }
+  };
+  const skip = () => onDone();
+  const s = WELCOME_SLIDES[slide];
+
+  return (
+    <div className="welcome-screen" style={{ '--slide-color': s.color }}>
+      <button className="welcome-skip" onClick={skip}>{t('auth.skip')}</button>
+      <div className={`welcome-slide ${exiting ? 'slide-exit' : 'slide-enter'}`}>
+        <div className="welcome-emoji">{s.emoji}</div>
+        <h2 className="welcome-title">{s.title}</h2>
+        <p className="welcome-desc">{s.desc}</p>
+      </div>
+      <div className="welcome-dots">
+        {WELCOME_SLIDES.map((_, i) => (
+          <span key={i} className={`welcome-dot ${i === slide ? 'active' : ''}`}
+            onClick={() => { setExiting(true); setTimeout(() => { setSlide(i); setExiting(false); }, 220); }} />
+        ))}
+      </div>
+      <button className="welcome-next" onClick={goNext}
+        style={{ background: s.color }}>
+        {slide < WELCOME_SLIDES.length - 1 ? t('auth.next') : t('auth.start')}
+      </button>
+    </div>
+  );
+}
+
+// ===== 新規登録ステップフロー =====
+function RegisterFlow({ onDone, onBack }) {
+  const { t } = useTranslation();
+  const [step, setStep] = useState(1); // 1:名前 2:ID 3:パスワード 4:アイコン
+  const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [avatar, setAvatar] = useState(null); // base64
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const TOTAL = 4;
+  const progress = (step / TOTAL) * 100;
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setAvatar(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleNext = () => {
+    setError('');
+    if (step === 1) {
+      if (!displayName.trim()) { setError(t('errors.name_required')); return; }
+      setStep(2);
+    } else if (step === 2) {
+      if (!username.trim()) { setError(t('errors.id_required')); return; }
+      if (/[\s\x00-\x1f]/.test(username.trim())) { setError(t('errors.id_no_space')); return; } // eslint-disable-line no-control-regex
+      setStep(3);
+    } else if (step === 3) {
+      if (!password) { setError(t('errors.password_required')); return; }
+      if (password.length < 6) { setError(t('errors.password_short')); return; }
+      setStep(4);
+    } else {
+      handleRegister();
+    }
+  };
+
+  const handleRegister = async () => {
+    setLoading(true); setError('');
+    try {
+      const res = await axios.post('/api/auth/register', {
+        username: username.trim(),
+        password,
+        displayName: displayName.trim(),
+        avatar,
+      });
+      localStorage.setItem('token', res.data.token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+      onDone(res.data.user);
+    } catch (err) {
+      setError(err.response?.data?.error || '接続エラー');
+      setStep(2); // IDが重複してたらIDに戻す
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-screen">
+      <div className="auth-card">
+        {/* 戻るボタン */}
+        <button onClick={step === 1 ? onBack : () => { setError(''); setStep(s => s - 1); }}
+          className="onboard-back-btn">← 戻る</button>
+
+        {/* プログレスバー */}
+        <div className="onboard-progress-bar">
+          <div className="onboard-progress-fill" style={{ width: `${progress}%` }} />
+        </div>
+        <div className="onboard-step-label">{t('auth.step_label', { current: step, total: TOTAL })}</div>
+
+        {/* WakkaChat ロゴ */}
+        <div className="auth-logo" style={{ marginBottom: 20 }}>
+          <WakkaLogo size={48} />
+          <h1>WakkaChat</h1>
+        </div>
+
+        {/* STEP 1: 名前 */}
+        {step === 1 && (
+          <div className="onboard-step">
+            <p className="onboard-question">{t('onboarding.step1_q')}</p>
+            <input className="auth-input" type="text" placeholder={t("onboarding.step1_placeholder")}
+              value={displayName} onChange={e => setDisplayName(e.target.value)}
+              autoFocus maxLength={30}
+              onKeyDown={e => e.key === 'Enter' && handleNext()} />
+            <p className="onboard-hint">{t('onboarding.step1_hint')}</p>
+          </div>
+        )}
+
+        {/* STEP 2: ID */}
+        {step === 2 && (
+          <div className="onboard-step">
+            <p className="onboard-question">{t('onboarding.step2_q')}</p>
+            <input className="auth-input" type="text" placeholder={t("onboarding.step2_placeholder")}
+              value={username} onChange={e => setUsername(e.target.value)}
+              autoCapitalize="none" autoFocus maxLength={30}
+              onKeyDown={e => e.key === 'Enter' && handleNext()} />
+            <p className="onboard-hint">{t('onboarding.step2_hint')}</p>
+          </div>
+        )}
+
+        {/* STEP 3: パスワード */}
+        {step === 3 && (
+          <div className="onboard-step">
+            <p className="onboard-question">{t('onboarding.step3_q')}</p>
+            <div style={{ position: 'relative' }}>
+              <input className="auth-input" type={showPw ? 'text' : 'password'}
+                placeholder={t("onboarding.step3_placeholder")} value={password}
+                onChange={e => setPassword(e.target.value)}
+                autoComplete="new-password" autoFocus
+                style={{ paddingRight: 44 }}
+                onKeyDown={e => e.key === 'Enter' && handleNext()} />
+              <button type="button" onClick={() => setShowPw(v => !v)}
+                style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)',
+                  background:'none', border:'none', cursor:'pointer', fontSize:18,
+                  color:'var(--text2)', padding:4 }}>
+                {showPw ? '🙈' : '👁️'}
+              </button>
+            </div>
+            <p className="onboard-hint">{t('onboarding.step3_hint')}</p>
+          </div>
+        )}
+
+        {/* STEP 4: アイコン */}
+        {step === 4 && (
+          <div className="onboard-step" style={{ textAlign: 'center' }}>
+            <p className="onboard-question">{t('onboarding.step4_q')}</p>
+            <label className="onboard-avatar-label">
+              {avatar
+                ? <img src={avatar} alt="avatar" className="onboard-avatar-preview" />
+                : <div className="onboard-avatar-placeholder">
+                    <span style={{ fontSize: 40 }}>😊</span>
+                    <span style={{ fontSize: 13, color: 'var(--text2)', marginTop: 6 }}>{t('onboarding.avatar_tap')}</span>
+                  </div>
+              }
+              <input type="file" accept="image/*" onChange={handleAvatarChange}
+                style={{ display: 'none' }} />
+            </label>
+            <p className="onboard-hint">{t('onboarding.step4_hint')}</p>
+          </div>
+        )}
+
+        {error && <div className="auth-error">{error}</div>}
+
+        <button className="auth-btn" onClick={handleNext} disabled={loading}>
+          {loading ? t('auth.loading_register') : step < TOTAL ? t('auth.next') : t('auth.start')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ===== ログインフォーム =====
+function LoginForm({ onLogin, onBack }) {
+  const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -64,10 +302,9 @@ function AuthScreen({ onLogin }) {
     e.preventDefault();
     if (!username.trim()) { setError('IDを入力してください'); return; }
     if (!password) { setError('パスワードを入力してください'); return; }
-    if (!isLogin && /[\s\x00-\x1f]/.test(username.trim())) { setError('IDにスペースは使えません'); return; } // eslint-disable-line no-control-regex
     setLoading(true); setError('');
     try {
-      const res = await axios.post(isLogin ? '/api/auth/login' : '/api/auth/register', { username: username.trim(), password });
+      const res = await axios.post('/api/auth/login', { username: username.trim(), password });
       localStorage.setItem('token', res.data.token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       onLogin(res.data.user);
@@ -87,50 +324,192 @@ function AuthScreen({ onLogin }) {
   return (
     <div className="auth-screen">
       <div className="auth-card">
+        <button onClick={onBack} className="onboard-back-btn">← 戻る</button>
         <div className="auth-logo">
-          <span className="logo-icon">
-            <svg width="56" height="56" viewBox="0 0 80 80" style={{borderRadius:16}}>
-              <rect width="80" height="80" rx="20" fill="#1DB874"/>
-              <circle cx="40" cy="38" r="22" fill="none" stroke="white" strokeWidth="6" opacity="0.3"/>
-              <rect x="22" y="26" width="36" height="22" rx="10" fill="white"/>
-              <path d="M28 48 L24 56 L36 50" fill="white"/>
-              <circle cx="32" cy="37" r="2.5" fill="#1DB874"/>
-              <circle cx="40" cy="37" r="2.5" fill="#1DB874"/>
-              <circle cx="48" cy="37" r="2.5" fill="#1DB874"/>
-            </svg>
-          </span>
+          <WakkaLogo size={52} />
           <h1>WakkaChat</h1>
-          <p>LINEを超えるチャットアプリ</p>
+          <p>{t('auth.welcome_back')}</p>
         </div>
         <form onSubmit={handleSubmit}>
-          <input type="text" placeholder="ユーザーID" value={username}
+          <input type="text" placeholder={t("auth.login")} value={username}
             onChange={(e) => setUsername(e.target.value)} required className="auth-input"
             autoComplete="username" autoCapitalize="none" />
           <div style={{ position:'relative' }}>
-            <input type={showPw ? 'text' : 'password'} placeholder="パスワード" value={password}
+            <input type={showPw ? 'text' : 'password'} placeholder={t("errors.password_required").replace("入力してください","").trim() || "Password"} value={password}
               onChange={(e) => setPassword(e.target.value)} required className="auth-input"
-              style={{ paddingRight:44 }} autoComplete={isLogin ? 'current-password' : 'new-password'} />
+              style={{ paddingRight:44 }} autoComplete="current-password" />
             <button type="button" onClick={() => setShowPw(v => !v)}
-              style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', fontSize:18, color:'var(--text2)', padding:4 }}>
+              style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)',
+                background:'none', border:'none', cursor:'pointer', fontSize:18,
+                color:'var(--text2)', padding:4 }}>
               {showPw ? '🙈' : '👁️'}
             </button>
           </div>
           {error && <div className="auth-error">{error}</div>}
           <button type="submit" disabled={loading} className="auth-btn">
-            {loading ? '...' : isLogin ? 'ログイン' : '登録'}
+            {loading ? t('auth.loading_login') : t('auth.login')}
           </button>
         </form>
-        {isLogin && (
-          <button onClick={() => setShowReset(true)} style={{
-            background:'none', border:'none', color:'var(--primary)', fontSize:13,
-            cursor:'pointer', padding:'4px 0', marginTop:4, display:'block', width:'100%'
-          }}>
-            パスワードを忘れた方はこちら
-          </button>
-        )}
-        <button className="auth-toggle" onClick={() => setIsLogin(!isLogin)}>
-          {isLogin ? 'アカウント作成' : 'ログインへ戻る'}
+        <button onClick={() => setShowReset(true)} style={{
+          background:'none', border:'none', color:'var(--primary)', fontSize:13,
+          cursor:'pointer', padding:'4px 0', marginTop:4, display:'block', width:'100%'
+        }}>
+          {t('auth.forgot_password')}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ===== AuthScreen（全フローのコントローラー）=====
+// ===== OAuth ヘルパー =====
+async function handleGoogleOAuth(onLogin) {
+  return new Promise((resolve, reject) => {
+    const clientId = window.__GOOGLE_CLIENT_ID__ || process.env.REACT_APP_GOOGLE_CLIENT_ID;
+    if (!clientId) { reject(new Error('REACT_APP_GOOGLE_CLIENT_IDが未設定です')); return; }
+    // Google Identity Services (GSI) をロード
+    if (!window.google) {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => initGoogle(clientId, onLogin, resolve, reject);
+      script.onerror = () => reject(new Error('Googleスクリプトの読み込みに失敗しました'));
+      document.head.appendChild(script);
+    } else {
+      initGoogle(clientId, onLogin, resolve, reject);
+    }
+  });
+}
+
+function initGoogle(clientId, onLogin, resolve, reject) {
+  window.google.accounts.id.initialize({
+    client_id: clientId,
+    callback: async (response) => {
+      try {
+        const res = await axios.post('/api/auth/google', { idToken: response.credential });
+        localStorage.setItem('token', res.data.token);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+        onLogin(res.data.user);
+        resolve();
+      } catch(e) { reject(e); }
+    },
+  });
+  window.google.accounts.id.prompt((notification) => {
+    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+      // ポップアップが出なかった場合はOne Tapが使えないのでフォールバック
+      window.google.accounts.id.renderButton(
+        document.getElementById('google-btn-container'),
+        { theme: 'outline', size: 'large', width: 300, text: 'continue_with' }
+      );
+    }
+  });
+}
+
+// ===== AuthScreen（全フローのコントローラー）=====
+function AuthScreen({ onLogin }) {
+  // 初回起動か確認
+  const [phase, setPhase] = useState(() =>
+    localStorage.getItem('wc_welcomed') ? 'top' : 'splash'
+  );
+  const [oauthLoading, setOauthLoading] = useState('');
+  const [oauthError, setOauthError] = useState('');
+
+  const handleSplashDone = () => setPhase('welcome');
+  const handleWelcomeDone = () => {
+    localStorage.setItem('wc_welcomed', '1');
+    setPhase('top');
+  };
+
+  const handleGoogleLogin = async () => {
+    setOauthLoading('google'); setOauthError('');
+    try { await handleGoogleOAuth(onLogin); }
+    catch(e) { setOauthError(e.response?.data?.error || 'Googleログインに失敗しました'); }
+    finally { setOauthLoading(''); }
+  };
+
+  const handleAppleLogin = async () => {
+    setOauthLoading('apple'); setOauthError('');
+    try {
+      // Apple Sign In JS API
+      if (!window.AppleID) throw new Error('Apple Sign Inが読み込まれていません');
+      const res = await window.AppleID.auth.signIn();
+      const idToken = res.authorization?.id_token;
+      const fullName = res.user ? `${res.user.name?.firstName || ''} ${res.user.name?.lastName || ''}`.trim() : '';
+      if (!idToken) throw new Error('トークン取得に失敗しました');
+      const authRes = await axios.post('/api/auth/apple', { idToken, fullName });
+      localStorage.setItem('token', authRes.data.token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${authRes.data.token}`;
+      onLogin(authRes.data.user);
+    } catch(e) {
+      if (e.error === 'popup_closed_by_user') { setOauthError(''); }
+      else { setOauthError(e.response?.data?.error || 'Appleログインに失敗しました'); }
+    }
+    finally { setOauthLoading(''); }
+  };
+
+  if (phase === 'splash') return <SplashScreen onDone={handleSplashDone} />;
+  if (phase === 'welcome') return <WelcomeSlides onDone={handleWelcomeDone} />;
+  if (phase === 'register') return <RegisterFlow onDone={onLogin} onBack={() => setPhase('top')} />;
+  if (phase === 'login') return <LoginForm onLogin={onLogin} onBack={() => setPhase('top')} />;
+
+  // TOP画面
+  return (
+    <div className="auth-screen">
+      {/* Apple Sign In SDK */}
+      <script type="text/javascript" src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js" async />
+      <div className="auth-top-card">
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <WakkaLogo size={80} />
+          <h1 className="auth-top-title">WakkaChat</h1>
+          <p className="auth-top-sub">{t('app.tagline')}</p>
+        </div>
+
+        {/* Googleログイン */}
+        <button className="oauth-btn oauth-btn-google"
+          onClick={handleGoogleLogin}
+          disabled={!!oauthLoading}>
+          {oauthLoading === 'google' ? '接続中...' : (
+            <><span className="oauth-icon">
+              <svg width="18" height="18" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+              </svg>
+            </span>{t('auth.google')}</>
+          )}
+        </button>
+
+        {/* Apple Sign In */}
+        <button className="oauth-btn oauth-btn-apple"
+          onClick={handleAppleLogin}
+          disabled={!!oauthLoading}>
+          {oauthLoading === 'apple' ? '接続中...' : (
+            <><span className="oauth-icon">
+              <svg width="18" height="18" viewBox="0 0 814 1000" fill="white">
+                <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-57.8-155.5-127.4C46 411.4 65.5 301.6 69.4 297.4c0-.8.2-1.6.2-2.4 0-0 0-0 0-0C69.6 295 69.6 295 69.6 295c0 0 0 0 0 0C68.5 175.5 163.8 101.3 240 101.3c55.4 0 101.2 34.4 135.9 34.4 33.4 0 87.3-36.7 152.4-36.7 30.3 0 127.8 2.6 199 101.3zm-234-181.5c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/>
+              </svg>
+            </span>{t('auth.apple')}</>
+          )}
+        </button>
+
+        {oauthError && <div className="auth-error" style={{ marginTop: 8 }}>{oauthError}</div>}
+
+        {/* 区切り線 */}
+        <div className="oauth-divider"><span>{t('auth.or')}</span></div>
+
+        <button className="auth-btn" onClick={() => setPhase('register')}>
+          {t('auth.create_account')}
+        </button>
+        <button className="auth-btn auth-btn-outline" onClick={() => setPhase('login')}>
+          ログイン
+        </button>
+        <p className="auth-top-terms">
+          登録すると<a href="/terms" target="_blank" rel="noreferrer">利用規約</a>・
+          <a href="/privacy" target="_blank" rel="noreferrer">プライバシーポリシー</a>に同意したことになります
+        </p>
+        <div id="google-btn-container" style={{ display: 'none' }} />
       </div>
     </div>
   );
@@ -395,7 +774,15 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   const [showFileManager, setShowFileManager] = useState(false);
   const [roomFiles, setRoomFiles] = useState([]);
   const [roomStats, setRoomStats] = useState(null);
+  const { t, i18n: i18nInstance } = useTranslation();
   const [showTheme, setShowTheme] = useState(false);
+  const [showLangModal, setShowLangModal] = useState(false);
+  const [showStampMarket, setShowStampMarket] = useState(false);
+  const [showGamerStatus, setShowGamerStatus] = useState(false);
+  const [stampMarketPacks, setStampMarketPacks] = useState([]);
+  const [gamerStatusData, setGamerStatusData] = useState({ is_gaming: false, game_name: '', game_emoji: '🎮' });
+  const [friendGamingList, setFriendGamingList] = useState([]);
+  const [e2eEnabled, setE2eEnabled] = useState(!!localStorage.getItem('wc_e2e_key'));
   const [showDailyBonus, setShowDailyBonus] = useState(false);
   const [dailyBonusResult, setDailyBonusResult] = useState(null);
   const [showNotifSound, setShowNotifSound] = useState(false);
@@ -1563,6 +1950,14 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     { icon:'📁', label:'フォルダ', action: () => { axios.get('/api/folders').then(r=>{setFolderList(r.data);setShowFolders(true);}).catch(()=>{}); } },
                     { icon:'🏅', label:'バッジ', action: () => { axios.get('/api/badges').then(r=>{setBadgeList(r.data);setShowBadges(true);}).catch(()=>{}); } },
                     { icon:'🎨', label:'テーマ', action: () => setShowTheme(true) },
+                    { icon:'🌐', label:t('settings.language'), action: () => setShowLangModal(true) },
+                    { icon:'🛒', label:'スタンプ販売所', action: () => {
+                      axios.get('/api/stamp-market').then(r => { setStampMarketPacks(r.data); setShowStampMarket(true); }).catch(() => {});
+                    }},
+                    { icon:'🎮', label:'ゲームステータス', action: () => {
+                      axios.get('/api/gamer-status/friends').then(r => setFriendGamingList(r.data)).catch(() => {});
+                      setShowGamerStatus(true);
+                    }},
                   ].map(item => (
                     <button key={item.label} onClick={() => { setShowHeaderMenu(false); item.action(); }}
                       style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'10px 4px', borderRadius:12, border:'none', background:'var(--surface2)', cursor:'pointer', fontSize:11, color:'var(--text)', fontWeight:600 }}>
@@ -2715,6 +3110,169 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   setShowMusicShare(false);
                 }}>シェアする</button>
                 <button className="btn btn-secondary" style={{ width:'100%' }} onClick={() => setShowMusicShare(false)}>キャンセル</button>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== スタンプマーケットプレイス ===== */}
+          <Portal>{showStampMarket && (
+            <div className="modal-overlay" onClick={() => setShowStampMarket(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()}
+                style={{ maxWidth:480, maxHeight:'80vh', overflowY:'auto' }}>
+                <div className="modal-title">🛒 スタンプ販売所</div>
+                <p style={{ fontSize:12, color:'var(--text2)', marginBottom:12 }}>
+                  クリエイターが作ったスタンプをコインで購入できるで！
+                </p>
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {stampMarketPacks.length === 0
+                    ? <div style={{ textAlign:'center', padding:24, color:'var(--text2)' }}>
+                        まだスタンプがないで。最初のクリエイターになろう！
+                      </div>
+                    : stampMarketPacks.map(pack => (
+                      <div key={pack.id} style={{
+                        border:'1.5px solid var(--border)', borderRadius:14,
+                        padding:'12px 14px', display:'flex', gap:12, alignItems:'center',
+                      }}>
+                        <div style={{ fontSize:32, flexShrink:0 }}>
+                          {pack.stamps?.[0]?.emoji || '📦'}
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontWeight:700, fontSize:14 }}>{pack.title}</div>
+                          <div style={{ fontSize:12, color:'var(--text2)' }}>
+                            by {pack.creator_name} · {pack.stamps?.length || 0}個
+                          </div>
+                          <div style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>
+                            {pack.avg_rating && `⭐ ${pack.avg_rating}`} {pack.sales_count > 0 && `· ${pack.sales_count}件購入`}
+                          </div>
+                        </div>
+                        <div style={{ textAlign:'center', flexShrink:0 }}>
+                          <div style={{ fontWeight:800, color: pack.price === 0 ? '#06c755' : '#ff9500', fontSize:15 }}>
+                            {pack.price === 0 ? '無料' : `${pack.price}💰`}
+                          </div>
+                          {pack.purchased
+                            ? <div style={{ fontSize:11, color:'#06c755', fontWeight:700 }}>✓ 購入済み</div>
+                            : <button onClick={() => {
+                                if (!window.confirm(`「${pack.title}」を${pack.price}コインで購入しますか？`)) return;
+                                axios.post(`/api/stamp-market/${pack.id}/buy`)
+                                  .then(() => {
+                                    alert('購入完了！スタンプが使えるようになったで🎉');
+                                    axios.get('/api/stamp-market').then(r => setStampMarketPacks(r.data)).catch(() => {});
+                                  })
+                                  .catch(e => alert(e.response?.data?.error || '購入失敗'));
+                              }} style={{
+                                background:'#06c755', color:'white', border:'none',
+                                borderRadius:8, padding:'4px 10px', fontSize:12,
+                                cursor:'pointer', marginTop:4, fontWeight:700,
+                              }}>購入する</button>
+                          }
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
+                <div style={{ marginTop:16, paddingTop:12, borderTop:'1px solid var(--border)' }}>
+                  <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>🎨 自分のスタンプを出品する</div>
+                  <p style={{ fontSize:12, color:'var(--text2)' }}>
+                    スタンプを出品してコインを稼ごう！<br/>
+                    売上の80%がクリエイターに還元されるで。
+                  </p>
+                  <button onClick={() => { setShowStampMarket(false); setShowStickerMaker(true); }}
+                    style={{ marginTop:8, padding:'10px 16px', background:'#5856d6', color:'white',
+                      border:'none', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:700 }}>
+                    ✏️ スタンプを作る・出品する
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== ゲーマーステータス ===== */}
+          <Portal>{showGamerStatus && (
+            <div className="modal-overlay" onClick={() => setShowGamerStatus(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:360 }}>
+                <div className="modal-title">🎮 ゲーマーステータス</div>
+
+                {/* 自分のステータス設定 */}
+                <div style={{ padding:'12px 0', borderBottom:'1px solid var(--border)', marginBottom:12 }}>
+                  <div style={{ fontWeight:700, fontSize:13, marginBottom:8 }}>自分のステータス</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
+                      <input type="checkbox" checked={gamerStatusData.is_gaming}
+                        onChange={e => {
+                          const v = { ...gamerStatusData, is_gaming: e.target.checked };
+                          setGamerStatusData(v);
+                          axios.post('/api/gamer-status', v).catch(() => {});
+                        }} style={{ width:18, height:18, accentColor:'#06c755' }} />
+                      <span style={{ fontSize:14, fontWeight:600 }}>ゲーム中</span>
+                    </label>
+                    <span style={{ fontSize:22 }}>{gamerStatusData.game_emoji}</span>
+                  </div>
+                  {gamerStatusData.is_gaming && (
+                    <input value={gamerStatusData.game_name}
+                      onChange={e => {
+                        const v = { ...gamerStatusData, game_name: e.target.value };
+                        setGamerStatusData(v);
+                      }}
+                      onBlur={() => axios.post('/api/gamer-status', gamerStatusData).catch(() => {})}
+                      placeholder="プレイ中のゲーム名（例：Minecraft）"
+                      style={{ marginTop:8, width:'100%', padding:'8px 12px',
+                        border:'1.5px solid var(--border)', borderRadius:10,
+                        fontSize:13, background:'var(--surface)', color:'var(--text)' }}
+                    />
+                  )}
+                </div>
+
+                {/* 友達のゲーミング状況 */}
+                <div style={{ fontWeight:700, fontSize:13, marginBottom:8 }}>🕹️ 今ゲーム中の友達</div>
+                {friendGamingList.length === 0
+                  ? <div style={{ color:'var(--text2)', fontSize:13, padding:'8px 0' }}>
+                      今ゲーム中の友達はいないみたい
+                    </div>
+                  : friendGamingList.map(s => (
+                    <div key={s.user_id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0' }}>
+                      <img src={s.user?.avatar || '/default-avatar.png'} alt=""
+                        style={{ width:36, height:36, borderRadius:'50%', objectFit:'cover' }} />
+                      <div>
+                        <div style={{ fontWeight:600, fontSize:13 }}>{s.user?.display_name || s.user?.username}</div>
+                        <div style={{ fontSize:12, color:'#06c755' }}>
+                          {s.game_emoji} {s.game_name || 'ゲーム中'}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+          )}</Portal>
+
+          {/* ===== E2E暗号化設定 ===== */}
+          <Portal>{showLangModal && false && ( // 将来的にE2E設定モーダルをここに
+            <div></div>
+          )}</Portal>
+
+
+          {/* ===== 言語設定モーダル ===== */}
+          <Portal>{showLangModal && (
+            <div className="modal-overlay" onClick={() => setShowLangModal(false)}>
+              <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:320 }}>
+                <div className="modal-title">🌐 {t('settings.language_select')}</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:12 }}>
+                  {SUPPORTED_LANGS.map(lang => (
+                    <button key={lang.code}
+                      onClick={() => { i18nInstance.changeLanguage(lang.code); localStorage.setItem('wc_lang', lang.code); setShowLangModal(false); }}
+                      style={{
+                        display:'flex', alignItems:'center', gap:12, padding:'12px 16px',
+                        borderRadius:12, border: i18nInstance.language === lang.code ? '2px solid #06c755' : '1.5px solid var(--border)',
+                        background: i18nInstance.language === lang.code ? '#f0fff6' : 'var(--surface)',
+                        cursor:'pointer', fontSize:15, fontWeight: i18nInstance.language === lang.code ? 700 : 400,
+                        color:'var(--text)',
+                      }}>
+                      <span style={{ fontSize:24 }}>{lang.flag}</span>
+                      <span>{lang.label}</span>
+                      {i18nInstance.language === lang.code && <span style={{ marginLeft:'auto', color:'#06c755', fontSize:18 }}>✓</span>}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}</Portal>
