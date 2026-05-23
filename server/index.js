@@ -3609,10 +3609,7 @@ app.get('/sitemap.xml', (req, res) => {
 
 app.get('/robots.txt', (req, res) => {
   res.header('Content-Type', 'text/plain');
-  res.send(\`User-agent: *
-Allow: /
-Sitemap: \${CLIENT_URL}/sitemap.xml
-\`);
+  res.send(`User-agent: *\nAllow: /\nSitemap: ${CLIENT_URL}/sitemap.xml\n`);
 });
 
 // ===== TWA用 assetlinks.json =====
