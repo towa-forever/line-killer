@@ -4736,7 +4736,17 @@ const PORT = process.env.PORT || 4000;
   } catch (e) {}
 })();
 
-httpServer.listen(PORT, '0.0.0.0', () => console.log('Server: http://localhost:' + PORT));
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log('Server: http://localhost:' + PORT);
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.warn('[WARN] ANTHROPIC_API_KEY が未設定やで！AI機能が使えへんで。RenderのEnvironmentに追加してな。');
+  } else {
+    console.log('[OK] ANTHROPIC_API_KEY 設定済み');
+  }
+  if (!process.env.JWT_SECRET) {
+    console.error('[ERROR] JWT_SECRET が未設定やで！認証が動かへんで！');
+  }
+});
 
 // 未処理のPromise拒否でサーバーが落ちないように
 process.on('unhandledRejection', (reason, promise) => {

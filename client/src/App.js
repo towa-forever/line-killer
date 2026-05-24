@@ -1848,7 +1848,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             }}>📞</button>
             <button className="icon-btn header-menu-btn" onClick={() => dispatchModal({ type: 'TOGGLE', key: 'showHeaderMenu' })} title="メニュー">⋯</button>
             {showHeaderMenu && (
-              <div style={{ position:'absolute', top:'100%', right:0, zIndex:3000, background:'var(--surface)', borderRadius:16, boxShadow:'0 8px 32px rgba(0,0,0,0.18)', width:320, maxHeight:'80dvh', overflowY:'auto', padding:'8px 0' }}
+              <div className="header-menu-dropdown" style={{ position:'absolute', top:'100%', right:0, zIndex:3000, background:'var(--surface)', borderRadius:16, boxShadow:'0 8px 32px rgba(0,0,0,0.18)', width:320, maxHeight:'80dvh', overflowY:'auto', padding:'8px 0' }}
                 onClick={e => e.stopPropagation()}>
                 {/* このトーク */}
                 <div style={{ padding:'8px 16px 4px', fontSize:11, fontWeight:700, color:'var(--text2)', letterSpacing:1 }}>このトーク</div>
@@ -2313,12 +2313,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
             </div>
           )}</Portal>
           <Portal>{showAI && (
-            <Portal><ErrorBoundary><Suspense fallback={null}><AIAssistant
+            <ErrorBoundary><Suspense fallback={null}><AIAssistant
               messages={messages.filter(m => m.type === 'text').slice(-50)}
               currentRoom={selectedRoom}
               onInsert={text => { setInputText(text); setShowAI(false); }}
               onClose={handleCloseAI}
-            /></Suspense></ErrorBoundary></Portal>
+            /></Suspense></ErrorBoundary>
           )}</Portal>
           <Portal>{showTaskPanel && (
             <ErrorBoundary><Suspense fallback={null}><TaskPanel room={selectedRoom} currentUser={currentUser} socket={socket} onClose={handleCloseTaskPanel} showToast={showToast} /></Suspense></ErrorBoundary>
