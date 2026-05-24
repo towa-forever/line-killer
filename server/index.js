@@ -16,7 +16,7 @@ const { promisify } = require('util');
 const crypto = require('crypto');
 
 // ===== Groq AI ヘルパー =====
-const GROQ_MODEL = 'llama3-8b-8192';
+const GROQ_MODEL = 'llama-3.1-8b-instant'; // 高速・無料・最新
 async function callGroq(messages, maxTokens = 1000) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw Object.assign(new Error('GROQ_API_KEY が未設定やで'), { status: 503 });
