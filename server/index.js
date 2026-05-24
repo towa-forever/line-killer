@@ -14,6 +14,25 @@ const bcrypt = require('bcrypt');
 const https = require('https');
 const { promisify } = require('util');
 const crypto = require('crypto');
+
+// ===== Groq AI ヘルパー =====
+const GROQ_MODEL = 'llama3-8b-8192';
+async function callGroq(messages, maxTokens = 1000) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw Object.assign(new Error('GROQ_API_KEY が未設定やで'), { status: 503 });
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({ model: GROQ_MODEL, max_tokens: maxTokens, messages })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Groq API error: ${response.status}`);
+  }
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
@@ -3758,18 +3777,13 @@ app.get('/api/friends/birthdays', async (req, res) => {
 app.get('/api/ai/fortune', async (req, res) => {
   try {
     auth(req);
-    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
+    if (!process.env.GROQ_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const signs = ['牡羊座','牡牛座','双子座','蟹座','獅子座','乙女座','天秤座','蠍座','射手座','山羊座','水瓶座','魚座'];
     const { sign } = req.query;
     const today = new Date().toLocaleDateString('ja-JP');
     const prompt = `あなたは占い師です。${sign || '全体'}の今日（${today}）の運勢を、ラッキーカラー・ラッキーナンバー・総合運・恋愛運・仕事運の5項目で、各1〜2文で楽しく占ってください。絵文字を使って読みやすくしてね。`;
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, messages: [{ role: 'user', content: prompt }] })
-    });
-    const data = await response.json();
-    res.json({ result: data.content?.[0]?.text || '今日の運勢は不明やで', sign: sign || '全体', signs });
+    const result = await callGroq([{ role: 'user', content: prompt }], 400);
+    res.json({ result: result || '今日の運勢は不明やで', sign: sign || '全体', signs });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -3777,19 +3791,14 @@ app.get('/api/ai/fortune', async (req, res) => {
 app.post('/api/ai/tldr', async (req, res) => {
   try {
     auth(req);
-    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
+    if (!process.env.GROQ_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const { text } = req.body;
     if (!text?.trim()) return res.status(400).json({ error: 'テキストが空やで' });
     const prompt = `次のメッセージを「要するに：」で始まる1行（30字以内）で要約してください。
 
 ${text}`;
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 80, messages: [{ role: 'user', content: prompt }] })
-    });
-    const data = await response.json();
-    res.json({ result: data.content?.[0]?.text || '' });
+    const _groqResult = await callGroq([{ role: 'user', content: prompt }], 80)
+    res.json({ result: _groqResult || '' });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -3797,7 +3806,7 @@ ${text}`;
 app.post('/api/ai/extract-todos', async (req, res) => {
   try {
     auth(req);
-    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
+    if (!process.env.GROQ_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const { messages: msgs } = req.body;
     if (!msgs?.length) return res.json({ todos: [] });
     const text = msgs.map(m => `${m.senderName}: ${m.content}`).join('\n');
@@ -3806,13 +3815,8 @@ app.post('/api/ai/extract-todos', async (req, res) => {
 ${text}
 
 JSONのみ返してください。`;
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
-    });
-    const data = await response.json();
-    const raw = data.content?.[0]?.text || '[]';
+    const _groqResult = await callGroq([{ role: 'user', content: prompt }], 500)
+    const raw = _groqResult || '[]';
     try {
       const todos = JSON.parse(raw.replace(/```json|```/g, '').trim());
       res.json({ todos: Array.isArray(todos) ? todos : [] });
@@ -3915,7 +3919,7 @@ app.get('/api/friends/activities', async (req, res) => {
 app.post('/api/ai/practice', async (req, res) => {
   try {
     auth(req);
-    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
+    if (!process.env.GROQ_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const { mode, message, history } = req.body;
     // mode: 'english'|'keigo'|'casual'
     const systemPrompts = {
@@ -3925,17 +3929,8 @@ app.post('/api/ai/practice', async (req, res) => {
     };
     const historyMsgs = (history || []).slice(-10).map(m => ({ role: m.role, content: m.content }));
     const prompt = systemPrompts[mode] || systemPrompts.casual;
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001', max_tokens: 300,
-        system: prompt,
-        messages: [...historyMsgs, { role: 'user', content: message }]
-      })
-    });
-    const data = await response.json();
-    res.json({ result: data.content?.[0]?.text || '' });
+    const _groqResult = await callGroq([...historyMsgs, { role: 'user', content: message }], 300)
+    res.json({ result: _groqResult || '' });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -3990,29 +3985,18 @@ app.post('/api/ai/transcribe', uploadAudio.single('audio'), async (req, res) => 
       ? req.file.buffer.toString('base64')
       : require('fs').readFileSync(req.file.path).toString('base64');
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Groq Whisper APIで文字起こし
+    const formData = new (require('form-data'))();
+    formData.append('file', require('fs').createReadStream(req.file.path), { filename: req.file.originalname || 'audio.mp3' });
+    formData.append('model', 'whisper-large-v3');
+    formData.append('language', 'ja');
+    const whisperRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 500,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: 'この音声メッセージを文字起こししてください。話している内容をそのままテキストにしてください。テキストのみ返してください。'
-            }
-          ]
-        }]
-      })
+      headers: { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}`, ...formData.getHeaders() },
+      body: formData
     });
-    const data = await response.json();
-    const text = data.content?.[0]?.text || '文字起こしに失敗したで';
+    const whisperData = await whisperRes.json();
+    const text = whisperData.text || '文字起こしに失敗したで';
     res.json({ text });
   } catch(e) {
     res.status(500).json({ error: e.message });
@@ -4112,7 +4096,7 @@ app.get('/api/rooms/:roomId/files', async (req, res) => {
 app.post('/api/ai/wakkabot', async (req, res) => {
   try {
     auth(req);
-    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
+    if (!process.env.GROQ_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const { message, history } = req.body;
     if (!message?.trim()) return res.status(400).json({ error: 'メッセージが空やで' });
     const historyText = (history || []).slice(-10).map(m => `${m.senderName}: ${m.content}`).join('\n');
@@ -4125,13 +4109,8 @@ ${historyText}
 
 ` : ''}ユーザーのメッセージ: ${message}`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 300, messages: [{ role: 'user', content: prompt }] })
-    });
-    const data = await response.json();
-    res.json({ result: data.content?.[0]?.text || 'うまく返答できんかったで…' });
+    const _groqResult = await callGroq([{ role: 'user', content: prompt }], 300)
+    res.json({ result: _groqResult || 'うまく返答できんかったで…' });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4139,19 +4118,13 @@ ${historyText}
 app.post('/api/ai/emotion', async (req, res) => {
   try {
     auth(req);
-    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
+    if (!process.env.GROQ_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const { text } = req.body;
     if (!text?.trim()) return res.status(400).json({ emoji: '😐' });
     const prompt = `次のメッセージの感情を分析して、最も当てはまる絵文字を1つだけ返してください。絵文字以外は何も返さないでください。
 選択肢: 😊 😂 😢 😡 😍 😮 😰 🤔 👍 ❤️ 😐
 メッセージ: ${text}`;
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 10, messages: [{ role: 'user', content: prompt }] })
-    });
-    const data = await response.json();
-    const emoji = data.content?.[0]?.text?.trim() || '😐';
+    const emoji = (await callGroq([{ role: 'user', content: prompt }], 10) || '😐').trim();
     res.json({ emoji });
   } catch(e) { res.status(500).json({ emoji: '😐' }); }
 });
@@ -4161,25 +4134,14 @@ app.post('/api/ai/emotion', async (req, res) => {
 app.post('/api/ai/generate-avatar', async (req, res) => {
   try {
     auth(req);
-    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
+    if (!process.env.GROQ_API_KEY) return res.status(503).json({ error: 'AI機能が利用できへんで。管理者に連絡してな。' });
     const { prompt } = req.body;
     if (!prompt?.trim()) return res.status(400).json({ error: 'プロンプトが必要やで' });
     const systemPrompt = `あなたはアバター絵文字を選ぶアシスタントです。
 ユーザーのプロンプトに最もマッチする絵文字を1〜3個選んで返してください。
 絵文字だけを返し、他のテキストは一切含めないでください。
 例: 🧙‍♂️✨ または 🦁 または 🤖💜`;
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 20,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: `このスタイルのアバターに合う絵文字を選んで: ${prompt}` }]
-      })
-    });
-    const data = await response.json();
-    const emoji = data.content?.[0]?.text?.trim() || '🎨';
+    const emoji = (await callGroq([{ role: 'user', content: `このスタイルのアバターに合う絵文字を選んで: ${prompt}` }], 20) || '🎨').trim();
     res.json({ emoji });
   } catch(e) { res.status(500).json({ error: '生成に失敗したで', emoji: '🎨' }); }
 });
@@ -4187,7 +4149,7 @@ app.post('/api/ai/generate-avatar', async (req, res) => {
 app.post('/api/ai/assist', async (req, res) => {
   try {
     auth(req);
-    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'AI機能が設定されてへんで。管理者に連絡してな。' });
+    if (!process.env.GROQ_API_KEY) return res.status(503).json({ error: 'AI機能が設定されてへんで。管理者に連絡してな。' });
     const { type, messages: msgs, text, targetLang } = req.body;
     let prompt = '';
     if (type === 'summary') {
@@ -4204,19 +4166,7 @@ app.post('/api/ai/assist', async (req, res) => {
     } else {
       return res.status(400).json({ error: '不正なタイプです' });
     }
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      const errMsg = err?.error?.message || response.status;
-      console.error('[AI assist error]', errMsg);
-      return res.status(500).json({ error: `AI APIエラー: ${errMsg}` });
-    }
-    const data = await response.json();
-    const result = data.content?.[0]?.text;
+    const result = await callGroq([{ role: 'user', content: prompt }], 1000);
     if (!result) return res.status(500).json({ error: 'AIからの返答が空やったで' });
     res.json({ result });
   } catch(e) {
@@ -4230,14 +4180,8 @@ app.post('/api/translate', async (req, res) => {
   try {
     auth(req);
     const { text, targetLang } = req.body;
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 300,
-        messages: [{ role: 'user', content: `次のテキストを${targetLang || '日本語'}に翻訳してください。翻訳結果だけ返してください。\n\n${text}` }] })
-    });
-    const data = await response.json();
-    res.json({ result: data.content?.[0]?.text || '' });
+    const translated = await callGroq([{ role: 'user', content: `次のテキストを${targetLang || '日本語'}に翻訳してください。翻訳結果だけ返してください。\n\n${text}` }], 300);
+    res.json({ result: translated || '' });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4738,10 +4682,10 @@ const PORT = process.env.PORT || 4000;
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log('Server: http://localhost:' + PORT);
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('[WARN] ANTHROPIC_API_KEY が未設定やで！AI機能が使えへんで。RenderのEnvironmentに追加してな。');
+  if (!process.env.GROQ_API_KEY) {
+    console.warn('[WARN] GROQ_API_KEY が未設定やで！AI機能が使えへんで。RenderのEnvironmentに追加してな。');
   } else {
-    console.log('[OK] ANTHROPIC_API_KEY 設定済み');
+    console.log('[OK] GROQ_API_KEY 設定済み');
   }
   if (!process.env.JWT_SECRET) {
     console.error('[ERROR] JWT_SECRET が未設定やで！認証が動かへんで！');
