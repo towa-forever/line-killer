@@ -54,6 +54,125 @@ axios.defaults.baseURL = SERVER_URL;
 const _token = localStorage.getItem('token');
 if (_token) axios.defaults.headers.common['Authorization'] = `Bearer ${_token}`;
 
+
+// ===== システム通知バナー =====
+function SystemNoticeBanner({ currentUser, showToast }) {
+  const [notices, setNotices] = useState([]);
+  const [realNameInput, setRealNameInput] = useState('');
+  const [realNameLoading, setRealNameLoading] = useState(false);
+  const [activeNotice, setActiveNotice] = useState(null);
+
+  useEffect(() => {
+    axios.get('/api/system-notices').then(r => {
+      setNotices(r.data);
+      if (r.data.length > 0) setActiveNotice(r.data[0]);
+    }).catch(() => {});
+  }, []);
+
+  // ソケットでリアルタイム受信
+  useEffect(() => {
+    const handler = (notice) => {
+      setNotices(prev => [notice, ...prev.filter(n => n.id !== notice.id)]);
+      setActiveNotice(notice);
+    };
+    window.__wc_socket__?.on('system:notice', handler);
+    return () => window.__wc_socket__?.off('system:notice', handler);
+  }, []);
+
+  const dismiss = async (id) => {
+    await axios.post(`/api/system-notices/${id}/dismiss`).catch(() => {});
+    setNotices(prev => prev.filter(n => n.id !== id));
+    setActiveNotice(prev => prev?.id === id ? null : prev);
+  };
+
+  const submitRealName = async (noticeId) => {
+    if (!realNameInput.trim()) return;
+    setRealNameLoading(true);
+    try {
+      await axios.post('/api/users/me/real-name', { real_name: realNameInput.trim() });
+      showToast?.('本名を登録したで！ありがとう🎉', 'success');
+      dismiss(noticeId);
+    } catch(e) {
+      showToast?.(e.response?.data?.error || '送信エラー', 'error');
+    } finally { setRealNameLoading(false); }
+  };
+
+  if (!activeNotice) return null;
+
+  const n = activeNotice;
+  const isRealName = n.action_type === 'real_name';
+  const isSurvey = n.type === 'survey';
+
+  return (
+    <div style={{
+      position:'fixed', top:0, left:0, right:0, zIndex:9000,
+      background: isSurvey ? 'linear-gradient(135deg,#5856d6,#7c3aed)' : 'linear-gradient(135deg,#06c755,#03a040)',
+      color:'white', padding:'12px 16px',
+      boxShadow:'0 4px 20px rgba(0,0,0,0.2)',
+      animation:'slideDown 0.3s ease',
+    }}>
+      <style>{`@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}`}</style>
+      <div style={{ maxWidth:600, margin:'0 auto' }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontWeight:800, fontSize:14, marginBottom:4 }}>{n.title}</div>
+            {n.content && <div style={{ fontSize:13, opacity:0.9, lineHeight:1.5 }}>{n.content}</div>}
+
+            {/* 本名入力フォーム */}
+            {isRealName && (
+              <div style={{ marginTop:10, display:'flex', gap:8 }}>
+                <input
+                  value={realNameInput}
+                  onChange={e => setRealNameInput(e.target.value)}
+                  placeholder="例：山田 太郎"
+                  style={{
+                    flex:1, padding:'8px 12px', borderRadius:10, border:'none',
+                    fontSize:14, outline:'none', color:'#1c1c1e',
+                  }}
+                  onKeyDown={e => e.key === 'Enter' && submitRealName(n.id)}
+                />
+                <button onClick={() => submitRealName(n.id)} disabled={realNameLoading}
+                  style={{
+                    padding:'8px 16px', background:'white', color:'#5856d6',
+                    border:'none', borderRadius:10, fontWeight:700, fontSize:13,
+                    cursor:'pointer', flexShrink:0,
+                  }}>
+                  {realNameLoading ? '送信中...' : '送信'}
+                </button>
+              </div>
+            )}
+          </div>
+          <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+            {isRealName && (
+              <button onClick={() => dismiss(n.id)}
+                style={{ background:'rgba(255,255,255,0.2)', border:'none', color:'white',
+                  borderRadius:8, padding:'4px 10px', fontSize:12, cursor:'pointer' }}>
+                あとで
+              </button>
+            )}
+            <button onClick={() => dismiss(n.id)}
+              style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white',
+                borderRadius:8, padding:'4px 8px', fontSize:16, cursor:'pointer', lineHeight:1 }}>
+              ✕
+            </button>
+          </div>
+        </div>
+        {notices.length > 1 && (
+          <div style={{ marginTop:6, fontSize:11, opacity:0.7 }}>
+            他に{notices.length - 1}件のお知らせあるで →
+            <button onClick={() => {
+              const idx = notices.findIndex(n2 => n2.id === n.id);
+              setActiveNotice(notices[(idx + 1) % notices.length]);
+            }} style={{ background:'none', border:'none', color:'white', cursor:'pointer', fontSize:11, textDecoration:'underline' }}>
+              次を見る
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ===== オンボーディング用 WakkaLogo SVG =====
 function WakkaLogo({ size = 56 }) {
   return (
@@ -136,8 +255,9 @@ function WelcomeSlides({ onDone }) {
 // ===== 新規登録ステップフロー =====
 function RegisterFlow({ onDone, onBack }) {
   const { t } = useTranslation();
-  const [step, setStep] = useState(1); // 1:名前 2:ID 3:パスワード 4:アイコン
+  const [step, setStep] = useState(1); // 1:名前 2:本名 3:ID 4:パスワード 5:アイコン
   const [displayName, setDisplayName] = useState('');
+  const [realName, setRealName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -145,7 +265,7 @@ function RegisterFlow({ onDone, onBack }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const TOTAL = 4;
+  const TOTAL = 5;
   const progress = (step / TOTAL) * 100;
 
   const handleAvatarChange = (e) => {
@@ -182,6 +302,7 @@ function RegisterFlow({ onDone, onBack }) {
         password,
         displayName: displayName.trim(),
         avatar,
+        realName: realName.trim() || null,
       });
       localStorage.setItem('token', res.data.token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
@@ -225,8 +346,20 @@ function RegisterFlow({ onDone, onBack }) {
           </div>
         )}
 
-        {/* STEP 2: ID */}
+        {/* STEP 2: 本名（任意）*/}
         {step === 2 && (
+          <div className="onboard-step">
+            <p className="onboard-question">本名を教えてください 📝</p>
+            <input className="auth-input" type="text" placeholder="例：山田 太郎"
+              value={realName} onChange={e => setRealName(e.target.value)}
+              autoFocus maxLength={50}
+              onKeyDown={e => e.key === 'Enter' && handleNext()} />
+            <p className="onboard-hint">任意項目です。入力しなくてもOKやで（あとで設定可）</p>
+          </div>
+        )}
+
+        {/* STEP 3: ID */}
+        {step === 3 && (
           <div className="onboard-step">
             <p className="onboard-question">{t('onboarding.step2_q')}</p>
             <input className="auth-input" type="text" placeholder={t("onboarding.step2_placeholder")}
@@ -237,8 +370,8 @@ function RegisterFlow({ onDone, onBack }) {
           </div>
         )}
 
-        {/* STEP 3: パスワード */}
-        {step === 3 && (
+        {/* STEP 4: パスワード */}
+        {step === 4 && (
           <div className="onboard-step">
             <p className="onboard-question">{t('onboarding.step3_q')}</p>
             <div style={{ position: 'relative' }}>
@@ -259,8 +392,8 @@ function RegisterFlow({ onDone, onBack }) {
           </div>
         )}
 
-        {/* STEP 4: アイコン */}
-        {step === 4 && (
+        {/* STEP 5: アイコン */}
+        {step === 5 && (
           <div className="onboard-step" style={{ textAlign: 'center' }}>
             <p className="onboard-question">{t('onboarding.step4_q')}</p>
             <label className="onboard-avatar-label">
@@ -1729,6 +1862,8 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, [messages, renderMessage, translating]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
+    <div style={{ position:'relative' }}>
+    <SystemNoticeBanner currentUser={currentUser} showToast={showToast} />
     <div className="chat-screen">
       <div className={`room-list ${selectedRoom ? "hidden" : ""}`}>
         <div className="room-list-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
@@ -4105,6 +4240,7 @@ const InputArea = React.memo(function InputArea({
     </div>
       )}
     </div>
+  </div>
   );
 });
 

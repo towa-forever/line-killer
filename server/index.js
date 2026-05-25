@@ -50,7 +50,7 @@ const path = require('path');
 const fs = require('fs');
 const { join } = require('path');
 
-const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription, News, OfficialRequest, OfficialAccount, ThreadMessage, StampPack, StampPurchase, CoinTransaction, GamerStatus } = require('./db');
+const { User, Room, Message, Friend, FriendRequest, Post, Note, ScheduledMessage, Poll, Task, Event, Favorite, GameScore, GameCoin, GameItem, Story, PushSubscription, News, OfficialRequest, OfficialAccount, ThreadMessage, StampPack, StampPurchase, CoinTransaction, GamerStatus, SystemNotice } = require('./db');
 
 const app = express();
 // Render等のリバースプロキシ対応（express-rate-limitのX-Forwarded-Forエラー解消）
@@ -833,23 +833,31 @@ app.post('/api/auth/apple', async (req, res) => {
 // ===== 認証 =====
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, displayName, avatar, realName } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください' });
     const uname = username.trim();
     if (uname.length < 1) return res.status(400).json({ error: 'ユーザー名を入力してください' });
     if (uname.length > 30) return res.status(400).json({ error: 'ユーザー名は30文字以内にしてください' });
     if (password.length < 6) return res.status(400).json({ error: 'パスワードは6文字以上にしてください' });
     if (password.length > 100) return res.status(400).json({ error: 'パスワードが長すぎます' });
-    // スペースと制御文字のみ禁止（日本語・記号はOK）
     if (/[\s\x00-\x1f]/.test(uname)) return res.status(400).json({ error: 'ユーザー名にスペースや制御文字は使えません' });
     const exists = await User.findOne({ username: uname }, { id: 1 }).lean();
     if (exists) return res.status(400).json({ error: 'このユーザー名は既に使われてます' });
     const hashed = await bcrypt.hash(password, 10);
     const id = uuidv4();
-    await User.create({ id, username: uname, password: hashed });
+    const dname = (displayName || '').trim() || uname;
+    // アバターはbase64のまま保存（Cloudinaryは登録後にuploadAvatarで別途処理）
+    await User.create({
+      id, username: uname, password: hashed,
+      display_name: dname,
+      avatar: avatar || null,
+      real_name: realName ? realName.trim() : null,
+      real_name_submitted_at: realName ? new Date() : null,
+      coins: 100,
+    });
     const token = jwt.sign({ id, username: uname }, JWT_SECRET, { expiresIn: '30d' });
     res.json({ token, user: {
-      id, username: uname, avatar: null, displayName: uname,
+      id, username: uname, avatar: avatar || null, displayName: dname,
       coverImage: '', bio: '', status: '',
       avatarFrame: 'none', soundTheme: 'default',
       pinEnabled: false, secretQuestion: '', blockedUsers: [],
@@ -1680,6 +1688,14 @@ app.post('/api/posts', uploadImage.single('image'), async (req, res) => {
       image: req.file ? getFileUrl(req) : null
     });
     io.emit('post:new', post);
+    // ===== 全ユーザーにプッシュ通知 =====
+    if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+      sendPushToAll(
+        '📢 新しいお知らせ',
+        content ? content.slice(0, 80) : '管理者からのお知らせがあるで',
+        { url: '/?tab=notice', type: 'news' }
+      ).catch(e => console.error('[Push] お知らせ通知エラー:', e.message));
+    }
     res.json(post);
   } catch (e) {
     console.error('[投稿API] エラー:', e.message);
@@ -4470,6 +4486,123 @@ app.get('/{*path}', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(join(clientBuild, 'index.html'));
 });
+
+// ===== 全ユーザーにプッシュ通知を送るヘルパー =====
+async function sendPushToAll(title, body, data = {}) {
+  let sent = 0, failed = 0;
+  for (const [userId, sub] of pushSubscriptions.entries()) {
+    try {
+      await webpush.sendNotification(sub, JSON.stringify({ title, body, ...data }));
+      sent++;
+    } catch(e) {
+      if (e.statusCode === 410 || e.statusCode === 404) {
+        // 無効なサブスクリプションを削除
+        pushSubscriptions.delete(userId);
+        await PushSubscription.deleteOne({ user_id: userId }).catch(() => {});
+      }
+      failed++;
+    }
+  }
+  console.log(`[Push] 全体配信: 成功${sent}件 / 失敗${failed}件`);
+  return { sent, failed };
+}
+
+
+// ===== システム通知API =====
+
+// システム通知一覧（未読・未閉じのもの）
+app.get('/api/system-notices', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const now = new Date();
+    const notices = await SystemNotice.find({
+      dismissed_by: { $ne: decoded.id },
+      $or: [{ expires_at: null }, { expires_at: { $gt: now } }]
+    }).sort({ created_at: -1 }).lean();
+    res.json(notices);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// システム通知を閉じる
+app.post('/api/system-notices/:id/dismiss', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    await SystemNotice.findOneAndUpdate(
+      { id: req.params.id },
+      { $addToSet: { dismissed_by: decoded.id } }
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// 管理者: システム通知作成
+app.post('/api/admin/system-notices', async (req, res) => {
+  try {
+    const decoded = await adminAuth(req);
+    const { title, content, type, action_type, action_url, expires_hours } = req.body;
+    if (!title) return res.status(400).json({ error: 'タイトルは必須やで' });
+    const id = 'sn_' + uuidv4();
+    const expires_at = expires_hours
+      ? new Date(Date.now() + expires_hours * 60 * 60 * 1000)
+      : null;
+    const notice = await SystemNotice.create({
+      id, title, content: content || '', type: type || 'general',
+      action_type: action_type || null,
+      action_url: action_url || null,
+      expires_at,
+    });
+    // 全ユーザーにプッシュ通知
+    if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+      sendPushToAll(
+        `📣 ${title}`,
+        content ? content.slice(0, 80) : '',
+        { url: '/?tab=notice', type: 'system' }
+      ).catch(e => console.error('[Push] システム通知エラー:', e.message));
+    }
+    // ソケットでリアルタイム配信
+    io.emit('system:notice', notice);
+    res.json(notice);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// 本名を送信（アンケート回答）
+app.post('/api/users/me/real-name', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const { real_name } = req.body;
+    if (!real_name || !real_name.trim()) return res.status(400).json({ error: '本名を入力してください' });
+    await User.findOneAndUpdate(
+      { id: decoded.id },
+      { real_name: real_name.trim(), real_name_submitted_at: new Date() }
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// 管理者: 本名未設定ユーザーにアンケート通知を送る
+app.post('/api/admin/request-real-names', async (req, res) => {
+  try {
+    await adminAuth(req);
+    // 既存の本名アンケート通知を削除して新しく作成
+    await SystemNotice.deleteMany({ action_type: 'real_name' });
+    const id = 'sn_realname_' + uuidv4();
+    const notice = await SystemNotice.create({
+      id,
+      type: 'survey',
+      title: '📋 本名の登録をお願いします',
+      content: 'サービス向上のため、本名の登録をお願いしています。登録は任意ですが、ご協力いただけますと幸いです。',
+      action_type: 'real_name',
+      expires_at: null,
+    });
+    if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+      sendPushToAll('📋 本名登録のお願い', '少しだけお時間をいただけますか？', { url: '/?tab=notice', type: 'survey' })
+        .catch(() => {});
+    }
+    io.emit('system:notice', notice);
+    res.json({ ok: true, notice });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 
 // ===================================================
 // ===== Phase 4: スタンプマーケットプレイス API =====
