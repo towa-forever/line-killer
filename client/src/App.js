@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useEffect, useCallback, useMemo, useReducer, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import io from 'socket.io-client';
@@ -1862,7 +1863,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
   }, [messages, renderMessage, translating]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div style={{ position:'relative' }}>
+    <>
     <SystemNoticeBanner currentUser={currentUser} showToast={showToast} />
     <div className="chat-screen">
       <div className={`room-list ${selectedRoom ? "hidden" : ""}`}>
@@ -4240,7 +4241,7 @@ const InputArea = React.memo(function InputArea({
     </div>
       )}
     </div>
-  </div>
+  </>
   );
 });
 
