@@ -4098,6 +4098,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       )}
 
     </div>
+    </>
   );
 }
 
