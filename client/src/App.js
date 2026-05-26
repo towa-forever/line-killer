@@ -4242,7 +4242,6 @@ const InputArea = React.memo(function InputArea({
     </div>
       )}
     </div>
-  </>
   );
 });
 
