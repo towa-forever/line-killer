@@ -49,7 +49,7 @@ const CreateRoom = lazy(() => import('./components/CreateRoom'));
 const Note = lazy(() => import('./components/Note'));
 const UserProfile = lazy(() => import('./components/UserProfile'));
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com';
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
 axios.defaults.baseURL = SERVER_URL;
 // アプリ起動時に即座にトークンをセット
 const _token = localStorage.getItem('token');
