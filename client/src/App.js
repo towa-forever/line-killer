@@ -49,8 +49,8 @@ const CreateRoom = lazy(() => import('./components/CreateRoom'));
 const Note = lazy(() => import('./components/Note'));
 const UserProfile = lazy(() => import('./components/UserProfile'));
 
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
-axios.defaults.baseURL = SERVER_URL;
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || '';
+axios.defaults.baseURL = SERVER_URL; // 同一サーバーなので相対パスでOK
 // アプリ起動時に即座にトークンをセット
 const _token = localStorage.getItem('token');
 if (_token) axios.defaults.headers.common['Authorization'] = `Bearer ${_token}`;
