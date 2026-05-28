@@ -280,17 +280,24 @@ function RegisterFlow({ onDone, onBack }) {
   const handleNext = () => {
     setError('');
     if (step === 1) {
+      // STEP1: 名前
       if (!displayName.trim()) { setError(t('errors.name_required')); return; }
       setStep(2);
     } else if (step === 2) {
-      if (!username.trim()) { setError(t('errors.id_required')); return; }
-      if (/[\s\x00-\x1f]/.test(username.trim())) { setError(t('errors.id_no_space')); return; } // eslint-disable-line no-control-regex
+      // STEP2: 本名（任意なのでバリデーションなし）
       setStep(3);
     } else if (step === 3) {
+      // STEP3: ID
+      if (!username.trim()) { setError(t('errors.id_required')); return; }
+      if (/[\s\x00-\x1f]/.test(username.trim())) { setError(t('errors.id_no_space')); return; } // eslint-disable-line no-control-regex
+      setStep(4);
+    } else if (step === 4) {
+      // STEP4: パスワード
       if (!password) { setError(t('errors.password_required')); return; }
       if (password.length < 6) { setError(t('errors.password_short')); return; }
-      setStep(4);
+      setStep(5);
     } else {
+      // STEP5: アイコン → 登録実行
       handleRegister();
     }
   };
