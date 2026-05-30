@@ -449,7 +449,7 @@ function LoginForm({ onLogin, onBack }) {
       localStorage.setItem('token', res.data.token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       onLogin(res.data.user);
-    } catch (err) { setError(err.response?.data?.error || '接続エラー'); }
+    } catch (err) { alert('ERR:' + err.message + ' URL:' + err.config?.url + ' base:' + err.config?.baseURL); setError(err.response?.data?.error || '接続エラー'); }
     finally { setLoading(false); }
   };
 
