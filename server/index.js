@@ -4626,7 +4626,7 @@ async function updateCoins(userId, delta, type, reason, refId = null) {
 app.get('/api/stamp-market', async (req, res) => {
   try {
     const { sort = 'popular', tag, search } = req.query;
-    const query = { status: 'approved' };
+    const query = {};
     if (tag) query.tags = tag;
     if (search) query.title = { $regex: search, $options: 'i' };
     const sortObj = sort === 'new' ? { created_at: -1 } : { sales_count: -1 };

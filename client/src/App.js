@@ -3338,7 +3338,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
 
                 {/* 自分のステータス設定 */}
                 <div style={{ padding:'12px 0', borderBottom:'1px solid var(--border)', marginBottom:12 }}>
-                  <div style={{ fontWeight:700, fontSize:13, marginBottom:8 }}>自分のステータス</div>
+                  <div style={{ fontWeight:700, fontSize:13, marginBottom:8, color:'var(--text)' }}>自分のステータス</div>
                   <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                     <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
                       <input type="checkbox" checked={gamerStatusData.is_gaming}
@@ -3367,7 +3367,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                 </div>
 
                 {/* 友達のゲーミング状況 */}
-                <div style={{ fontWeight:700, fontSize:13, marginBottom:8 }}>🕹️ 今ゲーム中の友達</div>
+                <div style={{ fontWeight:700, fontSize:13, marginBottom:8, color:'var(--text)' }}>🕹️ 今ゲーム中の友達</div>
                 {friendGamingList.length === 0
                   ? <div style={{ color:'var(--text2)', fontSize:13, padding:'8px 0' }}>
                       今ゲーム中の友達はいないみたい
@@ -3377,7 +3377,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                       <img src={s.user?.avatar || '/default-avatar.png'} alt=""
                         style={{ width:36, height:36, borderRadius:'50%', objectFit:'cover' }} />
                       <div>
-                        <div style={{ fontWeight:600, fontSize:13 }}>{s.user?.display_name || s.user?.username}</div>
+                        <div style={{ fontWeight:600, fontSize:13, color:'var(--text)' }}>{s.user?.display_name || s.user?.username}</div>
                         <div style={{ fontSize:12, color:'#06c755' }}>
                           {s.game_emoji} {s.game_name || 'ゲーム中'}
                         </div>
