@@ -4480,7 +4480,7 @@ app.use('/static', express.static(join(clientBuild, 'static'), {
 }));
 
 // index.htmlはキャッシュしない
-app.use(express.static(clientBuild, { maxAge: 0 }));
+app.use((req, res, next) => { if (req.path.startsWith('/api')) return next('route'); next(); }, express.static(clientBuild, { maxAge: 0 }));
 
 app.get('/{*path}', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
