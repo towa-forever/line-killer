@@ -441,15 +441,20 @@ function LoginForm({ onLogin, onBack }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    alert('DEBUG: handleSubmit呼ばれたで');
     if (!username.trim()) { setError('IDを入力してください'); return; }
     if (!password) { setError('パスワードを入力してください'); return; }
     setLoading(true); setError('');
     try {
+      alert('DEBUG: axios.post直前 baseURL=' + (axios.defaults.baseURL || '空'));
       const res = await axios.post('/api/auth/login', { username: username.trim(), password });
       localStorage.setItem('token', res.data.token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       onLogin(res.data.user);
-    } catch (err) { setError(err.response?.data?.error || '接続エラー'); }
+    } catch (err) {
+      alert('DEBUG: エラー発生 ' + (err.message || '') + ' / ' + (err.response?.status || 'no status'));
+      setError(err.response?.data?.error || '接続エラー');
+    }
     finally { setLoading(false); }
   };
 
