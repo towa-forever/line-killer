@@ -441,20 +441,15 @@ function LoginForm({ onLogin, onBack }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    alert('DEBUG: handleSubmit呼ばれたで');
     if (!username.trim()) { setError('IDを入力してください'); return; }
     if (!password) { setError('パスワードを入力してください'); return; }
     setLoading(true); setError('');
     try {
-      alert('DEBUG: axios.post直前 baseURL=' + (axios.defaults.baseURL || '空'));
       const res = await axios.post('/api/auth/login', { username: username.trim(), password });
       localStorage.setItem('token', res.data.token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       onLogin(res.data.user);
-    } catch (err) {
-      alert('DEBUG: エラー発生 ' + (err.message || '') + ' / ' + (err.response?.status || 'no status'));
-      setError(err.response?.data?.error || '接続エラー');
-    }
+    } catch (err) { setError(err.response?.data?.error || '接続エラー'); }
     finally { setLoading(false); }
   };
 
@@ -3546,7 +3541,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   : showReadDetail.readers.filter(r => r.id !== currentUser.id).map(r => (
                     <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
                       <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--primary)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:700, overflow:'hidden', flexShrink:0 }}>
-                        {r.avatar ? <img src={r.avatar.startsWith('http') ? r.avatar : `${process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com'}${r.avatar}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : r.name?.[0]}
+                        {r.avatar ? <img src={r.avatar.startsWith('http') ? r.avatar : `${process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com'}${r.avatar}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : r.name?.[0]}
                       </div>
                       <span style={{ fontSize:14 }}>{r.name}</span>
                     </div>
@@ -4685,7 +4680,7 @@ export default function App() {
 
   // Renderのコールドスタート防止 - 2分ごとにpingを送る（ログイン前後両方）
   useEffect(() => {
-    const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://wakkachat.onrender.com';
+    const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'https://line-killer-server.onrender.com';
     const ping = () => axios.get(currentUser ? '/api/auth/me' : `${SERVER_URL}/health`).catch(() => {});
     ping(); // 即時実行
     const timer = setInterval(ping, 2 * 60 * 1000);
