@@ -4516,7 +4516,7 @@ app.get('/api/system-notices', async (req, res) => {
     const decoded = auth(req);
     const now = new Date();
     const notices = await SystemNotice.find({
-      dismissed_by: { $ne: decoded.id },
+      dismissed_by: { $nin: [decoded.id] },
       $or: [{ expires_at: null }, { expires_at: { $gt: now } }]
     }).sort({ created_at: -1 }).lean();
     res.json(notices);
