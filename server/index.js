@@ -4596,10 +4596,6 @@ app.post('/api/stamp-market/publish', uploadAvatar.single('preview'), async (req
 
 // コイン取引履歴
 
-app.get('/{*path}', (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.sendFile(join(clientBuild, 'index.html'));
-});
 
 // ===== 全ユーザーにプッシュ通知を送るヘルパー =====
 async function sendPushToAll(title, body, data = {}) {
@@ -4832,4 +4828,10 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
+});
+
+
+app.get('/{*path}', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(join(clientBuild, 'index.html'));
 });
