@@ -4482,6 +4482,120 @@ app.use('/static', express.static(join(clientBuild, 'static'), {
 // index.htmlはキャッシュしない
 app.use(express.static(clientBuild, { maxAge: 0 }));
 
+app.get('/api/stamp-market', async (req, res) => {
+  try {
+    const { sort = 'popular', tag, search } = req.query;
+    const query = {};
+    if (tag) query.tags = tag;
+    if (search) query.title = { $regex: search, $options: 'i' };
+    const sortObj = sort === 'new' ? { created_at: -1 } : { sales_count: -1 };
+    const packs = await StampPack.find(query).sort(sortObj).limit(50).lean();
+    // 購入済みチェック
+    const token = req.headers.authorization?.split(' ')[1];
+    let purchasedIds = [];
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const purchases = await StampPurchase.find({ user_id: decoded.id }, { pack_id: 1 }).lean();
+        purchasedIds = purchases.map(p => p.pack_id);
+      } catch(_) {}
+    }
+    res.json(packs.map(p => ({
+      ...p,
+      avg_rating: p.rating_count > 0 ? (p.rating_sum / p.rating_count).toFixed(1) : null,
+      purchased: purchasedIds.includes(p.id),
+    })));
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+// スタンプパック詳細
+app.get('/api/stamp-market/:packId', async (req, res) => {
+  try {
+    const pack = await StampPack.findOne({ id: req.params.packId }).lean();
+    if (!pack) return res.status(404).json({ error: '見つかりません' });
+    res.json(pack);
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+// スタンプパック購入
+app.post('/api/stamp-market/:packId/buy', async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
+    const pack = await StampPack.findOne({ id: req.params.packId, status: 'approved' }).lean();
+    if (!pack) return res.status(404).json({ error: 'スタンプが見つかりません' });
+
+    // 購入済みチェック
+    const already = await StampPurchase.findOne({ user_id: decoded.id, pack_id: pack.id });
+    if (already) return res.status(400).json({ error: 'すでに購入済みです' });
+
+    // コイン残高チェック
+    const user = await User.findOne({ id: decoded.id }, { coins: 1 }).lean();
+    if ((user?.coins ?? 0) < pack.price) return res.status(400).json({ error: 'コインが足りません' });
+
+    // 購入処理
+    await StampPurchase.create({ user_id: decoded.id, pack_id: pack.id, price_paid: pack.price });
+    const newCoins = await updateCoins(decoded.id, -pack.price, 'spend', 'stamp_purchase', pack.id);
+
+    // クリエイターに収益付与（80%）
+    const creatorShare = Math.floor(pack.price * 0.8);
+    if (creatorShare > 0) {
+      await updateCoins(pack.creator_id, creatorShare, 'transfer_in', 'creator_revenue', pack.id);
+    }
+    await StampPack.findOneAndUpdate({ id: pack.id }, { $inc: { sales_count: 1 } });
+
+    res.json({ success: true, coins: newCoins, message: `${pack.title} を購入しました！` });
+  } catch(e) {
+    console.error(e);
+    res.status(500).json({ error: 'サーバーエラー' });
+  }
+});
+
+// 自分が購入したスタンプ一覧
+app.get('/api/stamp-market/my/purchases', async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
+    const purchases = await StampPurchase.find({ user_id: decoded.id }).lean();
+    const packIds = purchases.map(p => p.pack_id);
+    const packs = await StampPack.find({ id: { $in: packIds } }).lean();
+    res.json(packs);
+  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
+});
+
+// クリエイター: スタンプパック出品
+app.post('/api/stamp-market/publish', uploadAvatar.single('preview'), async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
+    const user = await User.findOne({ id: decoded.id }, { username: 1, display_name: 1 }).lean();
+    const { title, description, price, stamps, tags } = req.body;
+    if (!title || !stamps) return res.status(400).json({ error: 'タイトルとスタンプは必須です' });
+
+    let parsedStamps;
+    try { parsedStamps = JSON.parse(stamps); } catch { return res.status(400).json({ error: 'スタンプデータが無効です' }); }
+    if (!Array.isArray(parsedStamps) || parsedStamps.length < 1 || parsedStamps.length > 40) {
+      return res.status(400).json({ error: 'スタンプは1〜40個にしてください' });
+    }
+
+    const id = 'sp_' + uuidv4();
+    const pack = await StampPack.create({
+      id, creator_id: decoded.id,
+      creator_name: user.display_name || user.username,
+      title: title.trim(),
+      description: (description || '').trim(),
+      price: Math.max(0, parseInt(price) || 0),
+      stamps: parsedStamps,
+      preview_url: req.file?.path || null,
+      tags: tags ? JSON.parse(tags) : [],
+      status: 'approved', // 本番では'pending'にして審査フローを入れる
+    });
+    res.json({ success: true, pack });
+  } catch(e) {
+    console.error(e);
+    res.status(500).json({ error: 'サーバーエラー' });
+  }
+});
+
+// コイン取引履歴
+
 app.get('/{*path}', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(join(clientBuild, 'index.html'));
@@ -4623,119 +4737,6 @@ async function updateCoins(userId, delta, type, reason, refId = null) {
 }
 
 // スタンプパック一覧（マーケット）
-app.get('/api/stamp-market', async (req, res) => {
-  try {
-    const { sort = 'popular', tag, search } = req.query;
-    const query = {};
-    if (tag) query.tags = tag;
-    if (search) query.title = { $regex: search, $options: 'i' };
-    const sortObj = sort === 'new' ? { created_at: -1 } : { sales_count: -1 };
-    const packs = await StampPack.find(query).sort(sortObj).limit(50).lean();
-    // 購入済みチェック
-    const token = req.headers.authorization?.split(' ')[1];
-    let purchasedIds = [];
-    if (token) {
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const purchases = await StampPurchase.find({ user_id: decoded.id }, { pack_id: 1 }).lean();
-        purchasedIds = purchases.map(p => p.pack_id);
-      } catch(_) {}
-    }
-    res.json(packs.map(p => ({
-      ...p,
-      avg_rating: p.rating_count > 0 ? (p.rating_sum / p.rating_count).toFixed(1) : null,
-      purchased: purchasedIds.includes(p.id),
-    })));
-  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
-});
-
-// スタンプパック詳細
-app.get('/api/stamp-market/:packId', async (req, res) => {
-  try {
-    const pack = await StampPack.findOne({ id: req.params.packId }).lean();
-    if (!pack) return res.status(404).json({ error: '見つかりません' });
-    res.json(pack);
-  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
-});
-
-// スタンプパック購入
-app.post('/api/stamp-market/:packId/buy', async (req, res) => {
-  try {
-    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
-    const pack = await StampPack.findOne({ id: req.params.packId, status: 'approved' }).lean();
-    if (!pack) return res.status(404).json({ error: 'スタンプが見つかりません' });
-
-    // 購入済みチェック
-    const already = await StampPurchase.findOne({ user_id: decoded.id, pack_id: pack.id });
-    if (already) return res.status(400).json({ error: 'すでに購入済みです' });
-
-    // コイン残高チェック
-    const user = await User.findOne({ id: decoded.id }, { coins: 1 }).lean();
-    if ((user?.coins ?? 0) < pack.price) return res.status(400).json({ error: 'コインが足りません' });
-
-    // 購入処理
-    await StampPurchase.create({ user_id: decoded.id, pack_id: pack.id, price_paid: pack.price });
-    const newCoins = await updateCoins(decoded.id, -pack.price, 'spend', 'stamp_purchase', pack.id);
-
-    // クリエイターに収益付与（80%）
-    const creatorShare = Math.floor(pack.price * 0.8);
-    if (creatorShare > 0) {
-      await updateCoins(pack.creator_id, creatorShare, 'transfer_in', 'creator_revenue', pack.id);
-    }
-    await StampPack.findOneAndUpdate({ id: pack.id }, { $inc: { sales_count: 1 } });
-
-    res.json({ success: true, coins: newCoins, message: `${pack.title} を購入しました！` });
-  } catch(e) {
-    console.error(e);
-    res.status(500).json({ error: 'サーバーエラー' });
-  }
-});
-
-// 自分が購入したスタンプ一覧
-app.get('/api/stamp-market/my/purchases', async (req, res) => {
-  try {
-    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
-    const purchases = await StampPurchase.find({ user_id: decoded.id }).lean();
-    const packIds = purchases.map(p => p.pack_id);
-    const packs = await StampPack.find({ id: { $in: packIds } }).lean();
-    res.json(packs);
-  } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
-});
-
-// クリエイター: スタンプパック出品
-app.post('/api/stamp-market/publish', uploadAvatar.single('preview'), async (req, res) => {
-  try {
-    const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
-    const user = await User.findOne({ id: decoded.id }, { username: 1, display_name: 1 }).lean();
-    const { title, description, price, stamps, tags } = req.body;
-    if (!title || !stamps) return res.status(400).json({ error: 'タイトルとスタンプは必須です' });
-
-    let parsedStamps;
-    try { parsedStamps = JSON.parse(stamps); } catch { return res.status(400).json({ error: 'スタンプデータが無効です' }); }
-    if (!Array.isArray(parsedStamps) || parsedStamps.length < 1 || parsedStamps.length > 40) {
-      return res.status(400).json({ error: 'スタンプは1〜40個にしてください' });
-    }
-
-    const id = 'sp_' + uuidv4();
-    const pack = await StampPack.create({
-      id, creator_id: decoded.id,
-      creator_name: user.display_name || user.username,
-      title: title.trim(),
-      description: (description || '').trim(),
-      price: Math.max(0, parseInt(price) || 0),
-      stamps: parsedStamps,
-      preview_url: req.file?.path || null,
-      tags: tags ? JSON.parse(tags) : [],
-      status: 'approved', // 本番では'pending'にして審査フローを入れる
-    });
-    res.json({ success: true, pack });
-  } catch(e) {
-    console.error(e);
-    res.status(500).json({ error: 'サーバーエラー' });
-  }
-});
-
-// コイン取引履歴
 app.get('/api/coins/history', async (req, res) => {
   try {
     const decoded = jwt.verify(req.headers.authorization?.split(' ')[1], JWT_SECRET);
