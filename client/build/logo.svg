@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="120" fill="#1DB874"/>
+  <!-- わっか（輪） -->
+  <circle cx="256" cy="240" r="160" fill="none" stroke="white" stroke-width="40" opacity="0.3"/>
+  <!-- チャットバブル -->
+  <rect x="130" y="158" width="252" height="158" rx="70" fill="white"/>
+  <path d="M168 316 L140 390 L230 338" fill="white"/>
+  <!-- ドット3つ -->
+  <circle cx="196" cy="237" r="20" fill="#1DB874"/>
+  <circle cx="256" cy="237" r="20" fill="#1DB874"/>
+  <circle cx="316" cy="237" r="20" fill="#1DB874"/>
+</svg>

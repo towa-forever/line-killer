@@ -1,0 +1,27 @@
+{
+  "short_name": "WakkaChat",
+  "name": "WakkaChat - 次世代チャットアプリ",
+  "description": "AIアシスタント・リアルタイムチャット・通話・VOOMなど豊富な機能の次世代チャットアプリ",
+  "icons": [
+    { "src": "favicon.ico", "sizes": "64x64 32x32 24x24 16x16", "type": "image/x-icon" },
+    { "src": "logo192.png", "type": "image/png", "sizes": "192x192", "purpose": "any maskable" },
+    { "src": "logo512.png", "type": "image/png", "sizes": "512x512", "purpose": "any maskable" }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#06c755",
+  "background_color": "#ffffff",
+  "orientation": "portrait",
+  "lang": "ja",
+  "categories": ["social", "communication"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "チャット",
+      "short_name": "トーク",
+      "description": "トーク一覧を開く",
+      "url": "/?tab=chat",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    }
+  ]
+}
