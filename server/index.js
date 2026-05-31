@@ -4480,12 +4480,9 @@ app.use('/static', express.static(join(clientBuild, 'static'), {
 }));
 
 // index.htmlはキャッシュしない
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return next();
-  express.static(clientBuild, { maxAge: 0 })(req, res, next);
-});
+app.use(express.static(clientBuild, { maxAge: 0 }));
 
-app.get('/{*path}', (req, res) => { if (req.path.startsWith('/api')) return res.status(404).json({ error: 'API not found' });
+app.get('/{*path}', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(join(clientBuild, 'index.html'));
 });
