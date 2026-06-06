@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo, useReducer, useRef, l
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
+import StickerMaker from './components/StickerMaker';
 import { compressImage } from './utils/imageCompress';
 import Portal from './components/Portal';
 import { sounds, startRingtone, stopRingtone } from './utils/sounds';
@@ -36,7 +37,7 @@ const SharedWhiteboard = lazy(() => import('./components/SharedWhiteboard'));
 const ReadLater       = lazy(() => import('./components/ReadLater'));
 const PinSetup        = lazy(() => import('./components/PinSetup').then(m => ({ default: m.PinSetup })));
 const PinVerify       = lazy(() => import('./components/PinSetup').then(m => ({ default: m.PinVerify })));
-const StickerMaker = lazy(() => import('./components/StickerMaker'));
+
 const AIAssistant = lazy(() => import('./components/AIAssistant'));
 const PollCard = lazy(() => import('./components/PollCard'));
 const TaskPanel = lazy(() => import('./components/TaskPanel'));
