@@ -14,10 +14,10 @@ const TAB_DRAW = 'draw';
 const TAB_IMAGE = 'image';
 const TAB_PUBLISH = 'publish';
 
-export default function StickerMaker({ onSend, onClose }) {
+export default function StickerMaker({ onSend, onClose, mode }) {
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
-  const [tab, setTab] = useState(TAB_DRAW);
+  const [tab, setTab] = useState(mode === 'publish' ? TAB_PUBLISH : TAB_DRAW);
 
   // 描画タブ
   const [text, setText]           = useState('😊');
@@ -341,3 +341,4 @@ export default function StickerMaker({ onSend, onClose }) {
     </div>
   );
 }
+ 

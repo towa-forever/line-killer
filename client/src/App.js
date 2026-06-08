@@ -2294,7 +2294,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       {/* スタンプ自作 */}
       <Portal>{showStickerMaker && (
         <Portal><ErrorBoundary><Suspense fallback={null}>
-          <StickerMaker
+          <StickerMaker mode={typeof showStickerMaker === "string" ? showStickerMaker : undefined}
             onSend={(data) => {
               if (socket && selectedRoom) {
                 socket?.emit('message:send', { roomId: selectedRoom.id, content: data.content, type: 'image', fileData: data.fileData });
@@ -3321,7 +3321,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                     スタンプを出品してコインを稼ごう！<br/>
                     売上の80%がクリエイターに還元されるで。
                   </p>
-                  <button onClick={() => { setShowStampMarket(false); setShowStickerMaker(true); }}
+                  <button onClick={() => { setShowStampMarket(false); setShowStickerMaker('publish'); }}
                     style={{ marginTop:8, padding:'10px 16px', background:'#5856d6', color:'white',
                       border:'none', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:700 }}>
                     ✏️ スタンプを作る・出品する
