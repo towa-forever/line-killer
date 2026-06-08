@@ -1,5 +1,5 @@
-// WakkaChat Service Worker v11
-const CACHE_NAME = 'wakkachat-v11';
+// WakkaChat Service Worker
+const CACHE_NAME = 'wakkachat-' + Date.now();
 const STATIC_ASSETS = [
   '/',
   '/static/js/main.chunk.js',
