@@ -920,6 +920,7 @@ app.get('/api/auth/me', async (req, res) => {
       officialCategory: user.official_category || '',
       isAdmin: user.username.trim().toLowerCase() === ADMIN_USERNAME.trim().toLowerCase(),
       pinnedRooms: user.pinned_rooms || [],
+      parentAccountId: user.parent_account_id || null,
     }});
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
