@@ -28,7 +28,7 @@ const Dashboard = lazy(() => import('./components/Dashboard'));
 const EventCalendar = lazy(() => import('./components/EventCalendar'));
 const MiniGame = lazy(() => import('./components/MiniGame'));
 const VoiceCall = lazy(() => import('./components/VoiceCall'));
-const SubAccounts = lazy(() => import('./components/SubAccounts'));
+import SubAccounts from './components/SubAccounts';
 const ContactForm     = lazy(() => import('./components/ContactForm'));
 // PasswordReset は AuthScreen 内で inline lazy import
 const GiftModal       = lazy(() => import('./components/GiftModal'));
