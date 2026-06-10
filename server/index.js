@@ -1231,9 +1231,11 @@ app.patch('/api/rooms/:roomId/theme', async (req, res) => {
 app.get('/api/sub-accounts', async (req, res) => {
   try {
     const decoded = auth(req);
-    const user = await User.findOne({ id: decoded.id }, { sub_accounts: 1 }).lean();
+    const user = await User.findOne({ id: decoded.id }).lean();
     if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
-    const subs = await User.find({ id: { $in: user.sub_accounts || [] } }, { password: 0 }).lean();
+    const parent = user.parent_account_id ? await User.findOne({ id: user.parent_account_id }).lean() : user;
+    if (!parent) return res.status(404).json({ error: '親アカが見つかりません' });
+    const subs = await User.find({ id: { $in: parent.sub_accounts || [] } }, { password: 0 }).lean();
     res.json(subs.map(s => ({ id: s.id, username: s.username, displayName: s.display_name || s.username, avatar: s.avatar, bio: s.bio })));
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
