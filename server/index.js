@@ -1276,6 +1276,12 @@ app.post('/api/sub-accounts', async (req, res) => {
   }
 });
 
+// サブ垢 → メインアカウントへ戻る
+app.post('/api/sub-accounts/switch-to-main', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const subUser = await User.findOne({ id: decoded.id });
+
 // サブアカに切り替え（トークンを発行）
 app.post('/api/sub-accounts/:subId/switch', async (req, res) => {
   try {
@@ -1346,11 +1352,6 @@ app.delete('/api/sub-accounts/:subId', async (req, res) => {
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
-// サブ垢 → メインアカウントへ戻る
-app.post('/api/sub-accounts/switch-to-main', async (req, res) => {
-  try {
-    const decoded = auth(req);
-    const subUser = await User.findOne({ id: decoded.id });
     if (!subUser) return res.status(404).json({ error: 'ユーザーが見つかりません' });
     if (!subUser.parent_account_id) return res.status(400).json({ error: 'メインアカウントがありません' });
     const parent = await User.findOne({ id: subUser.parent_account_id });
