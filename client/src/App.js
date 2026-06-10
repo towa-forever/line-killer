@@ -3,7 +3,6 @@ import React, { useState, useEffect, useCallback, useMemo, useReducer, useRef, l
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
-import StickerMaker from './components/StickerMaker';
 import { compressImage } from './utils/imageCompress';
 import Portal from './components/Portal';
 import { sounds, startRingtone, stopRingtone } from './utils/sounds';
@@ -37,7 +36,7 @@ const SharedWhiteboard = lazy(() => import('./components/SharedWhiteboard'));
 const ReadLater       = lazy(() => import('./components/ReadLater'));
 const PinSetup        = lazy(() => import('./components/PinSetup').then(m => ({ default: m.PinSetup })));
 const PinVerify       = lazy(() => import('./components/PinSetup').then(m => ({ default: m.PinVerify })));
-
+const StickerMaker = lazy(() => import('./components/StickerMaker'));
 const AIAssistant = lazy(() => import('./components/AIAssistant'));
 const PollCard = lazy(() => import('./components/PollCard'));
 const TaskPanel = lazy(() => import('./components/TaskPanel'));
@@ -2294,7 +2293,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
       {/* スタンプ自作 */}
       <Portal>{showStickerMaker && (
         <Portal><ErrorBoundary><Suspense fallback={null}>
-          <StickerMaker mode={typeof showStickerMaker === "string" ? showStickerMaker : undefined}
+          <StickerMaker
             onSend={(data) => {
               if (socket && selectedRoom) {
                 socket?.emit('message:send', { roomId: selectedRoom.id, content: data.content, type: 'image', fileData: data.fileData });
@@ -3265,7 +3264,7 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
               <div className="modal-box" onClick={e => e.stopPropagation()}
                 style={{ maxWidth:480, maxHeight:'80vh', overflowY:'auto' }}>
                 <div className="modal-title">🛒 スタンプ販売所</div>
-                <p style={{ fontSize:12, color:'var(--text2)', marginBottom:12 }}>
+                <p style={{ fontSize:12, color:'var(--text)', marginBottom:12 }}>
                   クリエイターが作ったスタンプをコインで購入できるで！
                 </p>
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -3282,11 +3281,11 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                           {pack.stamps?.[0]?.emoji || '📦'}
                         </div>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontWeight:700, fontSize:14 }}>{pack.title}</div>
-                          <div style={{ fontSize:12, color:'var(--text2)' }}>
+                          <div style={{ fontWeight:700, fontSize:14, color:'var(--text)' }}>{pack.title}</div>
+                          <div style={{ fontSize:12, color:'var(--text)' }}>
                             by {pack.creator_name} · {pack.stamps?.length || 0}個
                           </div>
-                          <div style={{ fontSize:12, color:'var(--text2)', marginTop:2 }}>
+                          <div style={{ fontSize:12, color:'var(--text)', marginTop:2 }}>
                             {pack.avg_rating && `⭐ ${pack.avg_rating}`} {pack.sales_count > 0 && `· ${pack.sales_count}件購入`}
                           </div>
                         </div>
@@ -3316,12 +3315,12 @@ function ChatScreen({ socket, currentUser, allStampSets, acquiredStampIds, frien
                   }
                 </div>
                 <div style={{ marginTop:16, paddingTop:12, borderTop:'1px solid var(--border)' }}>
-                  <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>🎨 自分のスタンプを出品する</div>
-                  <p style={{ fontSize:12, color:'var(--text2)' }}>
+                  <div style={{ fontSize:13, fontWeight:700, marginBottom:8, color:'var(--text)' }}>🎨 自分のスタンプを出品する</div>
+                  <p style={{ fontSize:12, color:'var(--text)' }}>
                     スタンプを出品してコインを稼ごう！<br/>
                     売上の80%がクリエイターに還元されるで。
                   </p>
-                  <button onClick={() => { setShowStampMarket(false); setShowStickerMaker('publish'); }}
+                  <button onClick={() => { setShowStampMarket(false); setShowStickerMaker(true); }}
                     style={{ marginTop:8, padding:'10px 16px', background:'#5856d6', color:'white',
                       border:'none', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:700 }}>
                     ✏️ スタンプを作る・出品する
