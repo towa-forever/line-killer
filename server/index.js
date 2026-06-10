@@ -898,7 +898,8 @@ app.post('/api/auth/login', async (req, res) => {
       officialCategory: user.official_category || '',
       isAdmin: user.username.trim().toLowerCase() === ADMIN_USERNAME.trim().toLowerCase(),
       pinnedRooms: user.pinned_rooms || [],
-    }});
+      parentAccountId: user.parent_account_id || null,
+    }}); 
   } catch(e) { res.status(500).json({ error: 'サーバーエラー' }); }
 });
 
