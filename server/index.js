@@ -1295,16 +1295,70 @@ app.post('/api/sub-accounts/:subId/switch', async (req, res) => {
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
-// サブアカ削除
+// サブアカ削除（完全削除：全関連データを消してなかったことに）
 app.delete('/api/sub-accounts/:subId', async (req, res) => {
   try {
     const decoded = auth(req);
     const parent = await User.findOne({ id: decoded.id });
     if (!parent || !(parent.sub_accounts || []).includes(req.params.subId)) return res.status(403).json({ error: '権限がありません' });
-    await User.deleteOne({ id: req.params.subId });
-    parent.sub_accounts = (parent.sub_accounts || []).filter(id => id !== req.params.subId);
+    const subId = req.params.subId;
+
+    // メッセージ削除
+    await Message.deleteMany({ sender_id: subId });
+    await ThreadMessage.deleteMany({ sender_id: subId });
+
+    // 友達関係削除
+    await Friend.deleteMany({ $or: [{ user_id: subId }, { friend_id: subId }] });
+    await FriendRequest.deleteMany({ $or: [{ from_id: subId }, { to_id: subId }] });
+
+    // 投稿・ストーリー・ノート等削除
+    await Post.deleteMany({ user_id: subId });
+    await Story.deleteMany({ user_id: subId });
+    await Note.deleteMany({ user_id: subId });
+    await Task.deleteMany({ user_id: subId });
+    await Poll.deleteMany({ user_id: subId });
+    await Event.deleteMany({ user_id: subId });
+    await ScheduledMessage.deleteMany({ user_id: subId });
+    await Favorite.deleteMany({ user_id: subId });
+    await GameScore.deleteMany({ user_id: subId });
+    await GameCoin.deleteMany({ user_id: subId });
+    await GameItem.deleteMany({ user_id: subId });
+    await StampPurchase.deleteMany({ user_id: subId });
+    await CoinTransaction.deleteMany({ user_id: subId });
+    await PushSubscription.deleteMany({ user_id: subId });
+    await GamerStatus.deleteMany({ user_id: subId });
+
+    // ルームのメンバーから除外、メンバーが0人になったルームは削除
+    await Room.updateMany({ members: subId }, { $pull: { members: subId } });
+    await Room.deleteMany({ members: { $size: 0 } });
+
+    // ユーザー本体削除
+    await User.deleteOne({ id: subId });
+
+    // 親アカのsub_accountsリストから除去
+    parent.sub_accounts = (parent.sub_accounts || []).filter(id => id !== subId);
     await parent.save();
+
     res.json({ ok: true });
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
+});
+
+// サブ垢 → メインアカウントへ戻る
+app.post('/api/sub-accounts/switch-to-main', async (req, res) => {
+  try {
+    const decoded = auth(req);
+    const subUser = await User.findOne({ id: decoded.id });
+    if (!subUser) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    if (!subUser.parent_account_id) return res.status(400).json({ error: 'メインアカウントがありません' });
+    const parent = await User.findOne({ id: subUser.parent_account_id });
+    if (!parent) return res.status(404).json({ error: 'メインアカウントが見つかりません' });
+    const token = jwt.sign({ id: parent.id, username: parent.username }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: {
+      id: parent.id, username: parent.username,
+      displayName: parent.display_name || parent.username,
+      avatar: parent.avatar, bio: parent.bio || '', status: parent.status || '',
+      parentAccountId: null,
+    }});
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
