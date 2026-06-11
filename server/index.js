@@ -1240,7 +1240,7 @@ app.get('/api/sub-accounts', async (req, res) => {
     const subsData = subs.map(s => ({ id: s.id, username: s.username, displayName: s.display_name || s.username, avatar: s.avatar, bio: s.bio }));
     // サブ垢からアクセスした場合はメインアカウント情報も返す
     const mainAccount = user.parent_account_id ? { id: parent.id, username: parent.username, displayName: parent.display_name || parent.username, avatar: parent.avatar } : null;
-    res.json({ subs: subsData, mainAccount });
+    res.json(subsData);
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
