@@ -1237,7 +1237,10 @@ app.get('/api/sub-accounts', async (req, res) => {
     const parent = user.parent_account_id ? await User.findOne({ id: user.parent_account_id }).lean() : user;
     if (!parent) return res.status(404).json({ error: '親アカが見つかりません' });
     const subs = await User.find({ id: { $in: parent.sub_accounts || [] } }, { password: 0 }).lean();
-    res.json(subs.map(s => ({ id: s.id, username: s.username, displayName: s.display_name || s.username, avatar: s.avatar, bio: s.bio })));
+    const subsData = subs.map(s => ({ id: s.id, username: s.username, displayName: s.display_name || s.username, avatar: s.avatar, bio: s.bio }));
+    // サブ垢からアクセスした場合はメインアカウント情報も返す
+    const mainAccount = user.parent_account_id ? { id: parent.id, username: parent.username, displayName: parent.display_name || parent.username, avatar: parent.avatar } : null;
+    res.json({ subs: subsData, mainAccount });
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
