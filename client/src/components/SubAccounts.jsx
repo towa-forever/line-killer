@@ -48,9 +48,10 @@ export default function SubAccounts({ currentUser, onSwitch, onClose }) {
 
   // メインアカウントに戻る
   const handleSwitchToMain = useCallback(async () => {
+    alert('ボタン押せた！isSubAccount=' + isSubAccount);
     setSwitchingMain(true);
     try {
-      const res = await axios.post('/api/sub-accounts/switch-to-main');
+      const res = await axios.post(SERVER_URL + '/api/sub-accounts/switch-to-main');
       localStorage.setItem('token', res.data.token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       onSwitch(res.data.user);
