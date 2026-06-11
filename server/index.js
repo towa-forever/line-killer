@@ -1281,17 +1281,28 @@ app.post('/api/sub-accounts/switch-to-main', async (req, res) => {
   try {
     const decoded = auth(req);
     const subUser = await User.findOne({ id: decoded.id });
+    if (!subUser) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+    if (!subUser.parent_account_id) return res.status(400).json({ error: 'メインアカウントがありません' });
+    const parent = await User.findOne({ id: subUser.parent_account_id });
+    if (!parent) return res.status(404).json({ error: 'メインアカウントが見つかりません' });
+    const token = jwt.sign({ id: parent.id, username: parent.username }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: {
+      id: parent.id, username: parent.username,
+      displayName: parent.display_name || parent.username,
+      avatar: parent.avatar, bio: parent.bio || '', status: parent.status || '',
+      parentAccountId: null,
+    }});
+  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
+});
 
 // サブアカに切り替え（トークンを発行）
 app.post('/api/sub-accounts/:subId/switch', async (req, res) => {
   try {
     const decoded = auth(req);
     const parent = await User.findOne({ id: decoded.id });
-    // 親アカかサブアカ本人のみ切り替え可能
     const isParent = parent && (parent.sub_accounts || []).includes(req.params.subId);
     const isSelf   = decoded.id === req.params.subId;
     if (!isParent && !isSelf) return res.status(403).json({ error: '権限がありません' });
-
     const sub = await User.findOne({ id: req.params.subId });
     if (!sub) return res.status(404).json({ error: 'サブアカが見つかりません' });
     const token = jwt.sign({ id: sub.id, username: sub.username }, JWT_SECRET, { expiresIn: '30d' });
@@ -1352,19 +1363,6 @@ app.delete('/api/sub-accounts/:subId', async (req, res) => {
   } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
 });
 
-    if (!subUser) return res.status(404).json({ error: 'ユーザーが見つかりません' });
-    if (!subUser.parent_account_id) return res.status(400).json({ error: 'メインアカウントがありません' });
-    const parent = await User.findOne({ id: subUser.parent_account_id });
-    if (!parent) return res.status(404).json({ error: 'メインアカウントが見つかりません' });
-    const token = jwt.sign({ id: parent.id, username: parent.username }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: {
-      id: parent.id, username: parent.username,
-      displayName: parent.display_name || parent.username,
-      avatar: parent.avatar, bio: parent.bio || '', status: parent.status || '',
-      parentAccountId: null,
-    }});
-  } catch (e) { const status = (e?.name === 'JsonWebTokenError' || e?.name === 'TokenExpiredError' || e?.name === 'NotBeforeError') ? 401 : 500; res.status(status).json({ error: status === 401 ? '認証エラー' : 'サーバーエラー' }); }
-});
 
 // ===== お問い合わせ =====
 const contactSchema = new mongoose.Schema({
